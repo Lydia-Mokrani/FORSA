@@ -1,14 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
-import {
-  Link,
-  useNavigate,
-  useLocation as useRouterLocation,
-} from 'react-router-dom';
+import { Link, useLocation as useRouterLocation } from 'react-router-dom';
 
 import {
-  Search,
-  SlidersHorizontal,
   MapPin,
   Bell,
   UserRound,
@@ -19,8 +13,9 @@ import {
 } from 'lucide-react';
 
 import { CatalogueApi } from '../services/api';
-import { Category, Offer } from '../types';
+import { Category, Offer, OfferFilterParams } from '../types';
 import { useLocation } from '../context/LocationContext';
+import HomeSearchControls from '../components/HomeSearchControls';
 
 const CATEGORY_IMAGES: Record<string, string> = {
   epicerie:
@@ -66,7 +61,6 @@ interface HomeOfferCardProps {
 }
 
 const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
-  // Remember the current page so the offer can open as a popup over it.
   const backgroundLocation = useRouterLocation();
 
   const photo =
@@ -178,18 +172,24 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
 
 export const HomePage: React.FC = () => {
   const { location, openModal } = useLocation();
-  const navigate = useNavigate();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [nearbyOffers, setNearbyOffers] = useState<Offer[]>([]);
+
   const [selectedCategory, setSelectedCategory] = useState<string>();
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [appliedFilters, setAppliedFilters] = useState<OfferFilterParams>({
+    available: true,
+    sort: 'distance',
+  });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
 
-  // Load categories
+  // Load categories from the existing API
   useEffect(() => {
     let cancelled = false;
 
@@ -208,7 +208,7 @@ export const HomePage: React.FC = () => {
     };
   }, []);
 
-  // Load nearby offers
+  // Load offers using only the existing API filter parameters
   useEffect(() => {
     let cancelled = false;
 
@@ -218,12 +218,12 @@ export const HomePage: React.FC = () => {
 
       try {
         const result = await CatalogueApi.getOffers({
+          ...appliedFilters,
           lat: location.lat,
           lng: location.lng,
           category: selectedCategory,
           q: searchQuery || undefined,
           limit: 8,
-          sort: 'distance',
         });
 
         if (!cancelled) {
@@ -248,13 +248,13 @@ export const HomePage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [location, selectedCategory, searchQuery, retryCount]);
-
-  // Search
-  const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSearchQuery(searchInput.trim());
-  };
+  }, [
+    location,
+    selectedCategory,
+    searchQuery,
+    retryCount,
+    appliedFilters,
+  ]);
 
   const displayedCategories = categories.slice(0, 4);
 
@@ -328,32 +328,21 @@ export const HomePage: React.FC = () => {
           <span className="truncate">{location.label}</span>
         </button>
 
-        {/* Search */}
-        <form
-          onSubmit={handleSearch}
-          className="mb-6 flex max-w-[666px] gap-3"
-        >
-          <div className="flex h-[46px] flex-1 items-center gap-3 rounded-[13px] border border-[#E6E4DD] bg-white px-4">
-            <Search size={19} className="shrink-0 text-[#0B2C25]" />
-
-            <input
-              type="search"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Rechercher"
-              className="h-full w-full bg-transparent text-sm text-[#0B2C25] outline-none placeholder:text-[#8A9088]"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => navigate('/explore')}
-            aria-label="Filtres"
-            className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px] border border-[#E6E4DD] bg-white text-[#0B2C25]"
-          >
-            <SlidersHorizontal size={20} />
-          </button>
-        </form>
+        {/* Search and filters */}
+        <HomeSearchControls
+          categories={categories}
+          offers={nearbyOffers}
+          searchInput={searchInput}
+          onSearchInputChange={setSearchInput}
+          onSearch={setSearchQuery}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          filters={appliedFilters}
+          onApplyFilters={(nextFilters, category) => {
+            setAppliedFilters(nextFilters);
+            setSelectedCategory(category);
+          }}
+        />
 
         {/* Map */}
         <section className="relative mb-6 h-[210px] overflow-hidden rounded-[22px] border border-[#E8E5DC] bg-[#E5E8D8] sm:h-[234px]">
