@@ -1,8 +1,11 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @import 'leaflet/dist/leaflet.css';
 
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   color: #1e293b;
   background-color: #f8fafc;
 }
@@ -12,7 +15,7 @@ body {
   min-height: 100vh;
 }
 
-/* ── FORSA design tokens (from Figma) ── */
+/* FORSA design tokens */
 @theme {
   --color-forsa-cream: #FFFAF0;
   --color-forsa-green: #0B2C25;
@@ -21,12 +24,13 @@ body {
   --font-poppins: 'Poppins', system-ui, sans-serif;
 }
 
-/* Active sidebar item: cream tab merging into the page, with rounded green corners above and below */
+/* Active merchant sidebar item */
 .forsa-nav-active {
   position: relative;
   background: #FFFAF0;
   border-radius: 30px 0 0 30px;
 }
+
 .forsa-nav-active::before,
 .forsa-nav-active::after {
   content: '';
@@ -36,11 +40,21 @@ body {
   height: 30px;
   pointer-events: none;
 }
+
 .forsa-nav-active::before {
   top: -30px;
-  background: radial-gradient(circle at 0 0, transparent 30px, #FFFAF0 30px);
+  background: radial-gradient(
+    circle at 0 0,
+    transparent 30px,
+    #FFFAF0 30px
+  );
 }
+
 .forsa-nav-active::after {
   bottom: -30px;
-  background: radial-gradient(circle at 0 100%, transparent 30px, #FFFAF0 30px);
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent 30px,
+    #FFFAF0 30px
+  );
 }
