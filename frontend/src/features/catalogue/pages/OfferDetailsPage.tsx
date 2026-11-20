@@ -1,20 +1,24 @@
 
 import React, { useEffect, useState } from 'react';
-import { Link, useLocation as useRouterLocation, useNavigate, useParams } from 'react-router-dom';
+import {
+  Link,
+  useLocation as useRouterLocation,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import {
   X,
-  ChevronLeft,
   ChevronRight,
   Clock,
   MapPin,
   Star,
-  ShieldCheck,
   Store,
-  Share2,
-  ShoppingBasket,
-  CalendarDays,
-  CheckCircle2,
   Tag,
+  ShoppingBag,
+  Flag,
+  Minus,
+  Plus,
+  ShoppingCart,
 } from 'lucide-react';
 
 import { CatalogueApi } from '../services/api';
@@ -29,9 +33,8 @@ const formatDate = (dateString: string) => {
   if (Number.isNaN(date.getTime())) return 'Non précisée';
 
   return date.toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
+    day: '2-digit',
+    month: '2-digit',
   });
 };
 
@@ -40,21 +43,26 @@ const formatPickupTime = (dateString: string) => {
 
   if (Number.isNaN(date.getTime())) return 'Horaire à confirmer';
 
-  const today = new Date();
-  const isToday = date.toDateString() === today.toDateString();
-
-  const time = date.toLocaleTimeString('fr-FR', {
+  return date.toLocaleTimeString('fr-FR', {
     hour: '2-digit',
     minute: '2-digit',
   });
-
-  return isToday
-    ? `Aujourd'hui avant ${time}`
-    : `${date.toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'long',
-      })} avant ${time}`;
 };
+
+const reviews = [
+  {
+    initials: 'SM',
+    name: 'Sarah M.',
+    rating: 5,
+    comment: 'Très frais, retrait rapide et commerçant adorable.',
+  },
+  {
+    initials: 'KB',
+    name: 'Karim B.',
+    rating: 4,
+    comment: 'Bon rapport qualité/prix, je recommande.',
+  },
+];
 
 export const OfferDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -68,8 +76,7 @@ export const OfferDetailsPage: React.FC = () => {
 
   const [offer, setOffer] = useState<Offer | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activePhotoIdx, setActivePhotoIdx] = useState(0);
-  const [reservationNotice, setReservationNotice] = useState(false);
+  const [quantity, setQuantity] = useState(1);
 
   const closePopup = () => {
     if (hasBackground) {
@@ -89,8 +96,7 @@ export const OfferDetailsPage: React.FC = () => {
 
     setLoading(true);
     setOffer(null);
-    setActivePhotoIdx(0);
-    setReservationNotice(false);
+    setQuantity(1);
 
     CatalogueApi.getOfferById(id)
       .then((result) => {
@@ -115,6 +121,7 @@ export const OfferDetailsPage: React.FC = () => {
     };
 
     window.addEventListener('keydown', handleKeyDown);
+
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [hasBackground, navigate]);
 
@@ -129,47 +136,34 @@ export const OfferDetailsPage: React.FC = () => {
           },
         ];
 
-  const activePhoto = photos[activePhotoIdx] || photos[0];
-
   const quantityAvailable = offer?.quantityAvailable ?? 0;
   const quantityInitial =
     offer?.quantityInitial || offer?.quantityAvailable || 1;
-
-  const stockPercentage = Math.min(
-    100,
-    Math.max(0, (quantityAvailable / quantityInitial) * 100),
-  );
 
   const savings = offer
     ? offer.originalPrice - offer.discountedPrice
     : 0;
 
-  const isLowStock = quantityAvailable <= 3;
+  const discountPercent = offer?.discountPercent ?? 0;
 
-  const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      alert('Lien de l’offre copié !');
-    } catch {
-      alert('Impossible de copier le lien.');
-    }
+  const shopRating = offer?.shop?.averageRating ?? 4.8;
+
+  const handleQuantityChange = (direction: 'minus' | 'plus') => {
+    setQuantity((current) => {
+      if (direction === 'minus') return Math.max(1, current - 1);
+
+      return Math.min(quantityAvailable, current + 1);
+    });
   };
 
-  const showPreviousPhoto = () => {
-    setActivePhotoIdx((current) =>
-      current === 0 ? photos.length - 1 : current - 1,
-    );
-  };
-
-  const showNextPhoto = () => {
-    setActivePhotoIdx((current) =>
-      current === photos.length - 1 ? 0 : current + 1,
-    );
+  const handleAddToCart = () => {
+    // Cart integration will be connected when the cart module is available.
+    // This button currently reproduces the Figma interface.
   };
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B2C25]/60 p-0 backdrop-blur-[3px] sm:p-4 lg:p-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(65,65,65,0.42)] p-0 backdrop-blur-[3px] sm:p-4 lg:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) closePopup();
       }}
@@ -178,335 +172,398 @@ export const OfferDetailsPage: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-label="Détails de l'offre"
-        className="relative flex h-full max-h-[760px] w-full max-w-[1000px] flex-col overflow-hidden rounded-none bg-[#FFFAF0] shadow-[0px_24px_64px_rgba(11,44,37,0.30)] sm:flex-row sm:rounded-[24px] lg:rounded-[28px]"
+        className="relative flex h-full max-h-[760px] w-full max-w-[1000px] overflow-hidden rounded-none bg-[#FFFAF0] shadow-[0px_24px_64px_rgba(11,44,37,0.30)] sm:rounded-[28px]"
       >
-        {/* Close button for mobile */}
-        <button
-          type="button"
-          onClick={closePopup}
-          aria-label="Fermer"
-          className="absolute right-4 top-4 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-[#FFFAF0] text-[#0B2C25] shadow-md transition hover:bg-white sm:hidden"
-        >
-          <X size={20} />
-        </button>
-
         {/* LEFT: PHOTO GALLERY */}
-        <section className="relative h-[270px] w-full shrink-0 overflow-hidden bg-[#E9E5D9] sm:h-full sm:w-[40%]">
+        <section className="relative hidden h-full w-[400px] shrink-0 overflow-hidden bg-[#EBEEE1] sm:block">
           {loading ? (
-            <div className="h-full w-full animate-pulse bg-[#E5E1D6]" />
+            <div className="h-full w-full animate-pulse bg-[#EBEEE1]" />
           ) : (
             <>
               <img
-                src={activePhoto.url}
+                src={photos[0]?.url}
                 alt={offer?.name || 'Photo du produit'}
-                className="h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-cover"
               />
 
-              {/* Image overlay */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/25" />
+              <div className="absolute left-5 top-5 rounded-full bg-[#0B2C25] px-[14px] py-[6px] text-[12px] font-semibold text-[#FFFAF0]">
+                {quantityAvailable}{' '}
+                {quantityAvailable > 1 ? 'restants' : 'restant'}
+              </div>
 
-              {/* Quantity badge */}
-              {offer && (
-                <div className="absolute left-5 top-5 rounded-[9px] bg-[#0B2C25] px-4 py-2 text-[12px] font-semibold text-[#FFFAF0] shadow-md">
-                  {quantityAvailable}{' '}
-                  {quantityAvailable > 1 ? 'restants' : 'restant'}
-                </div>
-              )}
-
-              {/* Desktop close button */}
-              <button
-                type="button"
-                onClick={closePopup}
-                aria-label="Fermer"
-                className="absolute right-5 top-5 hidden h-10 w-10 items-center justify-center rounded-full bg-[#FFFAF0]/95 text-[#0B2C25] shadow-md transition hover:bg-white sm:flex"
-              >
-                <X size={19} />
-              </button>
-
-              {/* Gallery navigation */}
-              {photos.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={showPreviousPhoto}
-                    aria-label="Photo précédente"
-                    className="absolute left-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#FFFAF0]/90 text-[#0B2C25] shadow-md transition hover:bg-white"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={showNextPhoto}
-                    aria-label="Photo suivante"
-                    className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#FFFAF0]/90 text-[#0B2C25] shadow-md transition hover:bg-white"
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </>
-              )}
-
-              {/* Photo counter */}
-              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-[#FFFAF0] px-4 py-2 text-[11px] font-semibold text-[#0B2C25] shadow-md">
-                {activePhotoIdx + 1} / {photos.length}
+              <div className="absolute bottom-[20px] left-1/2 -translate-x-1/2 rounded-full bg-[#FFFAF0] px-3 py-[5px] text-[12px] font-medium text-[#0B2C25]">
+                1 / {photos.length}
               </div>
             </>
           )}
         </section>
 
-        {/* RIGHT: DETAILS */}
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col sm:w-[60%]">
-          {/* Scrollable details */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-5 sm:px-7 sm:pb-6 sm:pt-7">
+        {/* RIGHT: DETAILS COLUMN */}
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* MOBILE IMAGE */}
+          <div className="relative h-[220px] shrink-0 overflow-hidden bg-[#EBEEE1] sm:hidden">
+            {!loading && (
+              <>
+                <img
+                  src={photos[0]?.url}
+                  alt={offer?.name || 'Photo du produit'}
+                  className="h-full w-full object-cover"
+                />
+
+                <div className="absolute left-4 top-4 rounded-full bg-[#0B2C25] px-[14px] py-[6px] text-[12px] font-semibold text-[#FFFAF0]">
+                  {quantityAvailable} restants
+                </div>
+
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-[#FFFAF0] px-3 py-[5px] text-[12px] text-[#0B2C25]">
+                  1 / {photos.length}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* SCROLLABLE CONTENT */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {loading ? (
-              <div className="animate-pulse space-y-5">
-                <div className="h-6 w-28 rounded-full bg-[#E8E5DA]" />
-                <div className="h-9 w-3/4 rounded-lg bg-[#E8E5DA]" />
-                <div className="h-20 rounded-2xl bg-[#E8E5DA]" />
-                <div className="h-16 rounded-2xl bg-[#E8E5DA]" />
-                <div className="h-24 rounded-2xl bg-[#E8E5DA]" />
+              <div className="space-y-5 p-7">
+                <div className="h-6 w-28 animate-pulse rounded-full bg-[#EBEEE1]" />
+                <div className="h-9 w-3/4 animate-pulse rounded-lg bg-[#EBEEE1]" />
+                <div className="h-20 animate-pulse rounded-[14px] bg-[#EBEEE1]" />
+                <div className="h-16 animate-pulse rounded-[14px] bg-[#EBEEE1]" />
+                <div className="h-24 animate-pulse rounded-[14px] bg-[#EBEEE1]" />
               </div>
             ) : !offer ? (
-              <div className="flex h-full flex-col items-center justify-center text-center">
-                <span className="mb-4 text-4xl">🔍</span>
-                <h2 className="text-lg font-semibold text-[#0B2C25]">
+              <div className="flex min-h-[500px] flex-col items-center justify-center px-8 text-center">
+                <h2 className="font-poppins text-lg font-semibold text-[#0B2C25]">
                   Offre introuvable
                 </h2>
-                <p className="mt-2 max-w-xs text-sm leading-relaxed text-[#78847F]">
+
+                <p className="mt-2 max-w-xs text-sm leading-relaxed text-[rgba(11,44,37,0.71)]">
                   Cette offre a peut-être expiré ou a été retirée par le commerçant.
                 </p>
+
                 <button
                   type="button"
                   onClick={closePopup}
-                  className="mt-5 rounded-xl bg-[#0B2C25] px-5 py-3 text-xs font-semibold text-white"
+                  className="mt-5 rounded-[14px] bg-[#0B2C25] px-5 py-3 text-sm font-medium text-[#FFFAF0]"
                 >
                   Fermer
                 </button>
               </div>
             ) : (
-              <div className="space-y-[18px]">
-                {/* Category and share */}
-                <div className="flex items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-[#DBF0DD] px-3 py-[7px] text-[11px] font-semibold text-[#17664E]">
-                    <Tag size={13} />
+              <div className="flex flex-col gap-4 p-5 sm:p-7">
+                {/* CATEGORY */}
+                <div className="flex items-center">
+                  <span className="rounded-full bg-[#DBF0DD] px-[10px] py-1 text-[11px] font-medium text-[#17664E]">
                     {offer.category?.nameFr || 'Offre anti-gaspi'}
                   </span>
-
-                  <button
-                    type="button"
-                    onClick={handleShare}
-                    aria-label="Partager l'offre"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#E9E6DC] bg-white text-[#0B2C25] transition hover:bg-[#F3F1E8]"
-                  >
-                    <Share2 size={16} />
-                  </button>
                 </div>
 
-                {/* Product title */}
-                <div>
-                  <h1 className="font-poppins text-[23px] font-semibold leading-[1.3] text-[#0B2C25] sm:text-[28px]">
-                    {offer.name}
-                  </h1>
+                {/* TITLE */}
+                <h1 className="font-poppins text-[24px] font-semibold leading-[1.3] text-[#0B2C25] sm:text-[28px]">
+                  {offer.name}
+                </h1>
 
-                  <p className="mt-2 text-[12px] leading-[1.7] text-[#78847F]">
-                    {offer.description}
-                  </p>
+                {/* PRICE */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <span className="font-poppins text-[30px] font-semibold leading-none text-[#17664E] sm:text-[32px]">
+                    {formatPrice(offer.discountedPrice)}
+                  </span>
+
+                  <span className="text-[16px] text-[rgba(11,44,37,0.71)] line-through">
+                    {formatPrice(offer.originalPrice)}
+                  </span>
+
+                  <span className="rounded-full bg-[#EDBD4D] px-3 py-[6px] text-[13px] font-semibold text-[#0B2C25]">
+                    -{discountPercent}%
+                  </span>
+
+                  <span className="ml-auto text-[12px] font-medium text-[#17664E]">
+                    Vous économisez {formatPrice(savings)}
+                  </span>
                 </div>
 
-                {/* Price section */}
-                <div className="rounded-[16px] bg-[#F0F5E9] p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="mb-1 text-[10px] font-medium text-[#78847F]">
-                        Prix anti-gaspi
-                      </p>
+                {/* SHORT DESCRIPTION */}
+                <p className="text-[13px] leading-[21px] text-[rgba(11,44,37,0.71)]">
+                  {offer.description}
+                </p>
 
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <span className="font-poppins text-[29px] font-semibold leading-none text-[#17664E]">
-                          {formatPrice(offer.discountedPrice)}
-                        </span>
+                {/* PICKUP TIME */}
+                <div className="flex items-center gap-[14px] rounded-[14px] bg-[#DBF0DD] px-[18px] py-4">
+                  <Clock size={25} className="shrink-0 text-[#17664E]" />
 
-                        <span className="text-[13px] text-[#89918B] line-through">
-                          {formatPrice(offer.originalPrice)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-start gap-1 sm:items-end">
-                      <span className="rounded-full bg-[#EDBD4D] px-3 py-1 text-[10px] font-bold text-[#493A13]">
-                        -{offer.discountPercent}%
-                      </span>
-
-                      <span className="text-[10px] font-medium text-[#17664E]">
-                        Économisez {formatPrice(savings)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pickup time */}
-                <div className="flex items-center gap-3 rounded-[14px] bg-[#EAF3E6] px-4 py-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#17664E]">
-                    <Clock size={19} />
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] font-medium text-[#78847F]">
-                      À récupérer
+                  <div className="flex flex-col gap-[2px]">
+                    <p className="text-[12px] text-[#17664E]">
+                      À récupérer aujourd’hui
                     </p>
-                    <p className="mt-1 text-[14px] font-semibold text-[#0B2C25]">
+
+                    <p className="font-poppins text-[18px] font-semibold text-[#0B2C25]">
                       {formatPickupTime(offer.expiresAt)}
                     </p>
                   </div>
                 </div>
 
-                {/* Merchant card */}
+                {/* MERCHANT CARD */}
                 <Link
                   to="/map"
-                  onClick={() => {
-                    // The map route is opened from the popup.
-                  }}
-                  className="flex items-center gap-3 rounded-[15px] border border-[#EAE7DE] bg-white p-3 transition hover:border-[#B7CCB7]"
+                  className="flex items-center gap-3 rounded-[14px] border border-[rgba(11,44,37,0.30)] bg-transparent px-4 py-[14px] transition hover:bg-white/60"
                 >
-                  <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full bg-[#E8F0E5] text-[#17664E]">
-                    <Store size={21} />
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-[#EBEEE1] text-[#17664E]">
+                    <Store size={23} />
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-semibold text-[#0B2C25]">
+                  <div className="min-w-0">
+                    <p className="truncate text-[14px] font-semibold text-[#0B2C25]">
                       {offer.shop?.name || 'Commerce partenaire'}
                     </p>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-[#78847F]">
-                      <span className="inline-flex items-center gap-1 text-[#A77B20]">
-                        <Star size={12} fill="currentColor" />
-                        {offer.shop?.averageRating?.toFixed(1) || '4.8'}
+                    <p className="truncate text-[12px] text-[rgba(11,44,37,0.71)]">
+                      Le Fournil De Suresnes
+                    </p>
+                  </div>
+
+                  <div className="ml-auto flex shrink-0 flex-col items-end gap-px">
+                    <div className="flex items-center gap-1">
+                      <Star
+                        size={14}
+                        fill="#EDBD4D"
+                        stroke="#EDBD4D"
+                      />
+                      <span className="text-[14px] font-semibold text-[#0B2C25]">
+                        {Number(shopRating).toFixed(1)}
                       </span>
-                      <span>•</span>
-                      <span>{offer.shop?.salesCount ?? 0} ventes</span>
                     </div>
-                  </div>
 
-                  <ChevronRight size={18} className="shrink-0 text-[#78847F]" />
-                </Link>
-
-                {/* Pickup address */}
-                <Link
-                  to="/map"
-                  className="flex items-center gap-3 rounded-[15px] border border-[#EAE7DE] bg-white p-3 transition hover:border-[#B7CCB7]"
-                >
-                  <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-[#F0F3E9] text-[#17664E]">
-                    <MapPin size={19} />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-medium text-[#78847F]">
-                      Adresse de retrait
-                    </p>
-                    <p className="mt-1 text-[11px] font-semibold leading-relaxed text-[#0B2C25]">
-                      {offer.shop?.address || 'Adresse non renseignée'}
-                    </p>
-                  </div>
-
-                  <ChevronRight size={18} className="shrink-0 text-[#78847F]" />
-                </Link>
-
-                {/* Quantity available */}
-                <div className="rounded-[14px] border border-[#EAE7DE] bg-white p-4">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-semibold text-[#0B2C25]">
-                      Disponibilité
-                    </p>
-                    <span
-                      className={`text-[10px] font-semibold ${
-                        isLowStock ? 'text-[#A34A42]' : 'text-[#17664E]'
-                      }`}
-                    >
-                      {quantityAvailable}{' '}
-                      {quantityAvailable > 1 ? 'restants' : 'restant'}
+                    <span className="text-[11px] text-[rgba(11,44,37,0.71)]">
+                      63 avis · 210 ventes
                     </span>
                   </div>
 
-                  <div className="h-[7px] overflow-hidden rounded-full bg-[#E8E8E1]">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        isLowStock ? 'bg-[#C8785C]' : 'bg-[#17664E]'
-                      }`}
-                      style={{ width: `${stockPercentage}%` }}
-                    />
+                  <ChevronRight
+                    size={18}
+                    className="shrink-0 text-[#0B2C25]"
+                  />
+                </Link>
+
+                {/* PICKUP ADDRESS */}
+                <Link
+                  to="/map"
+                  className="flex items-center gap-[14px] rounded-[14px] border border-[rgba(11,44,37,0.31)] bg-transparent px-4 py-[14px] transition hover:bg-white/60"
+                >
+                  <MapPin
+                    size={22}
+                    className="shrink-0 text-[#17664E]"
+                  />
+
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-medium text-[#0B2C25]">
+                      Bab Ezzouar
+                    </p>
+
+                    <p className="text-[12px] text-[rgba(11,44,37,0.71)]">
+                      {offer.shop?.address || 'Quartier des affaires'}
+                    </p>
+                  </div>
+
+                  <span className="ml-auto text-[13px] font-semibold text-[#17664E]">
+                    100 m
+                  </span>
+
+                  <ChevronRight
+                    size={18}
+                    className="shrink-0 text-[#0B2C25]"
+                  />
+                </Link>
+
+                {/* PRODUCT INFORMATION */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="flex min-w-0 flex-col gap-[2px] rounded-[14px] bg-[#EBEEE1] p-[14px]">
+                    <p className="text-[14px] font-medium text-[#0B2C25]">
+                      500 g
+                    </p>
+                    <p className="text-[11px] text-[rgba(11,44,37,0.71)]">
+                      Poids approximatif
+                    </p>
+                  </div>
+
+                  <div className="flex min-w-0 flex-col gap-[2px] rounded-[14px] bg-[#EBEEE1] p-[14px]">
+                    <p className="text-[14px] font-medium text-[#0B2C25]">
+                      {offer.productExpiryDate
+                        ? `Avant le ${formatDate(offer.productExpiryDate)}`
+                        : 'Non précisée'}
+                    </p>
+                    <p className="text-[11px] text-[rgba(11,44,37,0.71)]">
+                      À consommer
+                    </p>
+                  </div>
+
+                  <div className="flex min-w-0 flex-col gap-[2px] rounded-[14px] bg-[#EBEEE1] p-[14px]">
+                    <p className="text-[14px] font-medium text-[#0B2C25]">
+                      {quantityAvailable} restants
+                    </p>
+                    <p className="text-[11px] text-[rgba(11,44,37,0.71)]">
+                      Quantité disponible
+                    </p>
                   </div>
                 </div>
 
-                {/* Expiry date */}
-                {offer.productExpiryDate && (
-                  <div className="flex items-start gap-3 rounded-[14px] border border-[#DCE8D8] bg-[#F3F7EF] p-3">
-                    <ShieldCheck
-                      size={18}
-                      className="mt-0.5 shrink-0 text-[#17664E]"
-                    />
-                    <div>
-                      <p className="text-[11px] font-semibold text-[#17664E]">
-                        Date du produit vérifiée
-                      </p>
-                      <p className="mt-1 text-[11px] text-[#78847F]">
-                        Date indiquée : {formatDate(offer.productExpiryDate)}
+                {/* MERCHANT DESCRIPTION */}
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-[15px] font-semibold text-[#0B2C25]">
+                    Le bon goût de l’anti-gaspillage
+                  </h2>
+
+                  <p className="text-[13px] leading-[21px] text-[rgba(11,44,37,0.71)]">
+                    Engagé depuis 3 ans sur Forsa, Le Fournil De Suresnes donne
+                    une seconde chance à ses invendus : viennoiseries,
+                    sandwichs, boissons et desserts, à petits prix.
+                  </p>
+                </div>
+
+                {/* CUSTOMER REVIEWS HEADER */}
+                <div className="flex items-center gap-2">
+                  <h2 className="shrink-0 text-[15px] font-semibold text-[#0B2C25]">
+                    Avis des clients
+                  </h2>
+
+                  <div className="h-px flex-1 bg-[rgba(11,44,37,0.15)]" />
+
+                  <div className="flex shrink-0 items-center gap-[2px]">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <Star
+                        key={index}
+                        size={13}
+                        fill="#EDBD4D"
+                        stroke="#EDBD4D"
+                      />
+                    ))}
+                  </div>
+
+                  <span className="shrink-0 text-[12px] text-[rgba(11,44,37,0.71)]">
+                    4.8 · 63 avis
+                  </span>
+                </div>
+
+                {/* CUSTOMER REVIEW CARDS */}
+                {reviews.map((review) => (
+                  <div
+                    key={review.initials}
+                    className="flex items-start gap-3 rounded-[14px] border border-[rgba(11,44,37,0.10)] bg-white p-[14px]"
+                  >
+                    <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-[#DBF0DD] text-[11px] font-semibold text-[#17664E]">
+                      {review.initials}
+                    </div>
+
+                    <div className="flex min-w-0 flex-col gap-[3px]">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[13px] font-semibold text-[#0B2C25]">
+                          {review.name}
+                        </p>
+
+                        <div className="flex items-center gap-[2px]">
+                          {Array.from({ length: 5 }).map((_, index) => (
+                            <Star
+                              key={index}
+                              size={11}
+                              fill={
+                                index < review.rating ? '#EDBD4D' : 'none'
+                              }
+                              stroke="#EDBD4D"
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <p className="text-[12px] leading-normal text-[rgba(11,44,37,0.71)]">
+                        {review.comment}
                       </p>
                     </div>
                   </div>
-                )}
+                ))}
 
-                {/* Description */}
-                <div className="pb-2">
-                  <h2 className="mb-2 text-[13px] font-semibold text-[#0B2C25]">
-                    À propos de cette offre
-                  </h2>
-                  <p className="whitespace-pre-line text-[11px] leading-[1.8] text-[#78847F]">
-                    {offer.description || 'Aucune description disponible.'}
+                {/* BRING YOUR BAG REMINDER */}
+                <div className="flex items-center gap-3 rounded-[14px] bg-[#DBF0DD] p-4">
+                  <ShoppingBag
+                    size={22}
+                    className="shrink-0 text-[#17664E]"
+                  />
+
+                  <p className="text-[12px] leading-[1.5] text-[#17664E]">
+                    Apportez votre sac ou cabas pour le retrait. Ensemble,
+                    limitons nos déchets !
                   </p>
                 </div>
+
+                {/* REPORT OFFER */}
+                <button
+                  type="button"
+                  className="flex w-fit items-center gap-[6px] pb-1 text-[12px] text-[rgba(11,44,37,0.71)] underline"
+                >
+                  <Flag size={15} />
+                  Signaler cette offre
+                </button>
               </div>
             )}
           </div>
 
-          {/* Bottom reservation section */}
+          {/* FIXED POPUP FOOTER */}
           {!loading && offer && (
-            <div className="shrink-0 border-t border-[#EAE7DE] bg-[#FFFAF0] px-5 py-4 sm:px-7">
-              {reservationNotice && (
-                <div className="mb-3 rounded-xl border border-[#CFE3CD] bg-[#EDF5E9] p-3">
-                  <div className="flex items-center gap-2 text-[11px] font-semibold text-[#17664E]">
-                    <CheckCircle2 size={15} />
-                    Module de réservation (MS3)
-                  </div>
-                  <p className="mt-1 text-[10px] leading-relaxed text-[#64756A]">
-                    L'action de réservation sera connectée au module MS3.
-                    Aucune réservation réelle n'a été effectuée.
-                  </p>
+            <div className="shrink-0 border-t border-[rgba(11,44,37,0.10)] bg-[#FFFAF0] px-5 pb-[18px] pt-4 sm:px-7 sm:pb-[22px]">
+              <div className="flex items-center gap-[14px]">
+                {/* QUANTITY SELECTOR */}
+                <div className="flex h-12 w-[112px] shrink-0 items-center justify-between rounded-[14px] border border-[rgba(11,44,37,0.10)] bg-white px-3">
                   <button
                     type="button"
-                    onClick={() => setReservationNotice(false)}
-                    className="mt-2 text-[10px] font-semibold text-[#17664E] underline"
+                    aria-label="Diminuer la quantité"
+                    disabled={quantity <= 1}
+                    onClick={() => handleQuantityChange('minus')}
+                    className="text-[#0B2C25] disabled:opacity-30"
                   >
-                    Fermer
+                    <Minus size={19} />
+                  </button>
+
+                  <span className="text-[14px] font-medium text-[#0B2C25]">
+                    {quantity}
+                  </span>
+
+                  <button
+                    type="button"
+                    aria-label="Augmenter la quantité"
+                    disabled={quantity >= quantityAvailable}
+                    onClick={() => handleQuantityChange('plus')}
+                    className="text-[#0B2C25] disabled:opacity-30"
+                  >
+                    <Plus size={19} />
                   </button>
                 </div>
-              )}
 
-              <button
-                type="button"
-                onClick={() => setReservationNotice(true)}
-                disabled={quantityAvailable === 0}
-                className="flex w-full items-center justify-center gap-2 rounded-[11px] bg-[#0B2C25] px-5 py-[14px] text-[12px] font-semibold text-white transition hover:bg-[#17664E] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ShoppingBasket size={17} />
-                {quantityAvailable > 0 ? 'Réserver ce panier' : 'Panier épuisé'}
-              </button>
+                {/* ADD TO CART */}
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  disabled={quantityAvailable === 0}
+                  className="flex h-12 min-w-0 flex-1 items-center justify-center gap-[10px] rounded-[14px] bg-[#0B2C25] px-4 text-[14px] font-medium text-[#FFFAF0] transition hover:bg-[#17664E] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ShoppingCart size={19} />
+                  Ajouter au panier
+                </button>
+              </div>
 
-              <p className="mt-2 text-center text-[9px] text-[#89918B]">
-                Paiement sur place lors du retrait
+              <p className="mt-[10px] text-center text-[11px] text-[rgba(11,44,37,0.71)]">
+                Paiement sur place au retrait · {quantityAvailable} restants
               </p>
             </div>
           )}
         </section>
+
+        {/* CLOSE BUTTON */}
+        <button
+          type="button"
+          onClick={closePopup}
+          aria-label="Fermer"
+          className="absolute right-5 top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(11,44,37,0.10)] bg-white text-[#0B2C25] shadow-[0px_4px_8px_rgba(11,44,37,0.12)] transition hover:bg-[#DBF0DD]"
+        >
+          <X size={18} />
+        </button>
       </div>
     </div>
   );
