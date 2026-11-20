@@ -1,12 +1,15 @@
 // src/config/env.ts
 // Loads and validates all environment variables at startup.
+// The app crashes immediately if a required variable is missing.
 
 import dotenv from 'dotenv';
 dotenv.config();
 
 function required(key: string): string {
   const value = process.env[key];
-  if (!value) throw new Error(`Missing required environment variable: ${key}`);
+  if (!value || value.trim() === '') {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
   return value;
 }
 
@@ -30,8 +33,8 @@ export const env = {
   JWT_ALGORITHM:     'RS256' as const,
   MS1_PUBLIC_KEY_URL: optional('MS1_PUBLIC_KEY_URL', 'http://localhost:3001/api/auth/public-key'),
 
-  // Shared secret for internal service-to-service calls (MS3 -> MS2)
-  INTERNAL_API_KEY:  optional('INTERNAL_API_KEY', 'forsa-internal-secret-token-2026'),
+  // Shared secret for internal service-to-service calls (MS3 -> MS2). Required with no hardcoded fallback.
+  INTERNAL_API_KEY:  required('INTERNAL_API_KEY'),
 
   RABBITMQ_URL:      optional('RABBITMQ_URL', 'amqp://localhost'),
   RABBITMQ_EXCHANGE: optional('RABBITMQ_EXCHANGE', 'forsa.events'),

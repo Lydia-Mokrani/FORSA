@@ -1,6 +1,7 @@
 // src/jobs/expirationJob.ts
 // Runs every minute to expire offers whose pickup deadlines or product expiry dates have passed.
 // Also ensures same-day offers expire strictly at the end of their calendar day in Africa/Algiers timezone (UTC+1).
+// Implements cross-instance atomic transitions using PostgreSQL RETURNING to eliminate duplicate events.
 
 import cron from 'node-cron';
 import { prisma } from '../config/prisma';
@@ -14,7 +15,7 @@ let isRunning = false;
 
 export async function checkAndExpireOffers(currentTime?: Date): Promise<number> {
   if (isRunning) {
-    logger.debug('Expiration job already running, skipping overlapping tick.');
+    logger.debug('Expiration job already running in this process, skipping overlapping tick.');
     return 0;
   }
   isRunning = true;
@@ -47,46 +48,42 @@ export async function checkAndExpireOffers(currentTime?: Date): Promise<number> 
       (o) => getAlgiersEndOfDay(o.product_expiry_date) <= now
     );
 
-    // Merge and deduplicate candidates
-    const expiredMap = new Map<string, string>(); // offerId -> merchantId
-    for (const o of standardExpired) {
-      expiredMap.set(o.id, o.merchant_id);
-    }
-    for (const o of sameDayExpired) {
-      expiredMap.set(o.id, o.merchant_id);
-    }
+    // Merge and deduplicate candidate IDs
+    const candidateIdSet = new Set<string>();
+    for (const o of standardExpired) candidateIdSet.add(o.id);
+    for (const o of sameDayExpired) candidateIdSet.add(o.id);
 
-    const candidateIds = Array.from(expiredMap.keys());
+    const candidateIds = Array.from(candidateIdSet);
     if (candidateIds.length === 0) {
       return 0;
     }
 
-    // Atomic update with status guard to prevent duplicate processing
-    const result = await prisma.offer.updateMany({
-      where: {
-        id:     { in: candidateIds },
-        status: { in: [OfferStatus.ACTIVE, OfferStatus.PENDING_VERIFICATION] },
-      },
-      data: {
-        status:     OfferStatus.EXPIRED,
-        expired_at: now,
-      },
-    });
+    // 3. Atomic transition across multiple instances using UPDATE ... RETURNING
+    // Only rows that ACTUALLY transition from ACTIVE or PENDING_VERIFICATION to EXPIRED
+    // are returned. Any other instance executing concurrently will match 0 rows and return empty.
+    const transitioned = await prisma.$queryRaw<{ id: string; merchant_id: string }[]>`
+      UPDATE offers
+      SET status = ${OfferStatus.EXPIRED}::"OfferStatus", expired_at = ${now}
+      WHERE id = ANY(${candidateIds})
+        AND status IN (${OfferStatus.ACTIVE}::"OfferStatus", ${OfferStatus.PENDING_VERIFICATION}::"OfferStatus")
+      RETURNING id, merchant_id
+    `;
 
-    if (result.count > 0) {
-      logger.info(`Expired ${result.count} offers.`, { count: result.count });
+    if (transitioned && transitioned.length > 0) {
+      logger.info(`Expired ${transitioned.length} offers past deadlines.`, { count: transitioned.length });
 
-      for (const [offerId, merchantId] of expiredMap.entries()) {
+      // Publish events ONLY for successfully transitioned records (guaranteed idempotency)
+      for (const o of transitioned) {
         await publishEvent({
           eventId:    uuidv4(),
           type:       'offer.expired',
           occurredAt: now.toISOString(),
-          payload:    { offerId, merchantId },
+          payload:    { offerId: o.id, merchantId: o.merchant_id },
         });
       }
     }
 
-    return result.count;
+    return transitioned ? transitioned.length : 0;
   } catch (err) {
     logger.error('Expiration job error', { err });
     return 0;

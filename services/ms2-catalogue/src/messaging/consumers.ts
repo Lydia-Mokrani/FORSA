@@ -191,7 +191,14 @@ export async function startConsumers(): Promise<void> {
   ch.consume('ms2.offer.verified', async (msg) => {
     if (!msg) return;
     try {
-      const event: DomainEvent<{ offerId: string; verified: boolean; verifiedDate?: string; rejectionReason?: string; reason?: string }> = JSON.parse(msg.content.toString());
+      const event: DomainEvent<{
+        offerId: string;
+        verificationEventId?: string;
+        verified: boolean;
+        verifiedDate?: string;
+        rejectionReason?: string;
+        reason?: string;
+      }> = JSON.parse(msg.content.toString());
       const { type, payload } = event;
 
       const offer = await prisma.offer.findUnique({
@@ -199,7 +206,7 @@ export async function startConsumers(): Promise<void> {
         include: { shop: true },
       });
 
-      // Guard: Ignore verification events if offer does not exist or is not in PENDING_VERIFICATION
+      // Guard 1: Ignore verification events if offer does not exist or is not in PENDING_VERIFICATION
       if (!offer) {
         logger.warn('Received verification event for non-existent offer', { offerId: payload.offerId });
         ch.ack(msg);
@@ -216,13 +223,32 @@ export async function startConsumers(): Promise<void> {
         return;
       }
 
+      // Guard 2: Correlation check via verification_event_id to prevent stale verification events
+      if (
+        payload.verificationEventId &&
+        offer.verification_event_id &&
+        payload.verificationEventId !== offer.verification_event_id
+      ) {
+        logger.warn('Ignoring stale verification event: verificationEventId mismatch', {
+          offerId: offer.id,
+          eventVerificationId: payload.verificationEventId,
+          currentVerificationId: offer.verification_event_id,
+        });
+        ch.ack(msg);
+        return;
+      }
+
       const now = new Date();
 
-      // Guard: Pickup deadline or product expiry must not have passed
+      // Guard 3: Pickup deadline or product expiry must not have passed
       if (offer.expires_at <= now || offer.product_expiry_date <= now) {
         await prisma.offer.update({
           where: { id: offer.id },
-          data: { status: OfferStatus.EXPIRED, expired_at: now },
+          data: {
+            status:                OfferStatus.EXPIRED,
+            expired_at:            now,
+            verification_event_id: null,
+          },
         });
         logger.warn('Offer expired while awaiting verification', { offerId: offer.id });
         ch.ack(msg);
@@ -235,8 +261,9 @@ export async function startConsumers(): Promise<void> {
           await prisma.offer.update({
             where: { id: offer.id },
             data: {
-              status:           OfferStatus.REJECTED,
-              rejection_reason: payload.rejectionReason || 'Verification check failed.',
+              status:                OfferStatus.REJECTED,
+              rejection_reason:      payload.rejectionReason || 'Verification check failed.',
+              verification_event_id: null,
             },
           });
           logger.warn('Offer rejected because verified flag was not true', { offerId: offer.id });
@@ -250,8 +277,9 @@ export async function startConsumers(): Promise<void> {
             await prisma.offer.update({
               where: { id: offer.id },
               data: {
-                status:           OfferStatus.REJECTED,
-                rejection_reason: 'Packaged product verification rejected: missing OCR verified date from label.',
+                status:                OfferStatus.REJECTED,
+                rejection_reason:      'Packaged product verification rejected: missing OCR verified date from label.',
+                verification_event_id: null,
               },
             });
             logger.warn('Packaged offer rejected: missing verifiedDate in event payload', { offerId: offer.id });
@@ -267,8 +295,9 @@ export async function startConsumers(): Promise<void> {
             await prisma.offer.update({
               where: { id: offer.id },
               data: {
-                status:           OfferStatus.REJECTED,
-                rejection_reason: `Date on package label (${verifiedDateStr}) does not match entered expiry date (${expectedDateStr}).`,
+                status:                OfferStatus.REJECTED,
+                rejection_reason:      `Date on package label (${verifiedDateStr}) does not match entered expiry date (${expectedDateStr}).`,
+                verification_event_id: null,
               },
             });
             logger.warn('Offer rejected due to Algerian calendar date mismatch', {
@@ -281,13 +310,14 @@ export async function startConsumers(): Promise<void> {
           }
         }
 
-        // Verification approved -> transition to ACTIVE
+        // Verification approved -> transition to ACTIVE and clear correlation ID
         const updated = await prisma.offer.update({
           where: { id: offer.id },
           data: {
-            status:           OfferStatus.ACTIVE,
-            published_at:     new Date(),
-            rejection_reason: null,
+            status:                OfferStatus.ACTIVE,
+            published_at:          new Date(),
+            rejection_reason:      null,
+            verification_event_id: null,
           },
         });
 
@@ -307,8 +337,9 @@ export async function startConsumers(): Promise<void> {
         await prisma.offer.update({
           where: { id: offer.id },
           data: {
-            status:           OfferStatus.REJECTED,
-            rejection_reason: payload.rejectionReason || 'Date verification rejected',
+            status:                OfferStatus.REJECTED,
+            rejection_reason:      payload.rejectionReason || 'Date verification rejected',
+            verification_event_id: null,
           },
         });
         logger.info('Offer rejected after verification', { offerId: offer.id });
@@ -396,6 +427,26 @@ export async function startConsumers(): Promise<void> {
             return;
           }
 
+          // Guard 4: Validate that the offer belongs to the shop specified in the event
+          const offer = await tx.offer.findUnique({
+            where: { id: offerId },
+            select: { id: true, shop_id: true },
+          });
+
+          if (!offer) {
+            logger.warn('Cannot record pickup: offer not found', { offerId });
+            return;
+          }
+
+          if (shopId && shopId !== offer.shop_id) {
+            logger.warn('Mismatch between event shopId and offer shop_id; ignoring pickup', {
+              reservationId,
+              eventShopId: shopId,
+              offerShopId: offer.shop_id,
+            });
+            return;
+          }
+
           // Record PICKUP movement using exact reserved quantity
           await tx.stockMovement.create({
             data: {
@@ -406,13 +457,11 @@ export async function startConsumers(): Promise<void> {
             },
           });
 
-          // Increment shop sales count in the EXACT SAME transaction
-          if (shopId) {
-            await tx.shopSnapshot.update({
-              where: { id: shopId },
-              data:  { sales_count: { increment: 1 } },
-            });
-          }
+          // Increment shop sales count strictly on the offer's verified shop_id
+          await tx.shopSnapshot.update({
+            where: { id: offer.shop_id },
+            data:  { sales_count: { increment: 1 } },
+          });
         });
       }
       ch.ack(msg);

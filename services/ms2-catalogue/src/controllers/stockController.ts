@@ -48,19 +48,6 @@ function movementMatches(
 
 // ─── RESERVE STOCK ───────────────────────────────────────────────────────────
 
-/**
- * POST /internal/offers/:id/reserve
- *
- * Called by MS3 when a customer confirms a reservation.
- *
- * Guarantees:
- * - Atomic stock reduction.
- * - Stock update and movement record are one transaction.
- * - Duplicate reservation requests cannot reduce stock twice.
- * - Cannot reserve expired, withdrawn, suspended, or unverified offers.
- * - Cannot reserve after pickup deadline or product expiry date.
- */
-
 export async function reserveStock(
   req: Request,
   res: Response
@@ -326,7 +313,21 @@ export async function releaseStock(
         };
       }
 
-      // 2. Verify original reservation exists.
+      // 2. Guard: Check whether this reservation was already picked up (cannot release sold items!)
+      const existingPickup = await tx.stockMovement.findUnique({
+        where: {
+          reservation_id_movement_type: {
+            reservation_id: reservationId,
+            movement_type:  MovementType.PICKUP,
+          },
+        },
+      });
+
+      if (existingPickup) {
+        return { kind: 'already_picked_up' as const };
+      }
+
+      // 3. Verify original reservation exists.
       const reserveMovement = await tx.stockMovement.findUnique({
         where: {
           reservation_id_movement_type: {
@@ -340,12 +341,12 @@ export async function releaseStock(
         return { kind: 'reservation_not_found' as const };
       }
 
-      // 3. Ensure the release refers to the exact original reservation.
+      // 4. Ensure the release refers to the exact original reservation.
       if (!movementMatches(reserveMovement, offerId, quantity)) {
         return { kind: 'reservation_mismatch' as const };
       }
 
-      // 4. Restore stock atomically, without exceeding initial stock.
+      // 5. Restore stock atomically, without exceeding initial stock.
       const updatedRows = await tx.$executeRaw`
         UPDATE offers
         SET quantity_available = quantity_available + ${quantity}
@@ -364,7 +365,7 @@ export async function releaseStock(
         };
       }
 
-      // 5. Record the release in the SAME transaction.
+      // 6. Record the release in the SAME transaction.
       await tx.stockMovement.create({
         data: {
           offer_id: offerId,
@@ -374,7 +375,7 @@ export async function releaseStock(
         },
       });
 
-      // 6. Restore SOLD_OUT offers only if their deadline, product expiry, and shop status remain valid.
+      // 7. Restore SOLD_OUT offers only if their deadline, product expiry, and shop status remain valid.
       const offer = await tx.offer.findUnique({
         where: { id: offerId },
         include: { shop: true },
@@ -421,6 +422,14 @@ export async function releaseStock(
           idempotent: true,
         },
       });
+      return;
+    }
+
+    if (result.kind === 'already_picked_up') {
+      Errors.conflict(
+        res,
+        'This reservation was already confirmed as picked up; stock cannot be released.'
+      );
       return;
     }
 

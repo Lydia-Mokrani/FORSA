@@ -1,6 +1,6 @@
 // src/messaging/connection.ts
 // Manages a single persistent RabbitMQ connection for MS2.
-// Implements reconnect logic with exponential backoff and consumer restarting.
+// Implements publisher confirms, reconnect logic, and dead-letter queues.
 
 import amqplib from 'amqplib';
 import { env } from '../config/env';
@@ -22,16 +22,18 @@ export async function connectRabbitMQ(): Promise<void> {
     logger.info('Connecting to RabbitMQ...');
     const conn = await amqplib.connect(env.RABBITMQ_URL);
     connection = conn;
-    const ch = await conn.createChannel();
-    channel = ch;
 
-    // Declare the topic exchange — durable so it survives broker restarts
+    // Use a ConfirmChannel so publisher acknowledges message persistence
+    const ch = await conn.createConfirmChannel();
+    channel = ch as unknown as amqplib.Channel;
+
+    // Declare the primary topic exchange — durable so it survives broker restarts
     await ch.assertExchange(EXCHANGE, 'topic', { durable: true });
 
-    // Declare MS2's queues and bind routing keys
-    await declareQueues(ch);
+    // Declare MS2's queues and dead-letter queues
+    await declareQueues(ch as unknown as amqplib.Channel);
 
-    logger.info('RabbitMQ connected and queues declared.');
+    logger.info('RabbitMQ connected, confirm channel created, queues and DLQs declared.');
 
     conn.on('error', (err: any) => {
       logger.error('RabbitMQ connection error', { err });
@@ -72,9 +74,20 @@ async function declareQueues(ch: amqplib.Channel): Promise<void> {
   ];
 
   for (const q of queues) {
+    // 1. Declare dedicated Dead Letter Queue (DLQ) and bind to DLX
+    const dlqName = `${q.name}.dlq`;
+    await ch.assertQueue(dlqName, { durable: true });
+    for (const pattern of q.patterns) {
+      await ch.bindQueue(dlqName, deadLetterExchange, pattern);
+    }
+
+    // 2. Declare primary queue routing nacked / expired messages to DLX
     await ch.assertQueue(q.name, {
       durable:   true,
-      arguments: { 'x-dead-letter-exchange': deadLetterExchange, 'x-message-ttl': 86400000 },
+      arguments: {
+        'x-dead-letter-exchange': deadLetterExchange,
+        'x-message-ttl': 86400000,
+      },
     });
     for (const pattern of q.patterns) {
       await ch.bindQueue(q.name, EXCHANGE, pattern);

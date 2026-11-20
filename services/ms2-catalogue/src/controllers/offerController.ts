@@ -289,8 +289,6 @@ export async function getOfferById(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Public visitors must NEVER see DRAFT, PENDING_VERIFICATION, REJECTED, HIDDEN, WITHDRAWN,
-    // expired, or inactive-shop offers
     const publicAllowedStatuses = [OfferStatus.ACTIVE, OfferStatus.SOLD_OUT];
     const now = new Date();
 
@@ -337,7 +335,6 @@ export async function getMyOffers(req: AuthenticatedRequest, res: Response): Pro
 }
 
 // ─── POST /api/offers ────────────────────────────────────────────────────────
-// Creates a new offer in DRAFT status. Merchant must upload photos and submit.
 
 export async function createOffer(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -508,7 +505,6 @@ export async function uploadDatePhoto(req: AuthenticatedRequest, res: Response):
 }
 
 // ─── POST /api/offers/:id/submit ─────────────────────────────────────────────
-// Submits offer into PENDING_VERIFICATION (for both PACKAGED & FRESH)
 
 export async function submitOffer(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -549,22 +545,27 @@ export async function submitOffer(req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
-    // Both PACKAGED and FRESH transition strictly to PENDING_VERIFICATION
+    // Fresh correlation ID for this verification attempt
+    const verificationEventId = uuidv4();
+
+    // Transition strictly to PENDING_VERIFICATION and record verification_event_id
     const updated = await prisma.offer.update({
       where: { id },
       data:  {
-        status:           OfferStatus.PENDING_VERIFICATION,
-        rejection_reason: null,
+        status:                OfferStatus.PENDING_VERIFICATION,
+        verification_event_id: verificationEventId,
+        rejection_reason:      null,
       },
       include: { photos: true, category: true, shop: true },
     });
 
-    // Publish event for verification service
+    // Publish event for verification service using publisher confirms
     const published = await publishEvent({
-      eventId:    uuidv4(),
+      eventId:    verificationEventId,
       type:       'offer.needs_verification',
       occurredAt: new Date().toISOString(),
       payload: {
+        verificationEventId,
         offerId:           updated.id,
         merchantId:        req.user.merchantId,
         productType:       updated.product_type,
@@ -574,8 +575,18 @@ export async function submitOffer(req: AuthenticatedRequest, res: Response): Pro
       },
     });
 
+    // Guaranteed publishing: if publish fails, revert offer status back so it is never stuck
     if (!published) {
-      logger.warn('Event offer.needs_verification could not be queued immediately; broker may be buffering', { offerId: updated.id });
+      await prisma.offer.update({
+        where: { id },
+        data: {
+          status:                offer.status, // Revert to DRAFT or REJECTED
+          verification_event_id: null,
+        },
+      });
+      logger.error('Failed to confirm delivery of offer.needs_verification event; reverted offer status', { offerId: id });
+      Errors.internal(res, 'Unable to submit offer for verification due to messaging broker unavailability. Please try again.');
+      return;
     }
 
     res.json({ data: mapOfferToResponse(updated) });
@@ -609,11 +620,12 @@ export async function withdrawOffer(req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    // Existing customer reservations remain valid for pickup, but the offer is marked WITHDRAWN
-    // so no new reservations can be created and it is hidden from search.
     const updated = await prisma.offer.update({
       where: { id },
-      data:  { status: OfferStatus.WITHDRAWN },
+      data:  {
+        status:                OfferStatus.WITHDRAWN,
+        verification_event_id: null,
+      },
       include: { photos: true, category: true, shop: true },
     });
 
@@ -648,16 +660,21 @@ export async function adjustStock(req: AuthenticatedRequest, res: Response): Pro
 
     const { quantityDelta, newQuantity, reason } = parsed.data;
 
-    // Concurrency-safe: read current quantity and perform update inside a single transaction
+    // Concurrency-safe: lock the offer row inside the transaction with FOR UPDATE
     const result = await prisma.$transaction(async (tx) => {
-      const offer = await tx.offer.findUnique({
-        where: { id },
-        include: { shop: true },
-      });
+      const lockedRows = await tx.$queryRaw<any[]>`
+        SELECT id, merchant_id, status, quantity_available, quantity_initial, expires_at, product_expiry_date, shop_id
+        FROM offers
+        WHERE id = ${id}
+        FOR UPDATE
+      `;
 
-      if (!offer) {
+      if (!lockedRows || lockedRows.length === 0) {
         return { kind: 'not_found' as const };
       }
+
+      const offer = lockedRows[0];
+
       if (offer.merchant_id !== req.user.merchantId) {
         return { kind: 'forbidden' as const };
       }
@@ -686,6 +703,30 @@ export async function adjustStock(req: AuthenticatedRequest, res: Response): Pro
         return { kind: 'negative_stock' as const };
       }
 
+      // Calculate outstanding reserved quantity to recalculate quantity_initial properly
+      const [resAgg, relAgg, pickAgg] = await Promise.all([
+        tx.stockMovement.aggregate({
+          where: { offer_id: id, movement_type: MovementType.RESERVE },
+          _sum:  { quantity: true },
+        }),
+        tx.stockMovement.aggregate({
+          where: { offer_id: id, movement_type: MovementType.RELEASE },
+          _sum:  { quantity: true },
+        }),
+        tx.stockMovement.aggregate({
+          where: { offer_id: id, movement_type: MovementType.PICKUP },
+          _sum:  { quantity: true },
+        }),
+      ]);
+
+      const totalReserved = resAgg._sum.quantity ?? 0;
+      const totalReleased = relAgg._sum.quantity ?? 0;
+      const totalPickedUp = pickAgg._sum.quantity ?? 0;
+      const outstandingReserved = Math.max(0, totalReserved - totalReleased - totalPickedUp);
+
+      // Recalculate quantity_initial as: targetQty + outstandingReserved
+      const newQuantityInitial = targetQty + outstandingReserved;
+
       await tx.stockMovement.create({
         data: {
           offer_id:      id,
@@ -705,18 +746,20 @@ export async function adjustStock(req: AuthenticatedRequest, res: Response): Pro
       } else if (
         targetQty > 0 &&
         offer.status === OfferStatus.SOLD_OUT &&
-        offer.expires_at > now &&
-        offer.product_expiry_date > now &&
-        offer.shop?.status === ShopStatus.ACTIVE
+        new Date(offer.expires_at) > now &&
+        new Date(offer.product_expiry_date) > now
       ) {
-        newStatus = OfferStatus.ACTIVE;
+        const shop = await tx.shopSnapshot.findUnique({ where: { id: offer.shop_id } });
+        if (shop?.status === ShopStatus.ACTIVE) {
+          newStatus = OfferStatus.ACTIVE;
+        }
       }
 
       const updated = await tx.offer.update({
         where: { id },
         data: {
           quantity_available: targetQty,
-          quantity_initial:   Math.max(offer.quantity_initial, targetQty),
+          quantity_initial:   newQuantityInitial,
           status:             newStatus,
         },
         include: { photos: true, category: true, shop: true },
@@ -850,14 +893,10 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
 
     const discountPercent = calcDiscount(newOriginal, newDiscounted);
 
-    // Lifecycle & Verification state transitions:
-    // 1. If currently PENDING_VERIFICATION and critical attributes change (dates or product type),
-    //    revert to DRAFT so outdated verification is cancelled and merchant must resubmit.
-    // 2. If currently ACTIVE:
-    //    - If productExpiryDate or productType changes:
-    //      - If switching to PACKAGED and no date photo, revert to DRAFT.
-    //      - Otherwise transition to PENDING_VERIFICATION and publish verification request.
+    // Lifecycle transitions:
+    // If pending and critical fields change, revert to DRAFT and cancel previous verification_event_id
     let newStatus = existing.status;
+    let newVerificationEventId = existing.verification_event_id;
     let needsVerificationPublish = false;
     const targetProductType = (data.productType as ProductType) || existing.product_type;
 
@@ -869,6 +908,7 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
 
       if (hasCriticalChange) {
         newStatus = OfferStatus.DRAFT;
+        newVerificationEventId = null; // Invalidate previous verification event
       }
     } else if (existing.status === OfferStatus.ACTIVE) {
       const changedExpiry = data.productExpiryDate !== undefined && data.productExpiryDate !== existing.product_expiry_date.toISOString();
@@ -877,8 +917,10 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
       if (changedExpiry || changedType) {
         if (targetProductType === ProductType.PACKAGED && !existing.date_photo_url) {
           newStatus = OfferStatus.DRAFT;
+          newVerificationEventId = null;
         } else {
           newStatus = OfferStatus.PENDING_VERIFICATION;
+          newVerificationEventId = uuidv4();
           needsVerificationPublish = true;
         }
       }
@@ -887,27 +929,29 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
     const updated = await prisma.offer.update({
       where: { id },
       data: {
-        name:                data.name,
-        description:         data.description,
-        product_type:        data.productType as ProductType | undefined,
-        same_day_expiry:     data.sameDayExpiry,
-        original_price:      data.originalPrice,
-        discounted_price:    data.discountedPrice,
-        discount_percent:    discountPercent,
-        expires_at:          data.expiresAt ? new Date(data.expiresAt) : undefined,
-        product_expiry_date: data.productExpiryDate ? new Date(data.productExpiryDate) : undefined,
-        category_id:         data.categoryId,
-        status:              newStatus,
+        name:                  data.name,
+        description:           data.description,
+        product_type:          data.productType as ProductType | undefined,
+        same_day_expiry:       data.sameDayExpiry,
+        original_price:        data.originalPrice,
+        discounted_price:      data.discountedPrice,
+        discount_percent:      discountPercent,
+        expires_at:            data.expiresAt ? new Date(data.expiresAt) : undefined,
+        product_expiry_date:   data.productExpiryDate ? new Date(data.productExpiryDate) : undefined,
+        category_id:           data.categoryId,
+        status:                newStatus,
+        verification_event_id: newVerificationEventId,
       },
       include: { photos: { orderBy: { sort_order: 'asc' } }, category: true, shop: true },
     });
 
-    if (needsVerificationPublish) {
+    if (needsVerificationPublish && newVerificationEventId) {
       await publishEvent({
-        eventId:    uuidv4(),
+        eventId:    newVerificationEventId,
         type:       'offer.needs_verification',
         occurredAt: new Date().toISOString(),
         payload: {
+          verificationEventId: newVerificationEventId,
           offerId:           updated.id,
           merchantId:        req.user.merchantId,
           productType:       updated.product_type,
@@ -952,7 +996,10 @@ export async function deleteOffer(req: AuthenticatedRequest, res: Response): Pro
     // Soft withdrawal replaces hard delete. Existing reservations remain valid for pickup.
     await prisma.offer.update({
       where: { id },
-      data:  { status: OfferStatus.WITHDRAWN },
+      data:  {
+        status:                OfferStatus.WITHDRAWN,
+        verification_event_id: null,
+      },
     });
 
     await publishEvent({
@@ -986,37 +1033,8 @@ export async function uploadOfferPhotos(req: AuthenticatedRequest, res: Response
 
   try {
     const id = req.params.id as string;
-    const offer = await prisma.offer.findUnique({ where: { id } });
 
-    if (!offer) {
-      await cleanupFiles();
-      Errors.notFound(res, 'Offer not found.');
-      return;
-    }
-    if (offer.merchant_id !== req.user.merchantId) {
-      await cleanupFiles();
-      Errors.forbidden(res, 'You do not own this offer.');
-      return;
-    }
-    // Photo uploads are only permitted on DRAFT or REJECTED offers
-    if (offer.status !== OfferStatus.DRAFT && offer.status !== OfferStatus.REJECTED) {
-      await cleanupFiles();
-      Errors.badRequest(res, `Cannot upload photos for an offer with status '${offer.status}'.`);
-      return;
-    }
-
-    // Absolute cap: maximum 5 product photos per offer in total
-    const existingCount = await prisma.offerPhoto.count({ where: { offer_id: id } });
-    if (existingCount + files.length > 5) {
-      await cleanupFiles();
-      Errors.badRequest(
-        res,
-        `Maximum 5 product photos allowed per offer. This offer already has ${existingCount} photo(s).`
-      );
-      return;
-    }
-
-    // Validate ALL images before writing or saving anything
+    // Validate ALL uploaded images with Sharp before doing any processing
     for (const file of files) {
       try {
         const metadata = await sharp(file.path).metadata();
@@ -1032,52 +1050,94 @@ export async function uploadOfferPhotos(req: AuthenticatedRequest, res: Response
       }
     }
 
-    // Find the highest sort_order currently used to safely append
-    const maxSortResult = await prisma.offerPhoto.aggregate({
-      where: { offer_id: id },
-      _max:  { sort_order: true },
-    });
-    const baseSortOrder = (maxSortResult._max.sort_order ?? -1) + 1;
+    // Compress images to disk
+    const compressedFiles: { filename: string; outputPath: string; sizeBytes: number }[] = [];
+    for (const file of files) {
+      const compressed = `compressed_${file.filename}`;
+      const outputPath = path.join(env.UPLOAD_DIR, compressed);
+      await sharp(file.path)
+        .resize({ width: 1200, withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toFile(outputPath);
+      const stat = await fs.stat(outputPath);
+      compressedFiles.push({ filename: compressed, outputPath, sizeBytes: stat.size });
+      await fs.unlink(file.path).catch(() => {});
+    }
 
-    const createdPhotos = [];
-    const generatedPaths: string[] = [];
+    // Concurrency-safe: lock the offer row in a transaction to serialize concurrent uploads
+    const result = await prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<any[]>`
+        SELECT id, merchant_id, status FROM offers WHERE id = ${id} FOR UPDATE
+      `;
 
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const compressed = `compressed_${file.filename}`;
-        const outputPath = path.join(env.UPLOAD_DIR, compressed);
+      if (!locked || locked.length === 0) {
+        return { kind: 'not_found' as const };
+      }
 
-        await sharp(file.path)
-          .resize({ width: 1200, withoutEnlargement: true })
-          .jpeg({ quality: 85 })
-          .toFile(outputPath);
+      const offer = locked[0];
+      if (offer.merchant_id !== req.user.merchantId) {
+        return { kind: 'forbidden' as const };
+      }
+      if (offer.status !== OfferStatus.DRAFT && offer.status !== OfferStatus.REJECTED) {
+        return { kind: 'ineligible_status' as const, status: offer.status };
+      }
 
-        generatedPaths.push(outputPath);
-        await fs.unlink(file.path).catch(() => {});
+      const existingCount = await tx.offerPhoto.count({ where: { offer_id: id } });
+      if (existingCount + compressedFiles.length > 5) {
+        return { kind: 'limit_exceeded' as const, existingCount };
+      }
 
-        const url = `${env.MEDIA_BASE_URL}/${compressed}`;
-        const photo = await prisma.offerPhoto.create({
+      const maxSortResult = await tx.offerPhoto.aggregate({
+        where: { offer_id: id },
+        _max:  { sort_order: true },
+      });
+      const baseSortOrder = (maxSortResult._max.sort_order ?? -1) + 1;
+
+      const createdPhotos = [];
+      for (let i = 0; i < compressedFiles.length; i++) {
+        const cf = compressedFiles[i];
+        const url = `${env.MEDIA_BASE_URL}/${cf.filename}`;
+        const photo = await tx.offerPhoto.create({
           data: {
             offer_id:   id,
             url,
-            filename:   compressed,
-            size_bytes: (await fs.stat(outputPath)).size,
+            filename:   cf.filename,
+            size_bytes: cf.sizeBytes,
             mime_type:  'image/jpeg',
             sort_order: baseSortOrder + i,
           },
         });
         createdPhotos.push({ id: photo.id, url: photo.url, sortOrder: photo.sort_order });
       }
-    } catch (err) {
-      // Clean up newly compressed files if DB creation fails
-      for (const p of generatedPaths) {
-        await fs.unlink(p).catch(() => {});
-      }
-      throw err;
+
+      return { kind: 'success' as const, createdPhotos };
+    });
+
+    if (result.kind === 'not_found') {
+      for (const cf of compressedFiles) await fs.unlink(cf.outputPath).catch(() => {});
+      Errors.notFound(res, 'Offer not found.');
+      return;
+    }
+    if (result.kind === 'forbidden') {
+      for (const cf of compressedFiles) await fs.unlink(cf.outputPath).catch(() => {});
+      Errors.forbidden(res, 'You do not own this offer.');
+      return;
+    }
+    if (result.kind === 'ineligible_status') {
+      for (const cf of compressedFiles) await fs.unlink(cf.outputPath).catch(() => {});
+      Errors.badRequest(res, `Cannot upload photos for an offer with status '${result.status}'.`);
+      return;
+    }
+    if (result.kind === 'limit_exceeded') {
+      for (const cf of compressedFiles) await fs.unlink(cf.outputPath).catch(() => {});
+      Errors.badRequest(
+        res,
+        `Maximum 5 product photos allowed per offer. This offer already has ${result.existingCount} photo(s).`
+      );
+      return;
     }
 
-    res.status(201).json({ data: createdPhotos });
+    res.status(201).json({ data: result.createdPhotos });
   } catch (error) {
     await cleanupFiles();
     logger.error('uploadOfferPhotos error', { error });

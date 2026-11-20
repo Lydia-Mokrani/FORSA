@@ -4,7 +4,7 @@
 import { getAlgiersCalendarDate, isSameDayInAlgiers, getAlgiersEndOfDay } from '../../src/utils/timezone';
 import { checkAndExpireOffers } from '../../src/jobs/expirationJob';
 import { prisma } from '../../src/config/prisma';
-import { OfferStatus, ProductType, MovementType, ShopStatus } from '@prisma/client';
+import { OfferStatus, MovementType, ShopStatus } from '@prisma/client';
 import * as offerController from '../../src/controllers/offerController';
 import * as stockController from '../../src/controllers/stockController';
 import { AuthenticatedRequest } from '../../src/types';
@@ -35,7 +35,7 @@ jest.mock('../../src/config/prisma', () => ({
       findUnique: jest.fn(),
       findFirst: jest.fn(),
       count: jest.fn(),
-      aggregate: jest.fn(),
+      aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }),
       create: jest.fn(),
     },
     shopSnapshot: {
@@ -54,6 +54,7 @@ jest.mock('../../src/config/prisma', () => ({
       return Promise.all(callback);
     }),
     $executeRaw: jest.fn(),
+    $queryRaw: jest.fn(),
   },
 }));
 
@@ -109,21 +110,13 @@ describe('Timezone, Expiration & Advanced Business Rules', () => {
         ])
         .mockResolvedValueOnce([]); // No additional same-day candidates
 
-      (prisma.offer.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        { id: 'offer-1', merchant_id: 'merchant-1' },
+      ]);
 
       const expiredCount = await checkAndExpireOffers(now);
       expect(expiredCount).toBe(1);
-
-      expect(prisma.offer.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: { in: ['offer-1'] },
-          status: { in: [OfferStatus.ACTIVE, OfferStatus.PENDING_VERIFICATION] },
-        },
-        data: {
-          status: OfferStatus.EXPIRED,
-          expired_at: now,
-        },
-      });
+      expect(prisma.$queryRaw).toHaveBeenCalled();
     });
 
     test('expires same-day offers past end of day in Algeria', async () => {
@@ -141,7 +134,9 @@ describe('Timezone, Expiration & Advanced Business Rules', () => {
           },
         ]);
 
-      (prisma.offer.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        { id: 'same-day-offer', merchant_id: 'merchant-2' },
+      ]);
 
       const count = await checkAndExpireOffers(now);
       expect(count).toBe(1);
@@ -197,13 +192,18 @@ describe('Timezone, Expiration & Advanced Business Rules', () => {
         },
       } as unknown as AuthenticatedRequest;
 
-      (prisma.offer.findUnique as jest.Mock).mockResolvedValue({
-        id: 'offer-1',
-        merchant_id: 'merchant-1',
-        quantity_available: 5,
-        status: OfferStatus.ACTIVE,
-        shop: { status: ShopStatus.ACTIVE },
-      });
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        {
+          id: 'offer-1',
+          merchant_id: 'merchant-1',
+          quantity_available: 5,
+          quantity_initial: 5,
+          status: OfferStatus.ACTIVE,
+          expires_at: new Date(Date.now() + 3600000),
+          product_expiry_date: new Date(Date.now() + 3600000),
+          shop_id: 'shop-1',
+        },
+      ]);
 
       const res = mockResponse();
       await offerController.adjustStock(req, res);
@@ -220,6 +220,36 @@ describe('Timezone, Expiration & Advanced Business Rules', () => {
   });
 
   describe('Stock Release & Reactivation Safeguards', () => {
+    test('rejects stock release if reservation was already picked up', async () => {
+      const req = {
+        params: { id: 'offer-1' },
+        body: {
+          reservationId: '11111111-1111-1111-1111-111111111111',
+          quantity: 2,
+        },
+      } as any;
+
+      (prisma.stockMovement.findUnique as jest.Mock)
+        .mockResolvedValueOnce(null) // existingRelease: none
+        .mockResolvedValueOnce({
+          offer_id: 'offer-1',
+          quantity: 2,
+          movement_type: MovementType.PICKUP,
+        }); // existingPickup: exists!
+
+      const res = mockResponse();
+      await stockController.releaseStock(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            message: 'This reservation was already confirmed as picked up; stock cannot be released.',
+          }),
+        })
+      );
+    });
+
     test('does not reactivate SOLD_OUT offer upon release if product expiry date has passed', async () => {
       const past = new Date(Date.now() - 3600 * 1000);
       const future = new Date(Date.now() + 24 * 3600 * 1000);
@@ -234,6 +264,7 @@ describe('Timezone, Expiration & Advanced Business Rules', () => {
 
       (prisma.stockMovement.findUnique as jest.Mock)
         .mockResolvedValueOnce(null) // existingRelease: none
+        .mockResolvedValueOnce(null) // existingPickup: none
         .mockResolvedValueOnce({
           offer_id: 'offer-1',
           quantity: 2,
@@ -277,7 +308,8 @@ describe('Timezone, Expiration & Advanced Business Rules', () => {
       } as any;
 
       (prisma.stockMovement.findUnique as jest.Mock)
-        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null) // existingRelease: none
+        .mockResolvedValueOnce(null) // existingPickup: none
         .mockResolvedValueOnce({
           offer_id: 'offer-1',
           quantity: 2,
