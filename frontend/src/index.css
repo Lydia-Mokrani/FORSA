@@ -11,3 +11,36 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+
+/* ── FORSA design tokens (from Figma) ── */
+@theme {
+  --color-forsa-cream: #FFFAF0;
+  --color-forsa-green: #0B2C25;
+  --color-forsa-price: #17664E;
+  --color-forsa-muted: #78847F;
+  --font-poppins: 'Poppins', system-ui, sans-serif;
+}
+
+/* Active sidebar item: cream tab merging into the page, with rounded green corners above and below */
+.forsa-nav-active {
+  position: relative;
+  background: #FFFAF0;
+  border-radius: 30px 0 0 30px;
+}
+.forsa-nav-active::before,
+.forsa-nav-active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+}
+.forsa-nav-active::before {
+  top: -30px;
+  background: radial-gradient(circle at 0 0, transparent 30px, #FFFAF0 30px);
+}
+.forsa-nav-active::after {
+  bottom: -30px;
+  background: radial-gradient(circle at 0 100%, transparent 30px, #FFFAF0 30px);
+}
