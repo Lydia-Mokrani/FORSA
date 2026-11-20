@@ -1,0 +1,180 @@
+{
+  "info": {
+    "name": "FORSA — MS2 Catalogue & Search API",
+    "description": "Complete Postman collection for testing all public, merchant, and internal endpoints of MS2.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3002",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "YOUR_MS1_JWT_TOKEN",
+      "type": "string"
+    },
+    {
+      "key": "internalKey",
+      "value": "change_this_to_a_strong_random_secret",
+      "type": "string"
+    },
+    {
+      "key": "offerId",
+      "value": "offer-demo-00000000-0000-0000-0000-000000000001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Public / Customer",
+      "item": [
+        {
+          "name": "Get all categories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/categories"
+          }
+        },
+        {
+          "name": "Search & filter offers (with Haversine distance)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/offers?lat=36.7725&lng=3.0588&radius=10&sort=deadline&available=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "offers"],
+              "query": [
+                { "key": "lat", "value": "36.7725" },
+                { "key": "lng", "value": "3.0588" },
+                { "key": "radius", "value": "10" },
+                { "key": "sort", "value": "deadline" },
+                { "key": "available", "value": "true" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get offer details by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/offers/{{offerId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Merchant",
+      "item": [
+        {
+          "name": "Get Merchant Dashboard Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/merchant/dashboard"
+          }
+        },
+        {
+          "name": "Get My Offers",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/offers/mine"
+          }
+        },
+        {
+          "name": "Create new offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopId\": \"shop-demo-00000000-0000-0000-0000-000000000001\",\n  \"categoryId\": \"b1000000-0000-0000-0000-000000000001\",\n  \"name\": \"Panier Viennoiserie Fraîche\",\n  \"description\": \"Assortiment de 6 viennoiseries du jour\",\n  \"originalPrice\": 600,\n  \"discountedPrice\": 250,\n  \"quantityAvailable\": 5,\n  \"expiresAt\": \"2026-11-21T20:00:00.000Z\"\n}"
+            },
+            "url": "{{baseUrl}}/api/offers"
+          }
+        },
+        {
+          "name": "Update offer",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discountedPrice\": 200,\n  \"quantityAvailable\": 3\n}"
+            },
+            "url": "{{baseUrl}}/api/offers/{{offerId}}"
+          }
+        },
+        {
+          "name": "Delete offer",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/offers/{{offerId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Internal Service-to-Service (MS3)",
+      "item": [
+        {
+          "name": "Atomically reserve stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Internal-Api-Key", "value": "{{internalKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 2,\n  \"reservationId\": \"a0000000-0000-0000-0000-000000000001\"\n}"
+            },
+            "url": "{{baseUrl}}/internal/offers/{{offerId}}/reserve"
+          }
+        },
+        {
+          "name": "Release reserved stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Internal-Api-Key", "value": "{{internalKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 2,\n  \"reservationId\": \"a0000000-0000-0000-0000-000000000001\"\n}"
+            },
+            "url": "{{baseUrl}}/internal/offers/{{offerId}}/release"
+          }
+        }
+      ]
+    }
+  ]
+}
