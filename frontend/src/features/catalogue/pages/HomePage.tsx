@@ -10,7 +10,6 @@ import {
   ArrowRight,
   Clock,
   ShoppingBasket,
-  Leaf,
   ChevronRight,
 } from 'lucide-react';
 
@@ -35,7 +34,7 @@ const getCategoryImage = (category: Category) => {
   const name = category.nameFr.toLowerCase();
 
   const matchedKey = Object.keys(CATEGORY_IMAGES).find((key) =>
-    name.includes(key)
+    name.includes(key),
   );
 
   return matchedKey
@@ -43,17 +42,18 @@ const getCategoryImage = (category: Category) => {
     : 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=160&q=80';
 };
 
-const getPickupTime = (dateString: string) => {
+const formatPrice = (price: number) =>
+  `${new Intl.NumberFormat('fr-FR').format(price)} DA`;
+
+const formatPickupTime = (dateString: string) => {
   const date = new Date(dateString);
 
-  if (Number.isNaN(date.getTime())) {
-    return 'Retrait à confirmer';
-  }
+  if (Number.isNaN(date.getTime())) return 'À confirmer';
 
-  return `Retrait avant ${date.toLocaleTimeString('fr-FR', {
+  return date.toLocaleTimeString('fr-FR', {
     hour: '2-digit',
     minute: '2-digit',
-  })}`;
+  });
 };
 
 interface HomeOfferCardProps {
@@ -65,14 +65,24 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
     offer.photos?.[0]?.url ||
     'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80';
 
-  const isLowStock = offer.quantityAvailable <= 5;
+  const quantityAvailable = offer.quantityAvailable;
+  const quantityInitial =
+    offer.quantityInitial || offer.quantityAvailable || 1;
+
+  const stockPercentage = Math.min(
+    100,
+    Math.max(0, (quantityAvailable / quantityInitial) * 100),
+  );
+
+  const isLowStock = quantityAvailable <= 3;
 
   return (
     <Link
       to={`/offers/${offer.id}`}
-      className="group min-w-0 overflow-hidden rounded-[18px] border border-[#EAE8E1] bg-white transition hover:-translate-y-1 hover:shadow-lg"
+      className="group flex min-w-0 flex-col rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)] transition hover:-translate-y-1 hover:shadow-lg"
     >
-      <div className="relative h-[164px] overflow-hidden bg-[#EAE8E1]">
+      {/* Product image */}
+      <div className="relative h-[150px] w-full overflow-hidden rounded-[12px] bg-[#F0EEE8]">
         <img
           src={photo}
           alt={offer.name}
@@ -80,47 +90,77 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
           loading="lazy"
         />
 
-        <div className="absolute left-3 top-3 rounded-full bg-[#0B2C25] px-3 py-1 text-[11px] font-semibold text-white">
-          {isLowStock
-            ? `${offer.quantityAvailable} restants`
-            : `-${offer.discountPercent}%`}
-        </div>
+        <span className="absolute left-[9px] top-[9px] rounded-[7px] bg-[#0B2C25] px-[10px] py-[6px] font-poppins text-[10px] font-bold text-white">
+          -{offer.discountPercent}%
+        </span>
+
+        {offer.category && (
+          <span className="absolute right-[9px] top-[9px] rounded-[7px] bg-white/90 px-[9px] py-[6px] font-poppins text-[10px] font-semibold text-[#0B2C25]">
+            {offer.category.nameFr}
+          </span>
+        )}
       </div>
 
-      <div className="p-[18px]">
-        <p className="mb-2 flex items-center gap-1.5 text-xs text-[#777C74]">
-          <MapPin size={13} className="shrink-0" />
-          <span className="truncate">
-            {offer.shop?.name || 'Commerce partenaire'}
-          </span>
-        </p>
+      {/* Pickup information */}
+      <div className="mt-[9px] flex items-center gap-[6px]">
+        <Clock size={12} className="shrink-0 text-[#78847F]" />
 
-        <h3 className="mb-3 line-clamp-1 text-[16px] font-bold text-[#0B2C25]">
+        <p className="font-poppins text-[9px] text-[#78847F]">
+          Retrait avant {formatPickupTime(offer.expiresAt)}
+        </p>
+      </div>
+
+      {/* Product title and merchant */}
+      <div className="mt-[9px] min-h-[65px]">
+        <h3 className="line-clamp-1 font-poppins text-[16px] font-semibold leading-[24px] text-[#0B2C25]">
           {offer.name}
         </h3>
 
-        <div className="mb-3 flex items-baseline gap-3">
-          <span className="text-[23px] font-bold text-[#0B2C25]">
-            {offer.discountedPrice} DA
-          </span>
+        <p className="mt-[2px] truncate font-poppins text-[10px] text-[rgba(11,44,37,0.66)]">
+          {offer.shop?.name || 'Commerce partenaire'}
+        </p>
+      </div>
 
-          <span className="text-sm text-[#969990] line-through">
-            {offer.originalPrice} DA
-          </span>
+      {/* Pricing */}
+      <div className="mt-[8px] flex flex-wrap items-baseline gap-[7px]">
+        <span className="font-poppins text-[17px] font-bold text-[#17664E]">
+          {formatPrice(offer.discountedPrice)}
+        </span>
+
+        <span className="font-poppins text-[10px] text-[#78847F] line-through">
+          {formatPrice(offer.originalPrice)}
+        </span>
+      </div>
+
+      {/* Stock progress */}
+      <div className="mt-[13px]">
+        <div className="mb-[5px] flex items-center justify-between gap-2">
+          <p className="font-poppins text-[9px] text-[rgba(11,44,37,0.65)]">
+            {quantityAvailable}{' '}
+            {quantityAvailable > 1 ? 'pièces restantes' : 'pièce restante'}
+          </p>
+
+          {isLowStock && (
+            <span className="font-poppins text-[8px] font-semibold text-[#A34A42]">
+              Bientôt épuisé
+            </span>
+          )}
         </div>
 
-        <p className="mb-4 flex items-center gap-2 text-xs text-[#777C74]">
-          <Clock size={14} />
-          {getPickupTime(offer.expiresAt)}
-        </p>
-
-        <div className="flex items-center justify-between border-t border-[#F0EEE8] pt-3 text-sm font-semibold text-[#0B5B43]">
-          <span>Voir l'offre</span>
-          <ArrowRight
-            size={17}
-            className="transition group-hover:translate-x-1"
+        <div className="h-[6px] w-full overflow-hidden rounded-[3px] bg-[#D9D9D9]">
+          <div
+            className="h-full rounded-[3px] bg-[#0B2C25] transition-all"
+            style={{ width: `${stockPercentage}%` }}
           />
         </div>
+      </div>
+
+      {/* Action */}
+      <div className="mt-[13px] border-t border-[#F0F0F0] pt-[11px]">
+        <span className="flex w-full items-center justify-center gap-2 rounded-[8px] bg-[#0B2C25] px-3 py-[9px] font-poppins text-[11px] font-bold text-white transition-colors group-hover:bg-[#17664E]">
+          Voir l'offre
+          <ArrowRight size={14} />
+        </span>
       </div>
     </Link>
   );
@@ -132,28 +172,21 @@ export const HomePage: React.FC = () => {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [nearbyOffers, setNearbyOffers] = useState<Offer[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | undefined>();
+  const [selectedCategory, setSelectedCategory] = useState<string>();
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
-    const loadCategories = async () => {
-      try {
-        const result = await CatalogueApi.getCategories();
-
-        if (!cancelled) {
-          setCategories(result);
-        }
-      } catch (err) {
-        console.error('Unable to load categories:', err);
-      }
-    };
-
-    loadCategories();
+    CatalogueApi.getCategories()
+      .then((result) => {
+        if (!cancelled) setCategories(result);
+      })
+      .catch((err) => console.error('Unable to load categories:', err));
 
     return () => {
       cancelled = true;
@@ -188,9 +221,7 @@ export const HomePage: React.FC = () => {
           setNearbyOffers([]);
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -199,7 +230,7 @@ export const HomePage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [location, selectedCategory, searchQuery]);
+  }, [location, selectedCategory, searchQuery, retryCount]);
 
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -220,14 +251,15 @@ export const HomePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#FFFAF0] px-5 pb-32 pt-7 sm:px-8 lg:px-10">
       <div className="mx-auto max-w-[1200px]">
-        {/* Page heading */}
+
+        {/* Heading */}
         <section className="mb-6 flex flex-wrap items-center justify-between gap-5">
           <div>
             <p className="mb-2 text-xs font-medium text-[#7B8178]">
               Mon espace / Accueil
             </p>
 
-            <h1 className="text-[29px] font-bold tracking-tight text-[#0B2C25] sm:text-[32px]">
+            <h1 className="text-[29px] font-semibold tracking-tight text-[#0B2C25] sm:text-[32px]">
               Bonjour !
             </h1>
 
@@ -240,7 +272,7 @@ export const HomePage: React.FC = () => {
             <button
               type="button"
               onClick={openModal}
-              className="hidden items-center gap-2 text-xs font-medium text-[#0B2C25] transition hover:text-[#14734F] sm:flex"
+              className="hidden items-center gap-2 text-xs font-medium text-[#0B2C25] sm:flex"
             >
               <MapPin size={18} />
               <span className="max-w-[160px] truncate">{location.label}</span>
@@ -249,17 +281,15 @@ export const HomePage: React.FC = () => {
             <button
               type="button"
               aria-label="Notifications"
-              title="Notifications"
-              className="flex h-[42px] w-[42px] items-center justify-center rounded-full border border-[#EAE8E1] bg-white text-[#0B2C25]"
+              className="flex h-[45px] w-[45px] items-center justify-center rounded-full text-[#0B2C25]"
             >
-              <Bell size={20} />
+              <Bell size={22} />
             </button>
 
             <button
               type="button"
               aria-label="Profil"
-              title="Profil"
-              className="flex h-[42px] w-[42px] items-center justify-center rounded-full bg-[#E8E9DF] text-[#0B2C25]"
+              className="flex h-[45px] w-[45px] items-center justify-center rounded-full bg-[#E8E9DF] text-[#0B2C25]"
             >
               <UserRound size={21} />
             </button>
@@ -277,10 +307,7 @@ export const HomePage: React.FC = () => {
         </button>
 
         {/* Search */}
-        <form
-          onSubmit={handleSearch}
-          className="mb-6 flex max-w-[666px] gap-3"
-        >
+        <form onSubmit={handleSearch} className="mb-6 flex max-w-[666px] gap-3">
           <div className="flex h-[46px] flex-1 items-center gap-3 rounded-[13px] border border-[#E6E4DD] bg-white px-4">
             <Search size={19} className="shrink-0 text-[#0B2C25]" />
 
@@ -297,14 +324,13 @@ export const HomePage: React.FC = () => {
             type="button"
             onClick={() => navigate('/explore')}
             aria-label="Filtres"
-            title="Filtres"
-            className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px] border border-[#E6E4DD] bg-white text-[#0B2C25] transition hover:bg-[#E8F2E8]"
+            className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px] border border-[#E6E4DD] bg-white text-[#0B2C25]"
           >
             <SlidersHorizontal size={20} />
           </button>
         </form>
 
-        {/* Nearby map */}
+        {/* Map */}
         <section className="relative mb-6 h-[210px] overflow-hidden rounded-[22px] border border-[#E8E5DC] bg-[#E5E8D8] sm:h-[234px]">
           <iframe
             title="Carte des commerces à proximité"
@@ -321,7 +347,7 @@ export const HomePage: React.FC = () => {
           </div>
         </section>
 
-        {/* Category navigation */}
+        {/* Categories */}
         <section className="mb-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <button
             type="button"
@@ -346,7 +372,7 @@ export const HomePage: React.FC = () => {
                 setSelectedCategory(
                   selectedCategory === category.slug
                     ? undefined
-                    : category.slug
+                    : category.slug,
                 )
               }
               className={`flex h-[64px] min-w-0 items-center gap-3 rounded-[14px] border px-3 text-left transition ${
@@ -368,16 +394,16 @@ export const HomePage: React.FC = () => {
           ))}
         </section>
 
-        {/* Nearby offers */}
+        {/* Offers */}
         <section>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-[20px] font-bold text-[#0B2C25]">
+            <h2 className="text-[20px] font-semibold text-[#0B2C25]">
               Offres à proximité
             </h2>
 
             <Link
               to="/map"
-              className="flex items-center gap-2 text-xs font-medium text-[#0B5B43] transition hover:text-[#14734F]"
+              className="flex items-center gap-2 text-xs font-medium text-[#0B5B43]"
             >
               <MapPin size={16} />
               Voir sur la carte
@@ -390,16 +416,17 @@ export const HomePage: React.FC = () => {
               {[1, 2, 3].map((item) => (
                 <div
                   key={item}
-                  className="h-[350px] animate-pulse rounded-[18px] bg-[#EEECE4]"
+                  className="h-[350px] animate-pulse rounded-[16px] bg-[#EEECE4]"
                 />
               ))}
             </div>
           ) : error ? (
             <div className="rounded-2xl border border-[#E8E6DF] bg-white p-10 text-center">
               <p className="text-sm text-[#73796F]">{error}</p>
+
               <button
                 type="button"
-                onClick={() => setSearchQuery((value) => value)}
+                onClick={() => setRetryCount((count) => count + 1)}
                 className="mt-4 text-sm font-semibold text-[#0B5B43]"
               >
                 Réessayer
@@ -430,7 +457,7 @@ export const HomePage: React.FC = () => {
               <button
                 type="button"
                 onClick={openModal}
-                className="mt-4 rounded-xl bg-[#0B2C25] px-5 py-3 text-xs font-semibold text-white transition hover:bg-[#17483B]"
+                className="mt-4 rounded-xl bg-[#0B2C25] px-5 py-3 text-xs font-semibold text-white"
               >
                 Modifier ma localisation
               </button>
@@ -438,7 +465,7 @@ export const HomePage: React.FC = () => {
           )}
         </section>
 
-        {/* Reservation handoff */}
+        {/* Bottom reservation bar */}
         <section className="fixed bottom-3 left-3 right-3 z-30 flex min-h-[70px] items-center gap-3 rounded-[16px] bg-[#0B2C25] px-4 py-3 text-white shadow-xl md:left-[258px] md:right-10 md:px-5">
           <div className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-xl bg-[#FFFAF0] text-[#0B2C25]">
             <ShoppingBasket size={20} />
@@ -451,14 +478,9 @@ export const HomePage: React.FC = () => {
             </p>
           </div>
 
-          <div className="hidden items-center gap-2 text-xs text-white/80 lg:flex">
-            <Leaf size={17} />
-            <span>Un petit geste, moins de gaspillage.</span>
-          </div>
-
           <Link
             to="/explore"
-            className="flex shrink-0 items-center gap-2 text-xs font-semibold text-white transition hover:text-[#BDE5C2]"
+            className="flex shrink-0 items-center gap-2 text-xs font-semibold text-white"
           >
             Explorer
             <ChevronRight size={17} />
@@ -468,3 +490,5 @@ export const HomePage: React.FC = () => {
     </div>
   );
 };
+
+export default HomePage;
