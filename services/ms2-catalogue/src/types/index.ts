@@ -66,6 +66,7 @@ export interface OfferSearchParams extends PaginationParams {
   radius?:      number;    // km
   q?:           string;
   category?:    string;    // category slug
+  productType?: 'PACKAGED' | 'FRESH';
   minPrice?:    number;
   maxPrice?:    number;
   minDiscount?: number;    // 0-100

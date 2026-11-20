@@ -1,12 +1,11 @@
-
 // src/controllers/stockController.ts
-// Internal endpoints for stock reservation and release.
+// Internal endpoints for stock reservation, release, and pickup.
 // These endpoints are protected by INTERNAL_API_KEY
 // and must NEVER be exposed through Traefik.
 
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { Prisma, OfferStatus } from '@prisma/client';
+import { Prisma, OfferStatus, MovementType } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { Errors } from '../utils/apiError';
 import { logger } from '../config/logger';
@@ -21,6 +20,11 @@ const ReserveSchema = z.object({
 });
 
 const ReleaseSchema = z.object({
+  quantity: z.number().int().positive(),
+  reservationId: z.string().uuid(),
+});
+
+const PickupSchema = z.object({
   quantity: z.number().int().positive(),
   reservationId: z.string().uuid(),
 });
@@ -53,7 +57,8 @@ function movementMatches(
  * - Atomic stock reduction.
  * - Stock update and movement record are one transaction.
  * - Duplicate reservation requests cannot reduce stock twice.
- * - Insufficient stock is rejected.
+ * - Cannot reserve expired, withdrawn, suspended, or unverified offers.
+ * - Cannot reserve after pickup deadline or product expiry date.
  */
 
 export async function reserveStock(
@@ -80,7 +85,7 @@ export async function reserveStock(
         where: {
           reservation_id_movement_type: {
             reservation_id: reservationId,
-            movement_type: 'RESERVE',
+            movement_type: MovementType.RESERVE,
           },
         },
       });
@@ -96,8 +101,31 @@ export async function reserveStock(
         };
       }
 
-      // 2. Atomically reduce stock only if enough stock exists
-      // and the offer is currently active.
+      // 2. Fetch offer and verify eligibility
+      const offer = await tx.offer.findUnique({
+        where: { id: offerId },
+        include: { shop: true },
+      });
+
+      if (!offer) {
+        return { kind: 'not_found' as const };
+      }
+
+      const now = new Date();
+      if (offer.status !== OfferStatus.ACTIVE) {
+        return { kind: 'ineligible_status' as const, status: offer.status };
+      }
+      if (offer.expires_at <= now) {
+        return { kind: 'deadline_passed' as const };
+      }
+      if (offer.product_expiry_date && offer.product_expiry_date <= now) {
+        return { kind: 'product_expired' as const };
+      }
+      if (offer.shop?.status !== 'ACTIVE') {
+        return { kind: 'shop_inactive' as const };
+      }
+
+      // 3. Atomically reduce stock only if enough stock exists
       const updatedRows = await tx.$executeRaw`
         UPDATE offers
         SET quantity_available = quantity_available - ${quantity}
@@ -107,27 +135,20 @@ export async function reserveStock(
       `;
 
       if (updatedRows === 0) {
-        const offer = await tx.offer.findUnique({
-          where: { id: offerId },
-        });
-
-        return {
-          kind: 'unavailable' as const,
-          offer,
-        };
+        return { kind: 'insufficient_stock' as const };
       }
 
-      // 3. Record the reservation in the SAME transaction.
+      // 4. Record the reservation in the SAME transaction.
       await tx.stockMovement.create({
         data: {
           offer_id: offerId,
           reservation_id: reservationId,
-          movement_type: 'RESERVE',
+          movement_type: MovementType.RESERVE,
           quantity,
         },
       });
 
-      // 4. Check whether the offer has become sold out.
+      // 5. Check whether the offer has become sold out.
       const updatedOffer = await tx.offer.findUnique({
         where: { id: offerId },
       });
@@ -154,7 +175,7 @@ export async function reserveStock(
       };
     });
 
-    // 5. Handle transaction results.
+    // Handle transaction results.
     if (result.kind === 'duplicate') {
       if (!result.matches) {
         Errors.conflict(
@@ -173,21 +194,37 @@ export async function reserveStock(
       return;
     }
 
-    if (result.kind === 'unavailable') {
-      if (!result.offer) {
-        Errors.notFound(res, 'Offer not found.');
-      } else if (result.offer.status !== OfferStatus.ACTIVE) {
-        Errors.conflict(
-          res,
-          `Offer is not active (status: ${result.offer.status}).`
-        );
-      } else {
-        Errors.conflict(res, 'Insufficient stock available.');
-      }
+    if (result.kind === 'not_found') {
+      Errors.notFound(res, 'Offer not found.');
       return;
     }
 
-    // 6. Publish the event only after the database transaction commits.
+    if (result.kind === 'ineligible_status') {
+      Errors.conflict(res, `Offer is not active (status: ${result.status}).`);
+      return;
+    }
+
+    if (result.kind === 'deadline_passed') {
+      Errors.conflict(res, 'The pickup deadline for this offer has already passed.');
+      return;
+    }
+
+    if (result.kind === 'product_expired') {
+      Errors.conflict(res, 'The product has expired.');
+      return;
+    }
+
+    if (result.kind === 'shop_inactive') {
+      Errors.conflict(res, 'The merchant shop is currently not active.');
+      return;
+    }
+
+    if (result.kind === 'insufficient_stock') {
+      Errors.conflict(res, 'Insufficient stock available.');
+      return;
+    }
+
+    // Publish event only after transaction commits
     if (result.becameSoldOut) {
       await publishEvent({
         eventId: uuidv4(),
@@ -213,14 +250,12 @@ export async function reserveStock(
       },
     });
   } catch (error) {
-    // A concurrent duplicate request can reach the unique constraint.
-    // The failed transaction rolls back its stock update.
     if (isUniqueConstraintError(error)) {
       const existingMovement = await prisma.stockMovement.findUnique({
         where: {
           reservation_id_movement_type: {
             reservation_id: reservationId,
-            movement_type: 'RESERVE',
+            movement_type: MovementType.RESERVE,
           },
         },
       });
@@ -251,20 +286,6 @@ export async function reserveStock(
 
 // ─── RELEASE STOCK ───────────────────────────────────────────────────────────
 
-/**
- * POST /internal/offers/:id/release
- *
- * Called by MS3 when a reservation is cancelled or otherwise
- * requires stock restoration, according to the agreed workflow.
- *
- * Guarantees:
- * - A matching original reservation must exist.
- * - Released quantity must match the original reservation.
- * - A reservation cannot be released twice.
- * - Available stock cannot exceed initial stock.
- * - Stock update and movement record are one transaction.
- */
-
 export async function releaseStock(
   req: Request,
   res: Response
@@ -289,7 +310,7 @@ export async function releaseStock(
         where: {
           reservation_id_movement_type: {
             reservation_id: reservationId,
-            movement_type: 'RELEASE',
+            movement_type: MovementType.RELEASE,
           },
         },
       });
@@ -305,12 +326,12 @@ export async function releaseStock(
         };
       }
 
-      // 2. Verify the original reservation exists.
+      // 2. Verify original reservation exists.
       const reserveMovement = await tx.stockMovement.findUnique({
         where: {
           reservation_id_movement_type: {
             reservation_id: reservationId,
-            movement_type: 'RESERVE',
+            movement_type: MovementType.RESERVE,
           },
         },
       });
@@ -348,7 +369,7 @@ export async function releaseStock(
         data: {
           offer_id: offerId,
           reservation_id: reservationId,
-          movement_type: 'RELEASE',
+          movement_type: MovementType.RELEASE,
           quantity,
         },
       });
@@ -380,7 +401,7 @@ export async function releaseStock(
       };
     });
 
-    // 7. Handle transaction results.
+    // Handle transaction results.
     if (result.kind === 'duplicate') {
       if (!result.matches) {
         Errors.conflict(
@@ -441,14 +462,12 @@ export async function releaseStock(
       },
     });
   } catch (error) {
-    // If two duplicate release requests race, the unique constraint
-    // rejects one transaction and rolls back its stock update.
     if (isUniqueConstraintError(error)) {
       const existingRelease = await prisma.stockMovement.findUnique({
         where: {
           reservation_id_movement_type: {
             reservation_id: reservationId,
-            movement_type: 'RELEASE',
+            movement_type: MovementType.RELEASE,
           },
         },
       });
@@ -473,6 +492,180 @@ export async function releaseStock(
     }
 
     logger.error('releaseStock error', { error });
+    Errors.internal(res);
+  }
+}
+
+// ─── RECORD PICKUP ───────────────────────────────────────────────────────────
+
+export async function recordPickup(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const offerId = req.params.id as string;
+
+  const parsed = PickupSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    Errors.badRequest(res, 'Invalid request body', {
+      issues: parsed.error.flatten(),
+    });
+    return;
+  }
+
+  const { quantity, reservationId } = parsed.data;
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Guard: check whether this reservation was already released (cannot pick up after release)
+      const existingRelease = await tx.stockMovement.findUnique({
+        where: {
+          reservation_id_movement_type: {
+            reservation_id: reservationId,
+            movement_type: MovementType.RELEASE,
+          },
+        },
+      });
+
+      if (existingRelease) {
+        return { kind: 'already_released' as const };
+      }
+
+      // 2. Check whether pickup was already recorded
+      const existingPickup = await tx.stockMovement.findUnique({
+        where: {
+          reservation_id_movement_type: {
+            reservation_id: reservationId,
+            movement_type: MovementType.PICKUP,
+          },
+        },
+      });
+
+      if (existingPickup) {
+        return {
+          kind: 'duplicate' as const,
+          matches: movementMatches(existingPickup, offerId, quantity),
+        };
+      }
+
+      // 3. Verify original reservation exists
+      const reserveMovement = await tx.stockMovement.findUnique({
+        where: {
+          reservation_id_movement_type: {
+            reservation_id: reservationId,
+            movement_type: MovementType.RESERVE,
+          },
+        },
+      });
+
+      if (!reserveMovement) {
+        return { kind: 'reservation_not_found' as const };
+      }
+
+      if (!movementMatches(reserveMovement, offerId, quantity)) {
+        return { kind: 'reservation_mismatch' as const };
+      }
+
+      // 4. Record pickup movement
+      await tx.stockMovement.create({
+        data: {
+          offer_id: offerId,
+          reservation_id: reservationId,
+          movement_type: MovementType.PICKUP,
+          quantity,
+        },
+      });
+
+      // 5. Increment shop snapshot sales count
+      const offer = await tx.offer.findUnique({
+        where: { id: offerId },
+        select: { shop_id: true },
+      });
+
+      if (offer?.shop_id) {
+        await tx.shopSnapshot.update({
+          where: { id: offer.shop_id },
+          data: { sales_count: { increment: 1 } },
+        });
+      }
+
+      return { kind: 'picked_up' as const };
+    });
+
+    if (result.kind === 'already_released') {
+      Errors.conflict(res, 'This reservation was already cancelled and released; pickup cannot be recorded.');
+      return;
+    }
+
+    if (result.kind === 'duplicate') {
+      if (!result.matches) {
+        Errors.conflict(
+          res,
+          'This reservation ID was already recorded with different pickup details.'
+        );
+        return;
+      }
+
+      res.json({
+        data: {
+          pickedUp: true,
+          idempotent: true,
+        },
+      });
+      return;
+    }
+
+    if (result.kind === 'reservation_not_found') {
+      Errors.badRequest(
+        res,
+        'No matching reservation exists for this pickup.'
+      );
+      return;
+    }
+
+    if (result.kind === 'reservation_mismatch') {
+      Errors.conflict(
+        res,
+        'The offer ID or quantity does not match the original reservation.'
+      );
+      return;
+    }
+
+    logger.info('Stock pickup recorded successfully', {
+      offerId,
+      reservationId,
+      quantity,
+    });
+
+    res.json({
+      data: {
+        pickedUp: true,
+        idempotent: false,
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      const existingPickup = await prisma.stockMovement.findUnique({
+        where: {
+          reservation_id_movement_type: {
+            reservation_id: reservationId,
+            movement_type: MovementType.PICKUP,
+          },
+        },
+      });
+
+      if (existingPickup) {
+        res.json({
+          data: {
+            pickedUp: true,
+            idempotent: true,
+          },
+        });
+        return;
+      }
+    }
+
+    logger.error('recordPickup error', { error });
     Errors.internal(res);
   }
 }

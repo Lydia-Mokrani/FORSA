@@ -1,7 +1,6 @@
 // src/jobs/expirationJob.ts
-// Runs every minute to expire offers whose deadlines have passed.
-// Also hides same-day bakery/prepared-food items at end of day.
-// All time logic uses UTC (server time).
+// Runs every minute to expire offers whose pickup deadlines have passed.
+// Also expires same-day offers at end of day in Africa/Algiers timezone (UTC+1).
 
 import cron from 'node-cron';
 import { prisma } from '../config/prisma';
@@ -16,7 +15,7 @@ export function startExpirationJob(): void {
     try {
       const now = new Date();
 
-      // ── Expire offers past their deadline ──────────────────────────────────
+      // ── 1. Expire offers past their pickup deadline ────────────────────────
       const expired = await prisma.offer.updateMany({
         where: {
           status:     { in: [OfferStatus.ACTIVE, OfferStatus.PENDING_VERIFICATION] },
@@ -29,9 +28,8 @@ export function startExpirationJob(): void {
       });
 
       if (expired.count > 0) {
-        logger.info(`Expired ${expired.count} offers.`);
+        logger.info(`Expired ${expired.count} offers past pickup deadline.`);
 
-        // Fetch the IDs to publish events
         const justExpired = await prisma.offer.findMany({
           where:  { status: OfferStatus.EXPIRED, expired_at: { gte: new Date(now.getTime() - 60000) } },
           select: { id: true, merchant_id: true },
@@ -47,29 +45,50 @@ export function startExpirationJob(): void {
         }
       }
 
-      // ── Hide same-day bakery items at end of day (23:00 UTC) ──────────────
-      const hour = now.getUTCHours();
-      if (hour >= 23) {
-        const bakeryCat = await prisma.category.findUnique({ where: { slug: 'bakeries' } });
-        const restaurantCat = await prisma.category.findUnique({ where: { slug: 'restaurants' } });
+      // ── 2. Expire same-day offers at end of day (Africa/Algiers timezone) ──
+      // Algeria is UTC+1 all year. End of day = 23:00 onwards in Africa/Algiers.
+      const algeriaNow = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Algiers' }));
+      const algeriaHour = algeriaNow.getHours();
 
-        const categoryIds = [bakeryCat?.id, restaurantCat?.id].filter(Boolean) as string[];
+      if (algeriaHour >= 23) {
+        // Find active offers marked with same_day_expiry
+        const sameDayOffers = await prisma.offer.findMany({
+          where: {
+            status:          OfferStatus.ACTIVE,
+            same_day_expiry: true,
+          },
+          select: { id: true, merchant_id: true, created_at: true },
+        });
 
-        if (categoryIds.length > 0) {
-          // Hide offers that expire TODAY (same calendar day) for bakeries/restaurants
-          const startOfDay = new Date(now);
-          startOfDay.setUTCHours(0, 0, 0, 0);
-          const endOfDay = new Date(now);
-          endOfDay.setUTCHours(23, 59, 59, 999);
+        const toExpireIds: string[] = [];
+        for (const o of sameDayOffers) {
+          const offerAlgeriaDate = new Date(o.created_at.toLocaleString('en-US', { timeZone: 'Africa/Algiers' }));
+          // If created on or before today's calendar date in Algeria, expire it at end-of-day
+          if (
+            offerAlgeriaDate.getFullYear() <= algeriaNow.getFullYear() &&
+            offerAlgeriaDate.getMonth() <= algeriaNow.getMonth() &&
+            offerAlgeriaDate.getDate() <= algeriaNow.getDate()
+          ) {
+            toExpireIds.push(o.id);
+          }
+        }
 
+        if (toExpireIds.length > 0) {
           await prisma.offer.updateMany({
-            where: {
-              status:      OfferStatus.ACTIVE,
-              category_id: { in: categoryIds },
-              expires_at:  { gte: startOfDay, lte: endOfDay },
-            },
-            data: { status: OfferStatus.EXPIRED, expired_at: now },
+            where: { id: { in: toExpireIds } },
+            data:  { status: OfferStatus.EXPIRED, expired_at: now },
           });
+
+          logger.info(`Expired ${toExpireIds.length} same-day offers at end of day in Algeria timezone.`);
+
+          for (const id of toExpireIds) {
+            await publishEvent({
+              eventId:    uuidv4(),
+              type:       'offer.expired',
+              occurredAt: now.toISOString(),
+              payload:    { offerId: id },
+            });
+          }
         }
       }
     } catch (err) {

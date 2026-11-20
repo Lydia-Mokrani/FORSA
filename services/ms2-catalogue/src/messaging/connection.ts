@@ -1,6 +1,6 @@
 // src/messaging/connection.ts
 // Manages a single persistent RabbitMQ connection for MS2.
-// Implements reconnect logic with exponential backoff.
+// Implements reconnect logic with exponential backoff and consumer restarting.
 
 import amqplib from 'amqplib';
 import { env } from '../config/env';
@@ -8,7 +8,7 @@ import { logger } from '../config/logger';
 
 let connection: amqplib.ChannelModel | null = null;
 let channel:    amqplib.Channel      | null = null;
-let reconnectTimer: NodeJS.Timeout | null = null;
+let reconnectTimer: NodeJS.Timeout   | null = null;
 
 const EXCHANGE = env.RABBITMQ_EXCHANGE;
 
@@ -33,8 +33,15 @@ export async function connectRabbitMQ(): Promise<void> {
 
     logger.info('RabbitMQ connected and queues declared.');
 
-    conn.on('error', (err: any) => { logger.error('RabbitMQ connection error', { err }); scheduleReconnect(); });
-    conn.on('close', () => { logger.warn('RabbitMQ connection closed. Reconnecting...'); scheduleReconnect(); });
+    conn.on('error', (err: any) => {
+      logger.error('RabbitMQ connection error', { err });
+      scheduleReconnect();
+    });
+
+    conn.on('close', () => {
+      logger.warn('RabbitMQ connection closed. Reconnecting...');
+      scheduleReconnect();
+    });
   } catch (err) {
     logger.error('RabbitMQ connection failed', { err });
     scheduleReconnect();
@@ -69,7 +76,15 @@ function scheduleReconnect(): void {
   connection = null;
   reconnectTimer = setTimeout(async () => {
     reconnectTimer = null;
-    await connectRabbitMQ();
+    try {
+      await connectRabbitMQ();
+      const { startConsumers } = await import('./consumers');
+      await startConsumers();
+      logger.info('RabbitMQ reconnected and consumers successfully restarted.');
+    } catch (err) {
+      logger.error('RabbitMQ reconnect attempt failed', { err });
+      scheduleReconnect();
+    }
   }, 5000);
 }
 
@@ -79,4 +94,3 @@ export async function closeRabbitMQ(): Promise<void> {
     if (connection) await connection.close();
   } catch { /* ignore close errors */ }
 }
-

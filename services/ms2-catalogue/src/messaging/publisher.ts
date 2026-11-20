@@ -6,12 +6,12 @@ import { env } from '../config/env';
 import { logger } from '../config/logger';
 import { DomainEvent } from '../types';
 
-export async function publishEvent(event: DomainEvent): Promise<void> {
+export async function publishEvent(event: DomainEvent): Promise<boolean> {
   try {
     const channel = await getChannel();
     const buffer  = Buffer.from(JSON.stringify(event));
 
-    channel.publish(
+    const success = channel.publish(
       env.RABBITMQ_EXCHANGE,
       event.type,         // routing key = event type
       buffer,
@@ -23,9 +23,10 @@ export async function publishEvent(event: DomainEvent): Promise<void> {
       }
     );
 
-    logger.debug('Event published', { type: event.type, eventId: event.eventId });
+    logger.debug('Event published to exchange', { type: event.type, eventId: event.eventId, success });
+    return success;
   } catch (err) {
-    // Log and continue — do not crash the request if RabbitMQ is temporarily unavailable
-    logger.error('Failed to publish event', { type: event.type, err });
+    logger.error('Failed to publish event', { type: event.type, eventId: event.eventId, err });
+    return false;
   }
 }

@@ -6,7 +6,7 @@ import { prisma } from '../config/prisma';
 import { Errors } from '../utils/apiError';
 import { logger } from '../config/logger';
 import { AuthenticatedRequest } from '../types';
-import { OfferStatus } from '@prisma/client';
+import { OfferStatus, MovementType } from '@prisma/client';
 
 /**
  * GET /api/merchant/dashboard
@@ -23,6 +23,7 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
       pendingVerification,
       soldOutOffers,
       hiddenOffers,
+      withdrawnOffers,
     ] = await Promise.all([
       prisma.offer.count({ where: { merchant_id: merchantId } }),
       prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.ACTIVE } }),
@@ -30,21 +31,22 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
       prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.PENDING_VERIFICATION } }),
       prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.SOLD_OUT } }),
       prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.HIDDEN } }),
+      prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.WITHDRAWN } }),
     ]);
 
     // Stock reservations count (how many times stock was reserved across all offers)
     const reservedCount = await prisma.stockMovement.count({
       where: {
         offer:         { merchant_id: merchantId },
-        movement_type: 'RESERVE',
+        movement_type: MovementType.RESERVE,
       },
     });
 
-    // Pickups = releases (reservation picked up → MS3 triggers release)
+    // Actual confirmed customer pickups (PICKUP movement type)
     const pickupCount = await prisma.stockMovement.count({
       where: {
         offer:         { merchant_id: merchantId },
-        movement_type: 'RELEASE',
+        movement_type: MovementType.PICKUP,
       },
     });
 
@@ -70,6 +72,7 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
           pendingVerification,
           soldOutOffers,
           hiddenOffers,
+          withdrawnOffers,
           reservedProducts: reservedCount,
           pickups:          pickupCount,
           // Reviews are managed by MS4 — return 0 until MS4 provides them
@@ -79,6 +82,8 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
           id:              o.id,
           name:            o.name,
           status:          o.status,
+          productType:     o.product_type,
+          sameDayExpiry:   o.same_day_expiry,
           discountedPrice: Number(o.discounted_price),
           discountPercent: o.discount_percent,
           expiresAt:       o.expires_at,

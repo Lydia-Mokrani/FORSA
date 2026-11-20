@@ -14,7 +14,34 @@ import { env } from '../config/env';
 import { AuthenticatedRequest, OfferSearchParams } from '../types';
 import { publishEvent } from '../messaging/publisher';
 import { v4 as uuidv4 } from 'uuid';
-import { Prisma, OfferStatus } from '@prisma/client';
+import { Prisma, OfferStatus, ProductType, MovementType } from '@prisma/client';
+import { haversineKm } from '../utils/haversine';
+
+// ─── Timezone & Helper Functions ──────────────────────────────────────────────
+
+/**
+ * Returns 'YYYY-MM-DD' representing the calendar date in Africa/Algiers timezone.
+ */
+export function getAlgiersCalendarDate(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Algiers',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(date);
+}
+
+function calcDiscount(original: number, discounted: number): number {
+  return Math.round((1 - discounted / original) * 100);
+}
+
+function parseNumberParam(val: unknown, name: string): { value?: number; error?: string } {
+  if (val === undefined || val === null || val === '') return {};
+  const num = Number(val);
+  if (isNaN(num)) return { error: `Invalid numeric value for query parameter '${name}'.` };
+  return { value: num };
+}
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
@@ -23,20 +50,34 @@ const CreateOfferSchema = z.object({
   categoryId:        z.string().uuid(),
   name:              z.string().min(3).max(120),
   description:       z.string().min(10).max(2000),
+  productType:       z.enum(['PACKAGED', 'FRESH']),
+  sameDayExpiry:     z.boolean().default(false),
   originalPrice:     z.number().positive(),
   discountedPrice:   z.number().positive(),
   quantityAvailable: z.number().int().positive(),
-  expiresAt:         z.string().datetime(),
+  expiresAt:         z.string().datetime(), // pickup deadline
+  productExpiryDate: z.string().datetime(), // mandatory product expiry date
+});
+
+const UpdateOfferSchema = z.object({
+  categoryId:        z.string().uuid().optional(),
+  name:              z.string().min(3).max(120).optional(),
+  description:       z.string().min(10).max(2000).optional(),
+  productType:       z.enum(['PACKAGED', 'FRESH']).optional(),
+  sameDayExpiry:     z.boolean().optional(),
+  originalPrice:     z.number().positive().optional(),
+  discountedPrice:   z.number().positive().optional(),
+  expiresAt:         z.string().datetime().optional(),
   productExpiryDate: z.string().datetime().optional(),
 });
 
-const UpdateOfferSchema = CreateOfferSchema.partial().omit({ shopId: true });
-
-// ─── Helper ───────────────────────────────────────────────────────────────────
-
-function calcDiscount(original: number, discounted: number): number {
-  return Math.round((1 - discounted / original) * 100);
-}
+const StockAdjustmentSchema = z.object({
+  quantityDelta: z.number().int().optional(),
+  newQuantity:   z.number().int().min(0).optional(),
+  reason:        z.string().min(3).max(255).optional(),
+}).refine(data => data.quantityDelta !== undefined || data.newQuantity !== undefined, {
+  message: 'Either quantityDelta or newQuantity must be provided',
+});
 
 type OfferWithRelations = Prisma.OfferGetPayload<{
   include: { photos: true; category: true; shop: true };
@@ -50,6 +91,8 @@ function mapOfferToResponse(offer: OfferWithRelations) {
     categoryId:        offer.category_id,
     name:              offer.name,
     description:       offer.description,
+    productType:       offer.product_type,
+    sameDayExpiry:     offer.same_day_expiry,
     originalPrice:     Number(offer.original_price),
     discountedPrice:   Number(offer.discounted_price),
     discountPercent:   offer.discount_percent,
@@ -87,41 +130,98 @@ function mapOfferToResponse(offer: OfferWithRelations) {
   };
 }
 
-// ─── GET /api/offers ──────────────────────────────────────────────────────────
+// ─── GET /api/offers (Public Catalogue Search) ───────────────────────────────
 
 export async function getOffers(req: Request, res: Response): Promise<void> {
   try {
+    const latParsed = parseNumberParam(req.query.lat, 'lat');
+    if (latParsed.error) { Errors.badRequest(res, latParsed.error); return; }
+
+    const lngParsed = parseNumberParam(req.query.lng, 'lng');
+    if (lngParsed.error) { Errors.badRequest(res, lngParsed.error); return; }
+
+    const radiusParsed = parseNumberParam(req.query.radius, 'radius');
+    if (radiusParsed.error) { Errors.badRequest(res, radiusParsed.error); return; }
+
+    // Coordinate pair requirement
+    const hasLat = latParsed.value !== undefined;
+    const hasLng = lngParsed.value !== undefined;
+    if ((hasLat && !hasLng) || (!hasLat && hasLng)) {
+      Errors.badRequest(res, 'Both latitude and longitude must be provided together.');
+      return;
+    }
+
+    if (hasLat && (latParsed.value! < -90 || latParsed.value! > 90)) {
+      Errors.badRequest(res, 'Latitude must be between -90 and 90 degrees.');
+      return;
+    }
+    if (hasLng && (lngParsed.value! < -180 || lngParsed.value! > 180)) {
+      Errors.badRequest(res, 'Longitude must be between -180 and 180 degrees.');
+      return;
+    }
+    if (radiusParsed.value !== undefined && radiusParsed.value <= 0) {
+      Errors.badRequest(res, 'Radius must be a positive number of kilometers.');
+      return;
+    }
+
+    const minPriceParsed = parseNumberParam(req.query.minPrice, 'minPrice');
+    if (minPriceParsed.error) { Errors.badRequest(res, minPriceParsed.error); return; }
+
+    const maxPriceParsed = parseNumberParam(req.query.maxPrice, 'maxPrice');
+    if (maxPriceParsed.error) { Errors.badRequest(res, maxPriceParsed.error); return; }
+
+    const minDiscountParsed = parseNumberParam(req.query.minDiscount, 'minDiscount');
+    if (minDiscountParsed.error) { Errors.badRequest(res, minDiscountParsed.error); return; }
+
     const pagination = parsePagination(req.query as Record<string, unknown>);
     const params: OfferSearchParams = {
       ...pagination,
-      lat:         req.query.lat         ? parseFloat(String(req.query.lat))         : undefined,
-      lng:         req.query.lng         ? parseFloat(String(req.query.lng))         : undefined,
-      radius:      req.query.radius      ? parseFloat(String(req.query.radius))      : undefined,
-      q:           req.query.q           ? String(req.query.q)                       : undefined,
-      category:    req.query.category    ? String(req.query.category)                : undefined,
-      minPrice:    req.query.minPrice    ? parseFloat(String(req.query.minPrice))    : undefined,
-      maxPrice:    req.query.maxPrice    ? parseFloat(String(req.query.maxPrice))    : undefined,
-      minDiscount: req.query.minDiscount ? parseFloat(String(req.query.minDiscount)) : undefined,
-      available:   req.query.available   ? req.query.available === 'true'           : undefined,
+      lat:         latParsed.value,
+      lng:         lngParsed.value,
+      radius:      radiusParsed.value,
+      q:           req.query.q ? String(req.query.q).trim() : undefined,
+      category:    req.query.category ? String(req.query.category).trim() : undefined,
+      productType: (req.query.productType === 'PACKAGED' || req.query.productType === 'FRESH')
+                     ? req.query.productType
+                     : undefined,
+      minPrice:    minPriceParsed.value,
+      maxPrice:    maxPriceParsed.value,
+      minDiscount: minDiscountParsed.value,
+      available:   req.query.available ? req.query.available === 'true' : undefined,
       sort:        (req.query.sort as OfferSearchParams['sort']) ?? 'deadline',
     };
 
-    // Build where clause
+    const now = new Date();
+
+    // Strict public visibility:
+    // 1. ACTIVE status only
+    // 2. Pickup deadline not passed
+    // 3. Product expiry not passed
+    // 4. Shop must be ACTIVE
     const where: Prisma.OfferWhereInput = {
-      status: OfferStatus.ACTIVE,
+      status:              OfferStatus.ACTIVE,
+      expires_at:          { gt: now },
+      product_expiry_date: { gt: now },
+      shop:                { status: 'ACTIVE' },
     };
 
     if (params.q) {
-      where.name = { contains: params.q, mode: 'insensitive' };
+      where.OR = [
+        { name: { contains: params.q, mode: 'insensitive' } },
+        { description: { contains: params.q, mode: 'insensitive' } },
+      ];
     }
     if (params.category) {
       where.category = { slug: params.category };
     }
+    if (params.productType) {
+      where.product_type = params.productType;
+    }
     if (params.minPrice !== undefined) {
-      where.discounted_price = { ...where.discounted_price as object, gte: params.minPrice };
+      where.discounted_price = { ...((where.discounted_price as object) || {}), gte: params.minPrice };
     }
     if (params.maxPrice !== undefined) {
-      where.discounted_price = { ...where.discounted_price as object, lte: params.maxPrice };
+      where.discounted_price = { ...((where.discounted_price as object) || {}), lte: params.maxPrice };
     }
     if (params.minDiscount !== undefined) {
       where.discount_percent = { gte: params.minDiscount };
@@ -130,17 +230,44 @@ export async function getOffers(req: Request, res: Response): Promise<void> {
       where.quantity_available = { gt: 0 };
     }
 
-    // Distance filter — applied post-query using Haversine if lat/lng provided
-    // (For production scale, use PostGIS; for now we filter in-memory from DB results)
     const orderBy: Prisma.OfferOrderByWithRelationInput[] = [];
     if (params.sort === 'price')    orderBy.push({ discounted_price: 'asc' });
     if (params.sort === 'deadline') orderBy.push({ expires_at: 'asc' });
     if (params.sort === 'discount') orderBy.push({ discount_percent: 'desc' });
-    if (params.sort === 'distance' && params.lat !== undefined && params.lng !== undefined) {
-      // Distance sort — fetch all matching, sort in JS, then paginate
-      // (acceptable for now; replace with PostGIS for production)
+
+    // Distance filtering / sorting (must happen before pagination)
+    const hasLocation = params.lat !== undefined && params.lng !== undefined;
+    const isDistanceFilter = hasLocation && (params.radius !== undefined || params.sort === 'distance');
+
+    if (isDistanceFilter) {
+      const allOffers = await prisma.offer.findMany({
+        where,
+        include: { photos: { orderBy: { sort_order: 'asc' } }, category: true, shop: true },
+        orderBy: orderBy.length ? orderBy : [{ expires_at: 'asc' }],
+      });
+
+      let resultsWithDist = allOffers.map((offer) => {
+        const dist = haversineKm(params.lat!, params.lng!, offer.shop.latitude, offer.shop.longitude);
+        return { offer, dist };
+      });
+
+      if (params.radius !== undefined) {
+        resultsWithDist = resultsWithDist.filter((item) => item.dist <= params.radius!);
+      }
+
+      if (params.sort === 'distance') {
+        resultsWithDist.sort((a, b) => a.dist - b.dist);
+      }
+
+      const total = resultsWithDist.length;
+      const startIndex = (pagination.page - 1) * pagination.limit;
+      const paged = resultsWithDist.slice(startIndex, startIndex + pagination.limit).map((item) => item.offer);
+
+      res.json(buildPaginatedResponse(paged.map(mapOfferToResponse), total, pagination));
+      return;
     }
 
+    // Standard database pagination
     const [offers, total] = await prisma.$transaction([
       prisma.offer.findMany({
         where,
@@ -152,24 +279,14 @@ export async function getOffers(req: Request, res: Response): Promise<void> {
       prisma.offer.count({ where }),
     ]);
 
-    // Post-filter by distance if lat/lng/radius provided
-    let filtered = offers;
-    if (params.lat !== undefined && params.lng !== undefined && params.radius !== undefined) {
-      const { haversineKm } = await import('../utils/haversine');
-      filtered = offers.filter((o) => {
-        const dist = haversineKm(params.lat!, params.lng!, o.shop.latitude, o.shop.longitude);
-        return dist <= params.radius!;
-      });
-    }
-
-    res.json(buildPaginatedResponse(filtered.map(mapOfferToResponse), total, pagination));
+    res.json(buildPaginatedResponse(offers.map(mapOfferToResponse), total, pagination));
   } catch (error) {
     logger.error('getOffers error', { error });
     Errors.internal(res);
   }
 }
 
-// ─── GET /api/offers/:id ─────────────────────────────────────────────────────
+// ─── GET /api/offers/:id (Public Offer Details) ──────────────────────────────
 
 export async function getOfferById(req: Request, res: Response): Promise<void> {
   try {
@@ -179,8 +296,17 @@ export async function getOfferById(req: Request, res: Response): Promise<void> {
       include: { photos: { orderBy: { sort_order: 'asc' } }, category: true, shop: true },
     });
 
-    if (!offer || offer.status === OfferStatus.HIDDEN) {
+    // Public visitors must NEVER see DRAFT, PENDING_VERIFICATION, REJECTED, HIDDEN, WITHDRAWN, or past-deadline offers
+    if (!offer) {
       Errors.notFound(res, 'Offer not found.');
+      return;
+    }
+
+    const publicAllowedStatuses = [OfferStatus.ACTIVE, OfferStatus.SOLD_OUT];
+    const now = new Date();
+
+    if (!publicAllowedStatuses.includes(offer.status as any) || offer.expires_at <= now) {
+      Errors.notFound(res, 'Offer not found or no longer available.');
       return;
     }
 
@@ -191,7 +317,7 @@ export async function getOfferById(req: Request, res: Response): Promise<void> {
   }
 }
 
-// ─── GET /api/offers/mine ────────────────────────────────────────────────────
+// ─── GET /api/offers/mine (Merchant Offers) ───────────────────────────────────
 
 export async function getMyOffers(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -217,6 +343,7 @@ export async function getMyOffers(req: AuthenticatedRequest, res: Response): Pro
 }
 
 // ─── POST /api/offers ────────────────────────────────────────────────────────
+// Creates a new offer in DRAFT status. Merchant must upload photos and submit.
 
 export async function createOffer(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -227,14 +354,55 @@ export async function createOffer(req: AuthenticatedRequest, res: Response): Pro
     }
 
     const data = parsed.data;
+    const now = new Date();
+    const expiryDate = new Date(data.productExpiryDate);
+    const deadline   = new Date(data.expiresAt);
 
-    // Business rule: discounted price must be strictly lower than original price
+    // Business rule: discounted price strictly lower than original price
     if (data.discountedPrice >= data.originalPrice) {
       Errors.badRequest(res, 'Discounted price must be strictly lower than the original price.');
       return;
     }
 
-    // Verify shop belongs to this merchant
+    // Business rule: product expiry date cannot be in the past
+    if (expiryDate <= now) {
+      Errors.badRequest(res, 'Product expiry date cannot be in the past.');
+      return;
+    }
+
+    // Business rule: pickup deadline cannot be in the past
+    if (deadline <= now) {
+      Errors.badRequest(res, 'Pickup deadline cannot be in the past.');
+      return;
+    }
+
+    // Business rule: pickup deadline cannot exceed product expiry date
+    if (deadline > expiryDate) {
+      Errors.badRequest(res, 'Pickup deadline cannot be after the product expiry date.');
+      return;
+    }
+
+    // Same-day expiry timezone rule (Africa/Algiers)
+    if (data.sameDayExpiry) {
+      const algiersExpiryDay   = getAlgiersCalendarDate(expiryDate);
+      const algiersDeadlineDay = getAlgiersCalendarDate(deadline);
+      const algiersToday       = getAlgiersCalendarDate(now);
+
+      if (algiersExpiryDay !== algiersDeadlineDay) {
+        Errors.badRequest(
+          res,
+          `For same-day expiry offers, the product expiry date (${algiersExpiryDay}) and pickup deadline (${algiersDeadlineDay}) must fall on the exact same calendar day in Algeria.`
+        );
+        return;
+      }
+
+      if (algiersDeadlineDay < algiersToday) {
+        Errors.badRequest(res, 'Same-day offers cannot be created for a past calendar date in Algeria.');
+        return;
+      }
+    }
+
+    // Verify shop belongs to this merchant and is ACTIVE
     const shop = await prisma.shopSnapshot.findUnique({ where: { id: data.shopId } });
     if (!shop || shop.merchant_id !== req.user.merchantId) {
       Errors.forbidden(res, 'You do not own this shop.');
@@ -245,7 +413,7 @@ export async function createOffer(req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
-    // Verify category exists
+    // Verify food category exists
     const category = await prisma.category.findUnique({ where: { id: data.categoryId } });
     if (!category) {
       Errors.badRequest(res, 'Invalid category.');
@@ -254,62 +422,318 @@ export async function createOffer(req: AuthenticatedRequest, res: Response): Pro
 
     const discountPercent = calcDiscount(data.originalPrice, data.discountedPrice);
 
-    // Determine initial status:
-    // If product_expiry_date is provided → PENDING_VERIFICATION (MS4 OCR needed)
-    // Otherwise → ACTIVE immediately
-    const needsVerification = !!data.productExpiryDate;
-    const status = needsVerification ? OfferStatus.PENDING_VERIFICATION : OfferStatus.ACTIVE;
-
+    // Offers strictly start as DRAFT
     const offer = await prisma.offer.create({
       data: {
-        merchant_id:          req.user.merchantId,
-        shop_id:              data.shopId,
-        category_id:          data.categoryId,
-        name:                 data.name,
-        description:          data.description,
-        original_price:       data.originalPrice,
-        discounted_price:     data.discountedPrice,
-        discount_percent:     discountPercent,
-        quantity_available:   data.quantityAvailable,
-        quantity_initial:     data.quantityAvailable,
-        expires_at:           new Date(data.expiresAt),
-        product_expiry_date:  data.productExpiryDate ? new Date(data.productExpiryDate) : undefined,
-        status,
-        published_at:         status === OfferStatus.ACTIVE ? new Date() : undefined,
+        merchant_id:         req.user.merchantId,
+        shop_id:             data.shopId,
+        category_id:         data.categoryId,
+        name:                data.name,
+        description:         data.description,
+        product_type:        data.productType as ProductType,
+        same_day_expiry:     data.sameDayExpiry,
+        original_price:      data.originalPrice,
+        discounted_price:    data.discountedPrice,
+        discount_percent:    discountPercent,
+        quantity_available:  data.quantityAvailable,
+        quantity_initial:    data.quantityAvailable,
+        expires_at:          deadline,
+        product_expiry_date: expiryDate,
+        status:              OfferStatus.DRAFT,
       },
       include: { photos: true, category: true, shop: true },
     });
 
-    // Publish event to RabbitMQ
-    if (needsVerification) {
-      await publishEvent({
-        eventId:    uuidv4(),
-        type:       'offer.needs_verification',
-        occurredAt: new Date().toISOString(),
-        payload: {
-          offerId:          offer.id,
-          merchantId:       req.user.merchantId,
-          productExpiryDate: data.productExpiryDate,
-          datePhotoUrl:     offer.date_photo_url,
+    res.status(201).json({ data: mapOfferToResponse(offer) });
+  } catch (error) {
+    logger.error('createOffer error', { error });
+    Errors.internal(res);
+  }
+}
+
+// ─── POST /api/offers/:id/date-photo ─────────────────────────────────────────
+
+export async function uploadDatePhoto(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const file = req.file;
+  if (!file) {
+    Errors.badRequest(res, 'No photo uploaded.');
+    return;
+  }
+
+  try {
+    const id = req.params.id as string;
+    const offer = await prisma.offer.findUnique({ where: { id } });
+
+    if (!offer) {
+      await fs.unlink(file.path).catch(() => {});
+      Errors.notFound(res, 'Offer not found.');
+      return;
+    }
+    if (offer.merchant_id !== req.user.merchantId) {
+      await fs.unlink(file.path).catch(() => {});
+      Errors.forbidden(res, 'You do not own this offer.');
+      return;
+    }
+    if (offer.status !== OfferStatus.DRAFT && offer.status !== OfferStatus.REJECTED) {
+      await fs.unlink(file.path).catch(() => {});
+      Errors.badRequest(res, `Cannot upload date photo for offer with status '${offer.status}'.`);
+      return;
+    }
+
+    // Content validation with Sharp
+    const metadata = await sharp(file.path).metadata();
+    if (!metadata.format || !['jpeg', 'png', 'webp'].includes(metadata.format)) {
+      await fs.unlink(file.path).catch(() => {});
+      Errors.badRequest(res, 'Uploaded file is not a valid image.');
+      return;
+    }
+
+    const compressed = `compressed_date_${file.filename}`;
+    const outputPath = path.join(env.UPLOAD_DIR, compressed);
+
+    await sharp(file.path)
+      .resize({ width: 1200, withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toFile(outputPath);
+
+    await fs.unlink(file.path).catch(() => {});
+
+    const url = `${env.MEDIA_BASE_URL}/${compressed}`;
+
+    const updated = await prisma.offer.update({
+      where: { id },
+      data:  { date_photo_url: url },
+    });
+
+    res.json({ data: { datePhotoUrl: updated.date_photo_url } });
+  } catch (error) {
+    if (file?.path) await fs.unlink(file.path).catch(() => {});
+    logger.error('uploadDatePhoto error', { error });
+    Errors.internal(res);
+  }
+}
+
+// ─── POST /api/offers/:id/submit ─────────────────────────────────────────────
+// Submits offer into PENDING_VERIFICATION (for both PACKAGED & FRESH)
+
+export async function submitOffer(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const offer = await prisma.offer.findUnique({
+      where:   { id },
+      include: { photos: true, category: true, shop: true },
+    });
+
+    if (!offer) {
+      Errors.notFound(res, 'Offer not found.');
+      return;
+    }
+    if (offer.merchant_id !== req.user.merchantId) {
+      Errors.forbidden(res, 'You do not own this offer.');
+      return;
+    }
+    if (offer.status !== OfferStatus.DRAFT && offer.status !== OfferStatus.REJECTED) {
+      Errors.badRequest(res, `Offer cannot be submitted from status '${offer.status}'.`);
+      return;
+    }
+
+    // Guard: Must have at least 1 product photo
+    if (!offer.photos || offer.photos.length === 0) {
+      Errors.badRequest(res, 'At least one product photo must be uploaded before submitting.');
+      return;
+    }
+
+    // PACKAGED products require a date label photo
+    if (offer.product_type === ProductType.PACKAGED && !offer.date_photo_url) {
+      Errors.badRequest(res, 'A date label photo is required for packaged products before submission.');
+      return;
+    }
+
+    // Both PACKAGED and FRESH transition strictly to PENDING_VERIFICATION
+    const updated = await prisma.offer.update({
+      where: { id },
+      data:  {
+        status:           OfferStatus.PENDING_VERIFICATION,
+        rejection_reason: null,
+      },
+      include: { photos: true, category: true, shop: true },
+    });
+
+    // Publish event for verification service
+    await publishEvent({
+      eventId:    uuidv4(),
+      type:       'offer.needs_verification',
+      occurredAt: new Date().toISOString(),
+      payload: {
+        offerId:           updated.id,
+        merchantId:        req.user.merchantId,
+        productType:       updated.product_type,
+        productExpiryDate: updated.product_expiry_date?.toISOString(),
+        datePhotoUrl:      updated.date_photo_url,
+        freshnessInspectionNeeded: updated.product_type === ProductType.FRESH,
+      },
+    });
+
+    res.json({ data: mapOfferToResponse(updated) });
+  } catch (error) {
+    logger.error('submitOffer error', { error });
+    Errors.internal(res);
+  }
+}
+
+// ─── POST /api/offers/:id/withdraw ───────────────────────────────────────────
+
+export async function withdrawOffer(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const offer = await prisma.offer.findUnique({ where: { id } });
+
+    if (!offer) {
+      Errors.notFound(res, 'Offer not found.');
+      return;
+    }
+    if (offer.merchant_id !== req.user.merchantId) {
+      Errors.forbidden(res, 'You do not own this offer.');
+      return;
+    }
+    if (offer.status === OfferStatus.WITHDRAWN) {
+      Errors.conflict(res, 'Offer is already withdrawn.');
+      return;
+    }
+    if (offer.status === OfferStatus.EXPIRED || offer.status === OfferStatus.SOLD_OUT) {
+      Errors.badRequest(res, `Cannot withdraw an offer with status '${offer.status}'.`);
+      return;
+    }
+
+    // Guard: Check for active reservations
+    const reservedCount = await prisma.stockMovement.count({
+      where: { offer_id: id, movement_type: MovementType.RESERVE },
+    });
+    const releasedOrPickedUp = await prisma.stockMovement.count({
+      where: { offer_id: id, movement_type: { in: [MovementType.RELEASE, MovementType.PICKUP] } },
+    });
+
+    if (reservedCount > releasedOrPickedUp) {
+      Errors.conflict(res, 'Cannot withdraw an offer with active ongoing reservations.');
+      return;
+    }
+
+    const updated = await prisma.offer.update({
+      where: { id },
+      data:  { status: OfferStatus.WITHDRAWN },
+      include: { photos: true, category: true, shop: true },
+    });
+
+    await publishEvent({
+      eventId:    uuidv4(),
+      type:       'offer.withdrawn',
+      occurredAt: new Date().toISOString(),
+      payload: {
+        offerId:    updated.id,
+        merchantId: req.user.merchantId,
+      },
+    });
+
+    res.json({ data: mapOfferToResponse(updated) });
+  } catch (error) {
+    logger.error('withdrawOffer error', { error });
+    Errors.internal(res);
+  }
+}
+
+// ─── POST /api/offers/:id/stock-adjustment ───────────────────────────────────
+
+export async function adjustStock(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const parsed = StockAdjustmentSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      Errors.badRequest(res, 'Validation failed', { issues: parsed.error.flatten() });
+      return;
+    }
+
+    const { quantityDelta, newQuantity, reason } = parsed.data;
+
+    const offer = await prisma.offer.findUnique({ where: { id } });
+    if (!offer) {
+      Errors.notFound(res, 'Offer not found.');
+      return;
+    }
+    if (offer.merchant_id !== req.user.merchantId) {
+      Errors.forbidden(res, 'You do not own this offer.');
+      return;
+    }
+    if ([OfferStatus.EXPIRED, OfferStatus.REJECTED, OfferStatus.HIDDEN, OfferStatus.WITHDRAWN].includes(offer.status as any)) {
+      Errors.badRequest(res, `Cannot adjust stock for an offer with status '${offer.status}'.`);
+      return;
+    }
+
+    const currentQty = offer.quantity_available;
+    let targetQty: number;
+    let delta: number;
+
+    if (newQuantity !== undefined) {
+      targetQty = newQuantity;
+      delta = targetQty - currentQty;
+    } else {
+      delta = quantityDelta!;
+      targetQty = currentQty + delta;
+    }
+
+    if (targetQty < 0) {
+      Errors.badRequest(res, 'Adjusted quantity cannot be negative.');
+      return;
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.stockMovement.create({
+        data: {
+          offer_id:      id,
+          movement_type: MovementType.ADJUSTMENT,
+          quantity:      Math.abs(delta),
+          reason:        reason || (delta >= 0 ? 'Manual stock increase' : 'Manual stock reduction'),
         },
       });
-    } else {
+
+      let newStatus = offer.status;
+      let becameSoldOut = false;
+
+      if (targetQty === 0 && offer.status === OfferStatus.ACTIVE) {
+        newStatus = OfferStatus.SOLD_OUT;
+        becameSoldOut = true;
+      } else if (targetQty > 0 && offer.status === OfferStatus.SOLD_OUT && offer.expires_at > new Date()) {
+        newStatus = OfferStatus.ACTIVE;
+      }
+
+      const updated = await tx.offer.update({
+        where: { id },
+        data: {
+          quantity_available: targetQty,
+          quantity_initial:   Math.max(offer.quantity_initial, targetQty),
+          status:             newStatus,
+        },
+        include: { photos: true, category: true, shop: true },
+      });
+
+      return { updated, becameSoldOut };
+    });
+
+    if (result.becameSoldOut) {
       await publishEvent({
         eventId:    uuidv4(),
-        type:       'offer.published',
+        type:       'offer.sold_out',
         occurredAt: new Date().toISOString(),
         payload: {
-          offerId:    offer.id,
+          offerId:    id,
           merchantId: req.user.merchantId,
-          shopId:     data.shopId,
-          categoryId: data.categoryId,
         },
       });
     }
 
-    res.status(201).json({ data: mapOfferToResponse(offer) });
+    res.json({ data: mapOfferToResponse(result.updated) });
   } catch (error) {
-    logger.error('createOffer error', { error });
+    logger.error('adjustStock error', { error });
     Errors.internal(res);
   }
 }
@@ -325,13 +749,11 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
       Errors.notFound(res, 'Offer not found.');
       return;
     }
-    // Ownership check
     if (existing.merchant_id !== req.user.merchantId) {
       Errors.forbidden(res, 'You do not own this offer.');
       return;
     }
-    // Status check — cannot edit expired/sold-out offers
-    if ([OfferStatus.EXPIRED, OfferStatus.SOLD_OUT, OfferStatus.REJECTED].includes(existing.status as any)) {
+    if ([OfferStatus.EXPIRED, OfferStatus.SOLD_OUT, OfferStatus.REJECTED, OfferStatus.WITHDRAWN].includes(existing.status as any)) {
       Errors.badRequest(res, `Cannot edit an offer with status '${existing.status}'.`);
       return;
     }
@@ -344,7 +766,16 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
 
     const data = parsed.data;
 
-    // Price validation if either price is being updated
+    // Verify category if updated
+    if (data.categoryId) {
+      const category = await prisma.category.findUnique({ where: { id: data.categoryId } });
+      if (!category) {
+        Errors.badRequest(res, 'Specified category does not exist.');
+        return;
+      }
+    }
+
+    // Price validation
     const newOriginal   = data.originalPrice   ?? Number(existing.original_price);
     const newDiscounted = data.discountedPrice  ?? Number(existing.discounted_price);
     if (newDiscounted >= newOriginal) {
@@ -352,23 +783,80 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
+    const now = new Date();
+    const expiryDate = data.productExpiryDate ? new Date(data.productExpiryDate) : existing.product_expiry_date;
+    const deadline   = data.expiresAt ? new Date(data.expiresAt) : existing.expires_at;
+
+    if (data.productExpiryDate && expiryDate && expiryDate <= now) {
+      Errors.badRequest(res, 'Product expiry date cannot be in the past.');
+      return;
+    }
+    if (data.expiresAt && deadline <= now) {
+      Errors.badRequest(res, 'Pickup deadline cannot be in the past.');
+      return;
+    }
+    if (expiryDate && deadline && deadline > expiryDate) {
+      Errors.badRequest(res, 'Pickup deadline cannot be after the product expiry date.');
+      return;
+    }
+
+    // Same-day expiry timezone check
+    const isSameDay = data.sameDayExpiry ?? existing.same_day_expiry;
+    if (isSameDay && expiryDate && deadline) {
+      const algiersExpiryDay   = getAlgiersCalendarDate(expiryDate);
+      const algiersDeadlineDay = getAlgiersCalendarDate(deadline);
+      if (algiersExpiryDay !== algiersDeadlineDay) {
+        Errors.badRequest(
+          res,
+          `For same-day expiry offers, product expiry (${algiersExpiryDay}) and pickup deadline (${algiersDeadlineDay}) must fall on the exact same calendar day in Algeria.`
+        );
+        return;
+      }
+    }
+
     const discountPercent = calcDiscount(newOriginal, newDiscounted);
+
+    // If product expiry date is modified on an ACTIVE offer, require re-verification
+    let newStatus = existing.status;
+    let needsReVerification = false;
+    if (data.productExpiryDate && existing.status === OfferStatus.ACTIVE) {
+      newStatus = OfferStatus.PENDING_VERIFICATION;
+      needsReVerification = true;
+    }
 
     const updated = await prisma.offer.update({
       where: { id },
       data: {
-        name:               data.name,
-        description:        data.description,
-        original_price:     data.originalPrice,
-        discounted_price:   data.discountedPrice,
-        discount_percent:   discountPercent,
-        quantity_available: data.quantityAvailable,
-        expires_at:         data.expiresAt ? new Date(data.expiresAt) : undefined,
+        name:                data.name,
+        description:         data.description,
+        product_type:        data.productType as ProductType | undefined,
+        same_day_expiry:     data.sameDayExpiry,
+        original_price:      data.originalPrice,
+        discounted_price:    data.discountedPrice,
+        discount_percent:    discountPercent,
+        expires_at:          data.expiresAt ? new Date(data.expiresAt) : undefined,
         product_expiry_date: data.productExpiryDate ? new Date(data.productExpiryDate) : undefined,
-        category_id:        data.categoryId,
+        category_id:         data.categoryId,
+        status:              newStatus,
       },
       include: { photos: { orderBy: { sort_order: 'asc' } }, category: true, shop: true },
     });
+
+    if (needsReVerification) {
+      await publishEvent({
+        eventId:    uuidv4(),
+        type:       'offer.needs_verification',
+        occurredAt: new Date().toISOString(),
+        payload: {
+          offerId:           updated.id,
+          merchantId:        req.user.merchantId,
+          productType:       updated.product_type,
+          productExpiryDate: updated.product_expiry_date?.toISOString(),
+          datePhotoUrl:      updated.date_photo_url,
+          freshnessInspectionNeeded: updated.product_type === ProductType.FRESH,
+        },
+      });
+    }
 
     res.json({ data: mapOfferToResponse(updated) });
   } catch (error) {
@@ -377,7 +865,7 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
   }
 }
 
-// ─── DELETE /api/offers/:id ──────────────────────────────────────────────────
+// ─── DELETE /api/offers/:id (Soft-withdrawal) ────────────────────────────────
 
 export async function deleteOffer(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -392,17 +880,32 @@ export async function deleteOffer(req: AuthenticatedRequest, res: Response): Pro
       Errors.forbidden(res, 'You do not own this offer.');
       return;
     }
-    // Cannot delete if there are active reservations (MS3 would have set quantity < initial)
-    // We check for stock movements as a proxy
-    const hasReservations = await prisma.stockMovement.findFirst({
-      where: { offer_id: id, movement_type: 'RESERVE' },
+
+    // Soft withdrawal replaces hard delete
+    const reservedCount = await prisma.stockMovement.count({
+      where: { offer_id: id, movement_type: MovementType.RESERVE },
     });
-    if (hasReservations) {
-      Errors.conflict(res, 'Cannot delete an offer that has active reservations.');
+    const releasedOrPickedUp = await prisma.stockMovement.count({
+      where: { offer_id: id, movement_type: { in: [MovementType.RELEASE, MovementType.PICKUP] } },
+    });
+
+    if (reservedCount > releasedOrPickedUp) {
+      Errors.conflict(res, 'Cannot withdraw an offer with active ongoing reservations.');
       return;
     }
 
-    await prisma.offer.delete({ where: { id } });
+    await prisma.offer.update({
+      where: { id },
+      data:  { status: OfferStatus.WITHDRAWN },
+    });
+
+    await publishEvent({
+      eventId:    uuidv4(),
+      type:       'offer.withdrawn',
+      occurredAt: new Date().toISOString(),
+      payload:    { offerId: id, merchantId: req.user.merchantId },
+    });
+
     res.status(204).send();
   } catch (error) {
     logger.error('deleteOffer error', { error });
@@ -413,41 +916,61 @@ export async function deleteOffer(req: AuthenticatedRequest, res: Response): Pro
 // ─── POST /api/offers/:id/photos ─────────────────────────────────────────────
 
 export async function uploadOfferPhotos(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const files = req.files as Express.Multer.File[];
+  if (!files || files.length === 0) {
+    Errors.badRequest(res, 'No files uploaded.');
+    return;
+  }
+
   try {
     const id = req.params.id as string;
-    const files  = req.files as Express.Multer.File[];
-
-    if (!files || files.length === 0) {
-      Errors.badRequest(res, 'No files uploaded.');
-      return;
-    }
-
     const offer = await prisma.offer.findUnique({ where: { id } });
+
     if (!offer) {
+      for (const f of files) await fs.unlink(f.path).catch(() => {});
       Errors.notFound(res, 'Offer not found.');
       return;
     }
     if (offer.merchant_id !== req.user.merchantId) {
+      for (const f of files) await fs.unlink(f.path).catch(() => {});
       Errors.forbidden(res, 'You do not own this offer.');
       return;
     }
 
-    // Compress images using sharp
+    // Absolute cap: maximum 5 product photos per offer in total
+    const existingCount = await prisma.offerPhoto.count({ where: { offer_id: id } });
+    if (existingCount + files.length > 5) {
+      for (const f of files) await fs.unlink(f.path).catch(() => {});
+      Errors.badRequest(
+        res,
+        `Maximum 5 product photos allowed per offer. This offer already has ${existingCount} photo(s).`
+      );
+      return;
+    }
+
     const photoRecords = [];
     for (let i = 0; i < files.length; i++) {
-      const file        = files[i];
-      const compressed  = `compressed_${file.filename}`;
-      const outputPath  = path.join(env.UPLOAD_DIR, compressed);
+      const file = files[i];
+
+      // Validate image content with Sharp
+      const metadata = await sharp(file.path).metadata();
+      if (!metadata.format || !['jpeg', 'png', 'webp'].includes(metadata.format)) {
+        await fs.unlink(file.path).catch(() => {});
+        continue;
+      }
+
+      const compressed = `compressed_${file.filename}`;
+      const outputPath = path.join(env.UPLOAD_DIR, compressed);
 
       await sharp(file.path)
         .resize({ width: 1200, withoutEnlargement: true })
         .jpeg({ quality: 85 })
         .toFile(outputPath);
 
-      // Remove original
-      await fs.unlink(file.path);
+      await fs.unlink(file.path).catch(() => {});
 
       const url = `${env.MEDIA_BASE_URL}/${compressed}`;
+      const sortOrder = existingCount + i;
 
       const photo = await prisma.offerPhoto.create({
         data: {
@@ -456,7 +979,7 @@ export async function uploadOfferPhotos(req: AuthenticatedRequest, res: Response
           filename:   compressed,
           size_bytes: (await fs.stat(outputPath)).size,
           mime_type:  'image/jpeg',
-          sort_order: i,
+          sort_order: sortOrder,
         },
       });
       photoRecords.push({ id: photo.id, url: photo.url, sortOrder: photo.sort_order });
@@ -464,6 +987,7 @@ export async function uploadOfferPhotos(req: AuthenticatedRequest, res: Response
 
     res.status(201).json({ data: photoRecords });
   } catch (error) {
+    for (const f of files) await fs.unlink(f.path).catch(() => {});
     logger.error('uploadOfferPhotos error', { error });
     Errors.internal(res);
   }

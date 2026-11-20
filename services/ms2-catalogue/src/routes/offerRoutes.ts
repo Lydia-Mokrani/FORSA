@@ -1,5 +1,5 @@
 // src/routes/offerRoutes.ts
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import {
   getOffers,
   getOfferById,
@@ -8,6 +8,10 @@ import {
   updateOffer,
   deleteOffer,
   uploadOfferPhotos,
+  uploadDatePhoto,
+  submitOffer,
+  withdrawOffer,
+  adjustStock,
 } from '../controllers/offerController';
 import { authenticate } from '../middleware/auth';
 import { requireRole, requireEmailVerified, requireApprovedMerchant } from '../middleware/authorize';
@@ -67,6 +71,35 @@ router.post(
   ...merchantGuard,
   uploadMiddleware.array('photos', 5),
   (req, res) => uploadOfferPhotos(req as AuthenticatedRequest, res)
+);
+
+// POST /api/offers/:id/date-photo
+router.post(
+  '/:id/date-photo',
+  ...merchantGuard,
+  uploadMiddleware.single('photo'),
+  (req, res) => uploadDatePhoto(req as AuthenticatedRequest, res)
+);
+
+// POST /api/offers/:id/submit
+router.post(
+  '/:id/submit',
+  ...merchantGuard,
+  (req, res) => submitOffer(req as AuthenticatedRequest, res)
+);
+
+// POST /api/offers/:id/withdraw
+router.post(
+  '/:id/withdraw',
+  ...merchantGuard,
+  (req, res) => withdrawOffer(req as AuthenticatedRequest, res)
+);
+
+// POST /api/offers/:id/stock-adjustment
+router.post(
+  '/:id/stock-adjustment',
+  ...merchantGuard,
+  (req, res) => adjustStock(req as AuthenticatedRequest, res)
 );
 
 export { router as offerRoutes };

@@ -1,4 +1,4 @@
-// frontend/src/features/catalogue/services/api.ts
+﻿// frontend/src/features/catalogue/services/api.ts
 import { Category, Offer, OfferFilterParams, PaginatedResponse, MerchantDashboardData } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
@@ -351,5 +351,62 @@ export const CatalogueApi = {
         ]
       };
     }
+  },
+
+  // POST /api/offers/:id/date-photo
+  async uploadDatePhoto(id: string, file: File, token?: string): Promise<{ datePhotoUrl: string }> {
+    const formData = new FormData();
+    formData.append('photo', file);
+    const res = await fetch(`${API_BASE}/api/offers/${id}/date-photo`, {
+      method: 'POST',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to upload date photo');
+    const json = await res.json();
+    return json.data;
+  },
+
+  // POST /api/offers/:id/submit
+  async submitOffer(id: string, token?: string): Promise<Offer> {
+    const res = await fetch(`${API_BASE}/api/offers/${id}/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) throw new Error('Failed to submit offer');
+    const json = await res.json();
+    return json.data;
+  },
+
+  // POST /api/offers/:id/withdraw
+  async withdrawOffer(id: string, token?: string): Promise<Offer> {
+    const res = await fetch(`${API_BASE}/api/offers/${id}/withdraw`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) throw new Error('Failed to withdraw offer');
+    const json = await res.json();
+    return json.data;
+  },
+
+  // POST /api/offers/:id/stock-adjustment
+  async adjustStock(id: string, payload: { quantityDelta?: number; newQuantity?: number; reason?: string }, token?: string): Promise<Offer> {
+    const res = await fetch(`${API_BASE}/api/offers/${id}/stock-adjustment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to adjust stock');
+    const json = await res.json();
+    return json.data;
   }
 };

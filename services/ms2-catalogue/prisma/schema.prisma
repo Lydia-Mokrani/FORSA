@@ -15,15 +15,15 @@ datasource db {
 // CATEGORIES
 // ─────────────────────────────────────────────────────────────────────────────
 model Category {
-  id          String   @id @default(uuid())
-  slug        String   @unique
-  name_fr     String   // French display name
-  name_ar     String   // Arabic display name
-  icon        String?  // Icon identifier or URL
-  sort_order  Int      @default(0)
-  created_at  DateTime @default(now())
+  id         String   @id @default(uuid())
+  slug       String   @unique
+  name_fr    String // French display name
+  name_ar    String // Arabic display name
+  icon       String? // Icon identifier or URL
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
 
-  offers      Offer[]
+  offers Offer[]
 
   @@map("categories")
 }
@@ -35,18 +35,18 @@ model Category {
 // Never query MS1's database directly.
 // ─────────────────────────────────────────────────────────────────────────────
 model ShopSnapshot {
-  id             String   @id // = shopId from MS1 (UUID)
+  id             String     @id // = shopId from MS1 (UUID)
   name           String
   address        String
   latitude       Float
   longitude      Float
   status         ShopStatus @default(ACTIVE)
-  average_rating Float    @default(0)
-  sales_count    Int      @default(0)
-  merchant_id    String   // merchantId from MS1
-  updated_at     DateTime @updatedAt
+  average_rating Float      @default(0)
+  sales_count    Int        @default(0)
+  merchant_id    String // merchantId from MS1
+  updated_at     DateTime   @updatedAt
 
-  offers         Offer[]
+  offers Offer[]
 
   @@map("shop_snapshots")
 }
@@ -62,45 +62,48 @@ enum ShopStatus {
 // Core entity of MS2.
 // ─────────────────────────────────────────────────────────────────────────────
 model Offer {
-  id                    String      @id @default(uuid())
-  merchant_id           String      // from JWT — merchantId in MS1
-  shop_id               String      // references shop_snapshots.id
-  category_id           String
+  id          String @id @default(uuid())
+  merchant_id String // from JWT — merchantId in MS1
+  shop_id     String // references shop_snapshots.id
+  category_id String
 
   // Product information
-  name                  String
-  description           String      @db.Text
-  original_price        Decimal     @db.Decimal(10, 2)
-  discounted_price      Decimal     @db.Decimal(10, 2)
-  discount_percent      Int         // auto-calculated: round((1 - discounted/original) * 100)
+  name             String
+  description      String      @db.Text
+  product_type     ProductType
+  same_day_expiry  Boolean     @default(false)
+  original_price   Decimal     @db.Decimal(10, 2)
+  discounted_price Decimal     @db.Decimal(10, 2)
+  discount_percent Int // auto-calculated: round((1 - discounted/original) * 100)
 
   // Stock
-  quantity_available    Int         @default(1)
-  quantity_initial      Int         // immutable after creation — used for sold-out detection
+  quantity_available Int @default(1)
+  quantity_initial   Int // immutable after creation — used for sold-out detection
 
   // Dates
-  expires_at            DateTime    // offer deadline (when the basket must be picked up by)
-  product_expiry_date   DateTime?   // for packaged products requiring date verification
+  expires_at          DateTime // offer deadline (when the basket must be picked up by)
+  product_expiry_date DateTime? // for packaged products requiring date verification
 
   // Status
-  status                OfferStatus @default(DRAFT)
+  status          OfferStatus  @default(DRAFT)
+  previous_status OfferStatus? // preserved during merchant suspension so reactivation restores correctly
 
   // Verification tracking
-  date_photo_url        String?     // photo of product expiry date label (for packaged goods)
-  verification_event_id String?     // eventId sent to MS4 for OCR verification
+  date_photo_url        String? // photo of product expiry date label (for packaged goods)
+  verification_event_id String? // eventId sent to MS4 for OCR verification
   rejection_reason      String?
 
   // Timestamps
-  created_at            DateTime    @default(now())
-  updated_at            DateTime    @updatedAt
-  published_at          DateTime?
-  expired_at            DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  published_at DateTime?
+  expired_at   DateTime?
 
   // Relations
-  category              Category     @relation(fields: [category_id], references: [id])
-  shop                  ShopSnapshot @relation(fields: [shop_id], references: [id])
-  photos                OfferPhoto[]
-  stock_movements       StockMovement[]
+  category        Category        @relation(fields: [category_id], references: [id])
+  shop            ShopSnapshot    @relation(fields: [shop_id], references: [id])
+  photos          OfferPhoto[]
+  stock_movements StockMovement[]
 
   // Indexes for search & filtering
   @@index([status])
@@ -110,33 +113,41 @@ model Offer {
   @@index([expires_at])
   @@index([discounted_price])
   @@index([discount_percent])
+  @@index([product_type])
+  @@index([same_day_expiry])
   @@map("offers")
 }
 
+enum ProductType {
+  PACKAGED
+  FRESH
+}
+
 enum OfferStatus {
-  DRAFT               // created but not yet submitted
+  DRAFT // created but not yet submitted
   PENDING_VERIFICATION // awaiting MS4 OCR date verification
-  ACTIVE              // visible to customers
-  EXPIRED             // past deadline
-  SOLD_OUT            // quantity_available = 0
-  REJECTED            // rejected by MS4 or moderation
-  HIDDEN              // merchant suspended
+  ACTIVE // visible to customers
+  EXPIRED // past deadline
+  SOLD_OUT // quantity_available = 0
+  REJECTED // rejected by MS4 or moderation
+  HIDDEN // merchant suspended
+  WITHDRAWN // voluntarily withdrawn by merchant
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OFFER PHOTOS
 // ─────────────────────────────────────────────────────────────────────────────
 model OfferPhoto {
-  id          String   @id @default(uuid())
-  offer_id    String
-  url         String   // public URL through /media route
-  filename    String   // stored filename on disk
-  size_bytes  Int
-  mime_type   String
-  sort_order  Int      @default(0)
-  created_at  DateTime @default(now())
+  id         String   @id @default(uuid())
+  offer_id   String
+  url        String // public URL through /media route
+  filename   String // stored filename on disk
+  size_bytes Int
+  mime_type  String
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
 
-  offer       Offer    @relation(fields: [offer_id], references: [id], onDelete: Cascade)
+  offer Offer @relation(fields: [offer_id], references: [id], onDelete: Cascade)
 
   @@index([offer_id])
   @@map("offer_photos")
@@ -148,18 +159,18 @@ model OfferPhoto {
 // Critical for auditability and idempotency.
 // ─────────────────────────────────────────────────────────────────────────────
 model StockMovement {
-  id              String        @id @default(uuid())
-  offer_id        String
-  reservation_id  String        // from MS3
-  movement_type   MovementType
-  quantity        Int
-  created_at      DateTime      @default(now())
+  id             String       @id @default(uuid())
+  offer_id       String
+  reservation_id String? // from MS3 (optional for manual adjustments)
+  movement_type  MovementType
+  quantity       Int
+  reason         String? // for adjustments or operational audit
+  created_at     DateTime     @default(now())
 
-  offer           Offer         @relation(fields: [offer_id], references: [id])
+  offer Offer @relation(fields: [offer_id], references: [id])
 
   // CRITICAL: Prevent duplicate reserve or release for the same reservation
   @@unique([reservation_id, movement_type])
-
   @@index([offer_id])
   @@index([reservation_id])
   @@map("stock_movements")
@@ -168,4 +179,6 @@ model StockMovement {
 enum MovementType {
   RESERVE
   RELEASE
+  ADJUSTMENT
+  PICKUP
 }

@@ -32,7 +32,10 @@ export type OfferStatus =
   | 'EXPIRED'
   | 'SOLD_OUT'
   | 'REJECTED'
-  | 'HIDDEN';
+  | 'HIDDEN'
+  | 'WITHDRAWN';
+
+export type ProductType = 'PACKAGED' | 'FRESH';
 
 export interface Offer {
   id: string;
@@ -41,6 +44,8 @@ export interface Offer {
   categoryId: string;
   name: string;
   description: string;
+  productType?: ProductType;
+  sameDayExpiry?: boolean;
   originalPrice: number;
   discountedPrice: number;
   discountPercent: number;
@@ -93,9 +98,24 @@ export interface MerchantStats {
   pendingVerification: number;
   soldOutOffers: number;
   hiddenOffers: number;
+  withdrawnOffers?: number;
   reservedProducts: number;
   pickups: number;
   reviews: number;
+}
+
+export interface CreateOfferPayload {
+  shopId: string;
+  categoryId: string;
+  name: string;
+  description: string;
+  productType: ProductType;
+  sameDayExpiry?: boolean;
+  originalPrice: number;
+  discountedPrice: number;
+  quantityAvailable: number;
+  expiresAt: string;
+  productExpiryDate: string;
 }
 
 export interface MerchantDashboardData {

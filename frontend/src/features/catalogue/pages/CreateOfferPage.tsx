@@ -262,7 +262,11 @@ export const CreateOfferPage: React.FC = () => {
     setSubmitting(true);
 
     try {
+      const isSameDay = !isPackaged && expiryDate === today();
+
       const created = await CatalogueApi.createOffer({
+        productType: isPackaged ? 'PACKAGED' : 'FRESH',
+        sameDayExpiry: isSameDay,
         shopId,
         categoryId,
         name: name.trim(),
@@ -281,6 +285,12 @@ export const CreateOfferPage: React.FC = () => {
       if (photos.length > 0) {
         await CatalogueApi.uploadPhotos(created.id, photos);
       }
+
+      if (isPackaged && datePhoto) {
+        await CatalogueApi.uploadDatePhoto(created.id, datePhoto);
+      }
+
+      await CatalogueApi.submitOffer(created.id);
 
       navigate('/merchant/my-offers');
     } catch (err) {

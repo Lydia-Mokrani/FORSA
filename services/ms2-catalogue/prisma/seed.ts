@@ -2,24 +2,23 @@
 // Seeds the initial categories and demo data for MS2
 // Run with: npm run db:seed
 
-import { PrismaClient, OfferStatus } from '@prisma/client';
+import { PrismaClient, OfferStatus, ProductType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Seeding MS2 database...');
 
-  // ── Categories ────────────────────────────────────────────────────────────
+  // ── Categories (Strictly Food Products per FORSA requirements) ───────────
   const categories = [
-    { slug: 'bakeries',           name_fr: 'Boulangeries',                name_ar: 'مخابز',              icon: '🥖', sort_order: 1 },
-    { slug: 'restaurants',        name_fr: 'Restaurants',                 name_ar: 'مطاعم',              icon: '🍽️', sort_order: 2 },
-    { slug: 'fruits-vegetables',  name_fr: 'Fruits et légumes',           name_ar: 'فواكه وخضروات',     icon: '🥦', sort_order: 3 },
-    { slug: 'groceries',          name_fr: 'Épicerie et conserves',       name_ar: 'بقالة ومعلبات',     icon: '🛒', sort_order: 4 },
-    { slug: 'near-expiry',        name_fr: 'Produits proches de la DLUO', name_ar: 'منتجات قرب انتهاء صلاحيتها', icon: '⏰', sort_order: 5 },
-    { slug: 'supermarkets',       name_fr: 'Supermarchés',               name_ar: 'سوبرماركت',          icon: '🏪', sort_order: 6 },
-    { slug: 'clothing',           name_fr: 'Vêtements',                  name_ar: 'ملابس',              icon: '👕', sort_order: 7 },
-    { slug: 'shoes',              name_fr: 'Chaussures',                 name_ar: 'أحذية',              icon: '👟', sort_order: 8 },
-    { slug: 'other',              name_fr: 'Autre',                      name_ar: 'أخرى',               icon: '📦', sort_order: 9 },
+    { slug: 'bakeries',           name_fr: 'Boulangeries et viennoiseries', name_ar: 'مخابز ومعجنات',              icon: '🥖', sort_order: 1 },
+    { slug: 'fruits-vegetables',  name_fr: 'Fruits et légumes',             name_ar: 'فواكه وخضروات',              icon: '🥦', sort_order: 2 },
+    { slug: 'dairy-eggs',         name_fr: 'Produits laitiers et œufs',     name_ar: 'منتجات الألبان والبيض',      icon: '🧀', sort_order: 3 },
+    { slug: 'meat-fish',          name_fr: 'Viandes et poissons',           name_ar: 'لحوم وأسماك',                icon: '🥩', sort_order: 4 },
+    { slug: 'prepared-meals',     name_fr: 'Plats préparés et traiteur',    name_ar: 'وجبات جاهزة ومأكولات',       icon: '🍽️', sort_order: 5 },
+    { slug: 'groceries',          name_fr: 'Épicerie et conserves',         name_ar: 'بقالة ومعلبات',              icon: '🛒', sort_order: 6 },
+    { slug: 'beverages',          name_fr: 'Boissons',                      name_ar: 'مشروبات',                    icon: '🧃', sort_order: 7 },
+    { slug: 'other-food',         name_fr: 'Autres produits alimentaires',  name_ar: 'منتجات غذائية أخرى',          icon: '📦', sort_order: 8 },
   ];
 
   for (const cat of categories) {
@@ -67,6 +66,8 @@ async function main() {
         category_id:        bakeryCategory.id,
         name:               'Panier de croissants du soir',
         description:        'Assortiment de croissants et viennoiseries invendus de la journée. Frais et délicieux.',
+        product_type:       ProductType.FRESH,
+        same_day_expiry:    true,
         original_price:     650,
         discounted_price:   250,
         discount_percent:   62,
@@ -88,6 +89,8 @@ async function main() {
         category_id:        fruitCategory.id,
         name:               'Boîte de fraises fraîches',
         description:        'Fraises locales, légèrement trop mûres pour la vente standard. Idéales pour confitures.',
+        product_type:       ProductType.FRESH,
+        same_day_expiry:    false,
         original_price:     400,
         discounted_price:   150,
         discount_percent:   63,
