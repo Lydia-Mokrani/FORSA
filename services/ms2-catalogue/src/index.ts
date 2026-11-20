@@ -87,30 +87,42 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 async function bootstrap(): Promise<void> {
   try {
-    // Test database connection
-    await prisma.$connect();
-    logger.info('Database connected.');
-
-    // Start the HTTP server
+    // 1. Start the HTTP server first so the service is reachable
     app.listen(env.PORT, () => {
       logger.info(`MS2 Catalogue & Search running on port ${env.PORT} [${env.NODE_ENV}]`);
     });
 
-    // Connect to RabbitMQ (non-blocking — retries on failure)
-    await connectRabbitMQ();
+    // 2. Connect to PostgreSQL database
+    try {
+      await prisma.$connect();
+      logger.info('Database connected successfully.');
+    } catch (dbErr: any) {
+      logger.warn(
+        `⚠️ Could not connect to PostgreSQL at ${env.DATABASE_URL}. ` +
+        `Please ensure PostgreSQL is running (or run 'docker-compose up -d ms2-db') to perform database queries.`
+      );
+    }
 
-    // Start event consumers
-    await startConsumers();
+    // 3. Connect to RabbitMQ (non-blocking — retries on failure)
+    try {
+      await connectRabbitMQ();
+      await startConsumers();
+    } catch (mqErr) {
+      logger.warn('RabbitMQ connection pending...');
+    }
 
-    // Start offer expiration cron job
-    startExpirationJob();
+    // 4. Start offer expiration cron job
+    try {
+      startExpirationJob();
+    } catch (cronErr) {
+      logger.warn('Expiration job failed to initialize');
+    }
 
-    // Register with Consul
+    // 5. Register with Consul
     await registerWithConsul();
 
   } catch (err) {
     logger.error('Bootstrap failed', { err });
-    process.exit(1);
   }
 }
 
