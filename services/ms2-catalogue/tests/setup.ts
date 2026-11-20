@@ -8,7 +8,8 @@ process.env.DATABASE_URL    = 'postgresql://ms2_user:ms2_password@localhost:5433
 process.env.MS1_JWT_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0TEST_KEY_FOR_TESTS_ONLY
 -----END PUBLIC KEY-----`;
-process.env.INTERNAL_API_KEY = 'test-internal-key-12345';
+process.env.JWT_PUBLIC_KEY  = process.env.MS1_JWT_PUBLIC_KEY;
+process.env.INTERNAL_API_KEY = 'forsa-internal-secret-token-2026';
 process.env.RABBITMQ_URL    = 'amqp://localhost';
 process.env.RABBITMQ_EXCHANGE = 'forsa.events.test';
 process.env.CONSUL_HOST     = 'localhost';

@@ -21,6 +21,7 @@ import { connectRabbitMQ } from './messaging/connection';
 import { startConsumers } from './messaging/consumers';
 import { startExpirationJob } from './jobs/expirationJob';
 import { registerWithConsul } from './services/consulService';
+import { loadMs1PublicKey } from './middleware/auth';
 
 const app = express();
 
@@ -92,7 +93,10 @@ async function bootstrap(): Promise<void> {
       logger.info(`MS2 Catalogue & Search running on port ${env.PORT} [${env.NODE_ENV}]`);
     });
 
-    // 2. Connect to PostgreSQL database
+    // 2. Load MS1 RSA RS256 public key (from env or dynamic endpoint)
+    await loadMs1PublicKey();
+
+    // 3. Connect to PostgreSQL database
     try {
       await prisma.$connect();
       logger.info('Database connected successfully.');
@@ -103,7 +107,7 @@ async function bootstrap(): Promise<void> {
       );
     }
 
-    // 3. Connect to RabbitMQ (non-blocking — retries on failure)
+    // 4. Connect to RabbitMQ (non-blocking — retries on failure)
     try {
       await connectRabbitMQ();
       await startConsumers();
@@ -111,14 +115,14 @@ async function bootstrap(): Promise<void> {
       logger.warn('RabbitMQ connection pending...');
     }
 
-    // 4. Start offer expiration cron job
+    // 5. Start offer expiration cron job
     try {
       startExpirationJob();
     } catch (cronErr) {
       logger.warn('Expiration job failed to initialize');
     }
 
-    // 5. Register with Consul
+    // 6. Register with Consul
     await registerWithConsul();
 
   } catch (err) {

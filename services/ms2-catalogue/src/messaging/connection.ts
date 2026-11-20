@@ -28,7 +28,7 @@ export async function connectRabbitMQ(): Promise<void> {
     // Declare the topic exchange — durable so it survives broker restarts
     await ch.assertExchange(EXCHANGE, 'topic', { durable: true });
 
-    // Declare MS2's queues
+    // Declare MS2's queues and bind routing keys
     await declareQueues(ch);
 
     logger.info('RabbitMQ connected and queues declared.');
@@ -53,10 +53,22 @@ async function declareQueues(ch: amqplib.Channel): Promise<void> {
   await ch.assertExchange(deadLetterExchange, 'topic', { durable: true });
 
   const queues = [
-    { name: 'ms2.merchant.events',    patterns: ['merchant.approved', 'merchant.rejected', 'merchant.suspended', 'merchant.reactivated'] },
-    { name: 'ms2.shop.events',        patterns: ['shop.rating_updated'] },
-    { name: 'ms2.offer.verified',     patterns: ['offer.date_verified', 'offer.date_verified.rejected', 'offer.manual_review'] },
-    { name: 'ms2.reservation.events', patterns: ['reservation.picked_up'] },
+    {
+      name: 'ms2.merchant.events',
+      patterns: ['merchant.approved', 'merchant.rejected', 'merchant.suspended', 'merchant.reactivated'],
+    },
+    {
+      name: 'ms2.shop.events',
+      patterns: ['shop.created', 'shop.updated', 'shop.rating_updated', 'shop.status_changed'],
+    },
+    {
+      name: 'ms2.offer.verified',
+      patterns: ['offer.date_verified', 'offer.date_verified.rejected', 'offer.manual_review'],
+    },
+    {
+      name: 'ms2.reservation.events',
+      patterns: ['reservation.picked_up'],
+    },
   ];
 
   for (const q of queues) {

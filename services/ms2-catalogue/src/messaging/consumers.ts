@@ -98,13 +98,68 @@ export async function startConsumers(): Promise<void> {
     }
   }, { noAck: false });
 
-  // ── shop.events ────────────────────────────────────────────────────────────
+  // ── shop.events (MS1 -> MS2 shop snapshot synchronization) ──────────────────
   ch.consume('ms2.shop.events', async (msg) => {
     if (!msg) return;
     try {
       const event: DomainEvent<any> = JSON.parse(msg.content.toString());
 
-      if (event.type === 'shop.rating_updated') {
+      if (event.type === 'shop.created') {
+        const { shopId, merchantId, name, address, latitude, longitude } = event.payload;
+        if (shopId) {
+          await prisma.shopSnapshot.upsert({
+            where: { id: shopId },
+            create: {
+              id:             shopId,
+              name:           name || 'Boutique',
+              address:        address || '',
+              latitude:       Number(latitude) || 0,
+              longitude:      Number(longitude) || 0,
+              status:         ShopStatus.ACTIVE,
+              merchant_id:    merchantId,
+              average_rating: 0,
+              sales_count:    0,
+            },
+            update: {
+              name:        name !== undefined ? name : undefined,
+              address:     address !== undefined ? address : undefined,
+              latitude:    latitude !== undefined ? Number(latitude) : undefined,
+              longitude:   longitude !== undefined ? Number(longitude) : undefined,
+              status:      ShopStatus.ACTIVE,
+              merchant_id: merchantId !== undefined ? merchantId : undefined,
+            },
+          });
+          logger.info('Shop snapshot created/upserted on shop.created event', { shopId, merchantId, name });
+        }
+      } else if (event.type === 'shop.updated') {
+        const { shopId, id, name, address, latitude, longitude, status, merchantId } = event.payload;
+        const targetId = shopId || id;
+        if (targetId) {
+          await prisma.shopSnapshot.upsert({
+            where: { id: targetId },
+            create: {
+              id:             targetId,
+              name:           name || 'Boutique',
+              address:        address || '',
+              latitude:       Number(latitude) || 0,
+              longitude:      Number(longitude) || 0,
+              status:         status || ShopStatus.ACTIVE,
+              merchant_id:    merchantId,
+              average_rating: 0,
+              sales_count:    0,
+            },
+            update: {
+              name:        name !== undefined ? name : undefined,
+              address:     address !== undefined ? address : undefined,
+              latitude:    latitude !== undefined ? Number(latitude) : undefined,
+              longitude:   longitude !== undefined ? Number(longitude) : undefined,
+              status:      status !== undefined ? status : undefined,
+              merchant_id: merchantId !== undefined ? merchantId : undefined,
+            },
+          });
+          logger.info('Shop snapshot updated on shop.updated event', { shopId: targetId });
+        }
+      } else if (event.type === 'shop.rating_updated') {
         const { shopId, averageRating, salesCount } = event.payload;
         await prisma.shopSnapshot.update({
           where: { id: shopId },
@@ -114,31 +169,6 @@ export async function startConsumers(): Promise<void> {
           },
         });
         logger.info('Shop snapshot rating updated', { shopId, averageRating, salesCount });
-      } else if (event.type === 'shop.created' || event.type === 'shop.updated') {
-        const { shopId, id, name, address, latitude, longitude, status, merchantId } = event.payload;
-        const targetId = shopId || id;
-        if (targetId) {
-          await prisma.shopSnapshot.upsert({
-            where: { id: targetId },
-            create: {
-              id: targetId,
-              name: name || 'Shop',
-              address: address || '',
-              latitude: Number(latitude) || 0,
-              longitude: Number(longitude) || 0,
-              status: status || ShopStatus.ACTIVE,
-              merchant_id: merchantId,
-            },
-            update: {
-              name: name !== undefined ? name : undefined,
-              address: address !== undefined ? address : undefined,
-              latitude: latitude !== undefined ? Number(latitude) : undefined,
-              longitude: longitude !== undefined ? Number(longitude) : undefined,
-              status: status !== undefined ? status : undefined,
-            },
-          });
-          logger.info('Shop snapshot created/updated', { shopId: targetId });
-        }
       } else if (event.type === 'shop.status_changed') {
         const { shopId, status } = event.payload;
         if (shopId && status) {

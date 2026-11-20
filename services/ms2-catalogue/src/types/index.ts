@@ -3,20 +3,22 @@
 
 import { Request } from 'express';
 
-// ─── JWT Payload (from MS1) ───────────────────────────────────────────────────
+// ─── JWT Payload (from MS1 - RS256) ───────────────────────────────────────────
 export interface JwtPayload {
-  sub:        string;   // userId
-  merchantId: string;
-  role:       UserRole;
-  email:      string;
-  emailVerified: boolean;
+  sub:            string;   // User ID
+  merchantId:     string;   // Shop ID / Merchant ID
+  shopId:         string;   // Explicit Shop ID
+  role:           UserRole;
+  email:          string;
+  fullName:       string;
+  emailVerified:  boolean;
   merchantStatus: MerchantStatus;
-  iat:        number;
-  exp:        number;
+  iat?:           number;
+  exp?:           number;
 }
 
 export type UserRole       = 'CUSTOMER' | 'MERCHANT' | 'ADMIN';
-export type MerchantStatus = 'PENDING' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
+export type MerchantStatus = 'PENDING' | 'APPROVED' | 'SUSPENDED';
 
 // ─── Express Request extension ───────────────────────────────────────────────
 declare global {
@@ -81,4 +83,3 @@ export interface DomainEvent<T = unknown> {
   occurredAt: string;   // ISO 8601 UTC
   payload:    T;
 }
-

@@ -1,6 +1,5 @@
 // src/config/env.ts
 // Loads and validates all environment variables at startup.
-// The app crashes immediately if a required variable is missing.
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -15,6 +14,9 @@ function optional(key: string, fallback: string): string {
   return process.env[key] ?? fallback;
 }
 
+// Support both JWT_PUBLIC_KEY and MS1_JWT_PUBLIC_KEY
+const rawJwtPublicKey = (process.env.JWT_PUBLIC_KEY || process.env.MS1_JWT_PUBLIC_KEY || '').replace(/\\n/g, '\n');
+
 export const env = {
   NODE_ENV:          optional('NODE_ENV', 'development'),
   PORT:              parseInt(optional('PORT', '3002'), 10),
@@ -22,10 +24,14 @@ export const env = {
 
   DATABASE_URL:      required('DATABASE_URL'),
 
-  MS1_JWT_PUBLIC_KEY: required('MS1_JWT_PUBLIC_KEY').replace(/\\n/g, '\n'),
-  JWT_ALGORITHM:     optional('JWT_ALGORITHM', 'RS256') as 'RS256',
+  // RS256 Public Key from MS1
+  JWT_PUBLIC_KEY:     rawJwtPublicKey,
+  MS1_JWT_PUBLIC_KEY: rawJwtPublicKey,
+  JWT_ALGORITHM:     'RS256' as const,
+  MS1_PUBLIC_KEY_URL: optional('MS1_PUBLIC_KEY_URL', 'http://localhost:3001/api/auth/public-key'),
 
-  INTERNAL_API_KEY:  required('INTERNAL_API_KEY'),
+  // Shared secret for internal service-to-service calls (MS3 -> MS2)
+  INTERNAL_API_KEY:  optional('INTERNAL_API_KEY', 'forsa-internal-secret-token-2026'),
 
   RABBITMQ_URL:      optional('RABBITMQ_URL', 'amqp://localhost'),
   RABBITMQ_EXCHANGE: optional('RABBITMQ_EXCHANGE', 'forsa.events'),
