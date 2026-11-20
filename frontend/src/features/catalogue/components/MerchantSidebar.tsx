@@ -1,11 +1,19 @@
+
 import React from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { LayoutGrid, CalendarCheck, Plus, Star, User, LogOut } from 'lucide-react';
+import {
+  LayoutGrid,
+  CalendarCheck,
+  Plus,
+  Star,
+  User,
+  LogOut,
+} from 'lucide-react';
 
 interface SidebarItem {
   label: string;
   icon: React.ElementType;
-  to?: string; // no route yet = page not built
+  to?: string;
 }
 
 const ITEMS: SidebarItem[] = [
@@ -16,24 +24,25 @@ const ITEMS: SidebarItem[] = [
   { label: 'Compte', icon: User },
 ];
 
-// Figma: items every 63px (60px row + 3px gap), icon x=75, text 13.87px semibold
-const rowBase = 'ml-[21px] h-[60px] pl-[54px] pt-[10px] text-[13.87px] font-semibold leading-[21px]';
+const rowBase =
+  'ml-[15px] h-[60px] pl-[39px] pt-[10px] text-[13.87px] font-semibold leading-[21px]';
 
 const ItemContent: React.FC<{ item: SidebarItem }> = ({ item }) => {
   const Icon = item.icon;
+
   return (
-    <span className="flex h-[21px] items-center gap-[9px]">
-      <Icon className="h-[18.5px] w-[18.5px]" strokeWidth={1.75} />
+    <span className="flex h-[21px] items-center gap-[9px] whitespace-nowrap">
+      <Icon className="h-[18.5px] w-[18.5px] shrink-0" strokeWidth={1.75} />
       {item.label}
     </span>
   );
 };
 
 export const MerchantSidebar: React.FC = () => (
-  <aside className="fixed inset-y-0 left-0 z-30 w-[238px] rounded-r-[48px] bg-forsa-green shadow-[10px_11px_72px_rgba(0,0,0,0.18)]">
+  <aside className="fixed inset-y-0 left-0 z-30 w-[238px] rounded-r-[31px] bg-[#0B2C25] shadow-[10px_11px_72px_rgba(0,0,0,0.18)]">
     <Link
       to="/merchant/dashboard"
-      className="absolute left-[75px] top-[71px] text-[18.49px] font-extrabold leading-[28px] text-white"
+      className="absolute left-[75px] top-[71px] font-poppins text-[18.49px] font-extrabold leading-[28px] text-white"
     >
       FORSA
     </Link>
@@ -46,26 +55,34 @@ export const MerchantSidebar: React.FC = () => (
             to={item.to}
             end
             className={({ isActive }) =>
-              `${rowBase} block ${isActive ? 'forsa-nav-active text-forsa-green' : 'text-white'}`
+              `${rowBase} block ${
+                isActive
+                  ? 'forsa-nav-active text-[#0B2C25]'
+                  : 'text-white'
+              }`
             }
           >
             <ItemContent item={item} />
           </NavLink>
         ) : (
-          <div key={item.label} className={`${rowBase} cursor-default text-white`}>
+          <div
+            key={item.label}
+            className={`${rowBase} cursor-default text-white`}
+          >
             <ItemContent item={item} />
           </div>
-        )
+        ),
       )}
     </nav>
 
-    {/* TODO: connect to the real logout once authentication exists */}
     <button
       type="button"
-      className="absolute bottom-[54px] left-[37px] flex h-[46px] w-[164px] items-center gap-[15px] rounded-[10.8px] bg-white pl-5 text-[13.87px] font-semibold text-forsa-green"
+      className="absolute bottom-[54px] left-[37px] flex h-[46px] w-[164px] items-center gap-[15px] rounded-[10.8px] bg-white pl-5 font-poppins text-[13.87px] font-semibold text-[#0B2C25]"
     >
       <LogOut className="h-[18.5px] w-[18.5px]" strokeWidth={1.75} />
       Déconnexion
     </button>
   </aside>
 );
+
+export default MerchantSidebar;
