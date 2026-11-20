@@ -13,7 +13,8 @@
     "dev:ms1": "npm run dev --workspace=services/ms1-accounts",
     "dev:front": "npm run dev --workspace=frontend",
     "build:common": "npm run build --workspace=packages/common",
-    "prisma:ms1": "npm run prisma:generate --workspace=services/ms1-accounts"
+    "prisma:ms1": "npm run prisma:generate --workspace=services/ms1-accounts",
+    "test:ms1": "npm test --workspace=services/ms1-accounts"
   },
   "keywords": [
     "microservices",
