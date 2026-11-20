@@ -18,7 +18,6 @@ const assets = {
   rating: `${FIGMA_ASSETS}/65f25.svg`,
   clock: `${FIGMA_ASSETS}/815bb.svg`,
   edit: `${FIGMA_ASSETS}/48081.svg`,
-  delete: `${FIGMA_ASSETS}/df08e.svg`,
 };
 
 type DashboardOffer = MerchantDashboardData['recentOffers'][number] & {
@@ -216,17 +215,18 @@ const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
             Gérer
           </Link>
 
+          {/* Delete button */}
           <button
             type="button"
             onClick={() => onDelete(offer)}
             title="Supprimer l'offre"
             aria-label={`Supprimer ${offer.name}`}
-            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[8px] border border-[rgba(0,0,0,0.1)] transition hover:border-red-300 hover:bg-red-50"
+            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white text-[#0B2C25] transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
           >
-            <img
-              src={assets.delete}
-              alt=""
-              className="h-[16px] w-[16px]"
+            <Trash2
+              size={17}
+              strokeWidth={1.8}
+              aria-hidden="true"
             />
           </button>
         </div>
@@ -480,7 +480,6 @@ export const MerchantDashboardPage: React.FC = () => {
   return (
     <>
       <div className="w-full max-w-[1066px]">
-        {/* Welcome header */}
         <header className="flex min-h-[112px] items-start justify-between gap-6">
           <div className="min-w-0">
             <h1 className="font-poppins text-[clamp(30px,3.35vw,48px)] font-semibold leading-[1.25] text-[#0B2C25]">
@@ -521,7 +520,6 @@ export const MerchantDashboardPage: React.FC = () => {
           </div>
         </header>
 
-        {/* Statistics */}
         <section
           aria-label="Statistiques du commerce"
           className="mt-[50px] grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-4 xl:gap-[33px]"
@@ -531,7 +529,6 @@ export const MerchantDashboardPage: React.FC = () => {
           ))}
         </section>
 
-        {/* Today's offers */}
         <section className="mt-[50px]">
           <h2 className="mb-[22px] font-poppins text-[36px] font-semibold leading-[1.3] text-[#0B2C25]">
             Vos offres du jour
@@ -554,7 +551,6 @@ export const MerchantDashboardPage: React.FC = () => {
           )}
         </section>
 
-        {/* Add offer action */}
         <div className="mt-[50px] flex justify-end pb-8">
           <Link
             to="/merchant/create-offer"
@@ -566,7 +562,6 @@ export const MerchantDashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Delete confirmation modal */}
       {offerToDelete && (
         <DeleteOfferModal
           offer={offerToDelete}
