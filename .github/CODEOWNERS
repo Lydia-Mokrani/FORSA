@@ -1,0 +1,20 @@
+# Fichier officiel GitHub CODEOWNERS pour FORSA
+# Dès qu'une modification touche l'un de ces dossiers, GitHub notifie automatiquement la personne responsable pour révision.
+
+# Règle par défaut pour le dépôt
+* @hyb0hb @Lydia-Mokrani
+
+# Socle commun & Infrastructure
+/packages/common/ @hyb0hb @Lydia-Mokrani @Itshannahh
+/infra/ @hyb0hb @Lydia-Mokrani @Itshannahh
+/docs/ @hyb0hb @Lydia-Mokrani @Itshannahh
+
+# Services Backend Dédiés
+/services/ms1-accounts/ @hyb0hb
+/services/ms2-catalogue/ @Lydia-Mokrani
+/services/ms3-reservations/ @Itshannahh
+
+# Fonctionnalités Frontend
+/frontend/src/features/auth/ @hyb0hb
+/frontend/src/features/catalogue/ @Lydia-Mokrani
+/frontend/src/features/reservations/ @Itshannahh
