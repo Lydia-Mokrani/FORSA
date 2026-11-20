@@ -1,7 +1,19 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, X, AlertTriangle } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  X,
+  AlertTriangle,
+  Bell,
+  Tag,
+  CalendarCheck2,
+  TriangleAlert,
+  Star,
+  Clock3,
+  Pencil,
+} from 'lucide-react';
 
 import { CatalogueApi } from '../services/api';
 import { MerchantDashboardData } from '../types';
@@ -10,18 +22,18 @@ const ASSET =
   'https://www.figma.com/api/mcp/asset/cc438a28-a653-4f3c-af2f-672fcc42c3cb';
 
 const assets = {
-  edit: `${ASSET}/48081.svg`,
   avatar: `${ASSET}/6247d.png`,
   product: `${ASSET}/a9c3d.png`,
-  active: `${ASSET}/50881.svg`,
-  reservations: `${ASSET}/f8563.svg`,
-  soldOut: `${ASSET}/6047d.svg`,
-  rating: `${ASSET}/65f25.svg`,
-  clock: `${ASSET}/815bb.svg`,
-  divider: `${ASSET}/8f6e0.svg`,
 };
 
 type DashboardOffer = MerchantDashboardData['recentOffers'][number];
+
+interface StatCardProps {
+  value: string | number;
+  label: string;
+  icon: React.ReactNode;
+  iconBackground: string;
+}
 
 const formatPrice = (price: number) =>
   `${new Intl.NumberFormat('fr-FR').format(price)} DA`;
@@ -58,42 +70,22 @@ const statusLabel: Record<string, string> = {
   DRAFT: 'Brouillon',
 };
 
-interface StatCardProps {
-  value: string | number;
-  label: string;
-  icon: string;
-  iconBackground: string;
-  width: number;
-  iconSize: number;
-}
-
 const StatCard: React.FC<StatCardProps> = ({
   value,
   label,
   icon,
   iconBackground,
-  width,
-  iconSize,
 }) => (
-  <div
-    className="flex h-[108px] shrink-0 items-center justify-center gap-[23px] rounded-[19px] bg-white px-[13px] py-[12px] shadow-[0px_4px_3px_rgba(0,0,0,0.05)]"
-    style={{ width }}
-  >
+  <div className="flex h-[108px] min-w-0 w-full items-center gap-5 rounded-[19px] bg-white px-[13px] py-3 shadow-[0px_4px_3px_rgba(0,0,0,0.05)]">
     <div
       className="flex h-[84px] w-[84px] shrink-0 items-center justify-center rounded-[17px]"
       style={{ backgroundColor: iconBackground }}
     >
-      <img
-        src={icon}
-        alt=""
-        aria-hidden="true"
-        className="object-contain"
-        style={{ width: iconSize, height: iconSize }}
-      />
+      {icon}
     </div>
 
     <div className="min-w-0 flex-1">
-      <p className="font-poppins text-[40px] font-semibold leading-[1.15] text-[#0B2C25]">
+      <p className="font-poppins text-[36px] font-semibold leading-[1.15] text-[#0B2C25]">
         {value}
       </p>
       <p className="font-poppins text-[13px] leading-[1.35] text-[rgba(11,44,37,0.71)]">
@@ -110,113 +102,87 @@ interface OfferCardProps {
 
 const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
   const originalPrice = getOriginalPrice(offer);
-  const isActive = offer.status === 'ACTIVE';
 
   return (
-    <article className="flex h-[330px] w-full min-w-0 flex-col rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)]">
-      <div className="flex flex-col gap-[14px]">
-        <div className="flex flex-col gap-[9px]">
-          <div className="flex flex-col gap-[6px]">
-            <div className="relative h-[140px] w-full overflow-hidden rounded-[12px]">
-              <img
-                src={offer.thumbnailUrl || assets.product}
-                alt={offer.name}
-                className="absolute inset-0 h-full w-full object-cover"
-              />
+    <article className="flex h-[330px] min-w-0 w-full flex-col rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)]">
+      <div className="relative h-[140px] w-full shrink-0 overflow-hidden rounded-[12px]">
+        <img
+          src={offer.thumbnailUrl || assets.product}
+          alt={offer.name}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
 
-              <Link
-                to={`/merchant/edit-offer/${offer.id}`}
-                aria-label={`Modifier ${offer.name}`}
-                className="absolute right-[5px] top-[9px] flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[rgba(255,255,255,0.79)] transition hover:bg-white"
-              >
-                <img
-                  src={assets.edit}
-                  alt=""
-                  className="h-[24px] w-[24px]"
-                />
-              </Link>
-            </div>
+        <Link
+          to={`/merchant/edit-offer/${offer.id}`}
+          aria-label={`Modifier ${offer.name}`}
+          className="absolute right-[8px] top-[8px] flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[rgba(255,255,255,0.88)] text-[#17233D] transition hover:bg-white"
+        >
+          <Pencil size={21} strokeWidth={1.7} />
+        </Link>
+      </div>
 
-            <div className="flex h-[12px] items-center gap-[6px]">
-              <img
-                src={assets.clock}
-                alt=""
-                className="h-[10px] w-[10px] shrink-0"
-              />
-              <p className="font-poppins text-[8px] leading-[12px] text-[#78847F]">
-                Fin de l'offre : {formatDeadline(offer.expiresAt)}
-              </p>
-            </div>
-          </div>
+      <div className="mt-[8px] flex h-[14px] shrink-0 items-center gap-[6px]">
+        <Clock3 size={11} className="shrink-0 text-[#78847F]" />
+        <p className="font-poppins text-[8px] leading-[12px] text-[#78847F]">
+          Retrait : {formatDeadline(offer.expiresAt)}
+        </p>
+      </div>
 
-          <div className="flex h-[38px] items-start justify-between gap-[25px]">
-            <div className="flex h-[38px] min-w-0 flex-1 flex-col">
-              <h3 className="h-[26px] w-full truncate font-poppins text-[17px] font-semibold leading-[26px] text-[#0B2C25]">
-                {offer.name}
-              </h3>
-
-              <p className="w-full truncate font-poppins text-[8px] leading-[12px] text-[rgba(11,44,37,0.66)]">
-                {offer.category.nameFr}
-              </p>
-            </div>
-
-            <div className="flex shrink-0 items-baseline gap-[4px] whitespace-nowrap py-[4px]">
-              <span className="font-poppins text-[14px] font-bold text-[#17664E]">
-                {formatPrice(offer.discountedPrice)}
-              </span>
-
-              {originalPrice !== null && (
-                <span className="font-poppins text-[8px] text-[#78847F] line-through">
-                  {formatPrice(originalPrice)}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex h-[21px] flex-col gap-[4px]">
-          <p className="font-poppins text-[7px] leading-[11px] text-[rgba(11,44,37,0.59)]">
-            {statusLabel[offer.status] || offer.status}
+      <div className="mt-[7px] flex min-h-[39px] items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-poppins text-[16px] font-semibold leading-[22px] text-[#0B2C25]">
+            {offer.name}
+          </h3>
+          <p className="truncate font-poppins text-[8px] leading-[12px] text-[rgba(11,44,37,0.66)]">
+            {offer.category.nameFr}
           </p>
-
-          <div className="h-[6px] w-full overflow-hidden rounded-[3px] bg-[#D9D9D9]">
-            <div
-              className={`h-full rounded-[3px] ${
-                isActive ? 'bg-[#0B2C25]' : 'bg-[#78847F]'
-              }`}
-              style={{
-                width: isActive ? '50%' : '0%',
-              }}
-            />
-          </div>
         </div>
 
-        <div className="h-[6px] w-[214px] max-w-full shrink-0">
-          <img
-            src={assets.divider}
-            alt=""
-            className="h-full w-full object-fill"
-          />
-        </div>
+        <div className="flex shrink-0 items-baseline gap-[4px] whitespace-nowrap pt-[2px]">
+          <span className="font-poppins text-[13px] font-bold text-[#17664E]">
+            {formatPrice(offer.discountedPrice)}
+          </span>
 
-        <div className="flex h-[32px] shrink-0 items-center gap-[10px]">
-          <Link
-            to={`/merchant/edit-offer/${offer.id}`}
-            className="flex h-[32px] min-w-0 flex-1 items-center justify-center rounded-[8px] bg-[#0B2C25] px-[12px] font-poppins text-[10px] font-bold text-white transition-colors hover:bg-[#17664E]"
-          >
-            Gérer
-          </Link>
-
-          <button
-            type="button"
-            onClick={() => onDelete(offer)}
-            title="Supprimer l'offre"
-            aria-label={`Supprimer ${offer.name}`}
-            className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white text-[#0B2C25] transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
-          >
-            <Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
-          </button>
+          {originalPrice !== null && (
+            <span className="font-poppins text-[8px] text-[#78847F] line-through">
+              {formatPrice(originalPrice)}
+            </span>
+          )}
         </div>
+      </div>
+
+      <div className="mt-[8px] flex min-h-[22px] items-center gap-[6px]">
+        <span
+          className={`h-[7px] w-[7px] shrink-0 rounded-full ${
+            offer.status === 'ACTIVE'
+              ? 'bg-[#17664E]'
+              : 'bg-[#A5AAA5]'
+          }`}
+        />
+        <p className="truncate font-poppins text-[8px] leading-[12px] text-[rgba(11,44,37,0.65)]">
+          {statusLabel[offer.status] || offer.status}
+        </p>
+      </div>
+
+      <div className="mt-[7px] h-px w-full shrink-0 bg-[#E5E5E0]" />
+
+      <div className="mt-auto flex h-[32px] shrink-0 items-center gap-[10px]">
+        <Link
+          to={`/merchant/edit-offer/${offer.id}`}
+          className="flex h-[32px] min-w-0 flex-1 items-center justify-center rounded-[8px] bg-[#0B2C25] px-3 font-poppins text-[10px] font-bold text-white transition-colors hover:bg-[#17664E]"
+        >
+          Gérer
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => onDelete(offer)}
+          title="Supprimer l'offre"
+          aria-label={`Supprimer ${offer.name}`}
+          className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white text-[#0B2C25] transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+        >
+          <Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
+        </button>
       </div>
     </article>
   );
@@ -387,17 +353,17 @@ export const MerchantDashboardPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="w-full max-w-[1066px] animate-pulse space-y-[50px]">
+      <div className="mx-auto w-full max-w-[1066px] animate-pulse space-y-[50px]">
         <div className="h-[112px] rounded-xl bg-[#F2EEE5]" />
         <div className="h-[108px] rounded-xl bg-white" />
-        <div className="h-[406px] rounded-xl bg-white" />
+        <div className="h-[330px] rounded-xl bg-white" />
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="w-full max-w-[1066px] py-12 text-center font-poppins text-[#0B2C25]">
+      <div className="mx-auto w-full max-w-[1066px] py-12 text-center font-poppins text-[#0B2C25]">
         Impossible de charger les données du tableau de bord.
       </div>
     );
@@ -418,66 +384,30 @@ export const MerchantDashboardPage: React.FC = () => {
 
   const shopName = shops[0]?.name || '[Commerce]';
 
-  const statCards: StatCardProps[] = [
-    {
-      label: 'offres actives',
-      value: stats.activeOffers,
-      icon: assets.active,
-      iconBackground: 'rgba(134,207,238,0.34)',
-      width: 220,
-      iconSize: 54,
-    },
-    {
-      label: 'produits réservés',
-      value: stats.reservedProducts,
-      icon: assets.reservations,
-      iconBackground: 'rgba(238,214,134,0.47)',
-      width: 280,
-      iconSize: 48,
-    },
-    {
-      label: 'offres épuisées',
-      value: stats.soldOutOffers,
-      icon: assets.soldOut,
-      iconBackground: 'rgba(206,86,86,0.47)',
-      width: 232,
-      iconSize: 53,
-    },
-    {
-      label: 'note moyenne',
-      value: averageRating,
-      icon: assets.rating,
-      iconBackground: '#EAF5EB',
-      width: 226,
-      iconSize: 54,
-    },
-  ];
-
   return (
     <>
-      <div className="w-full max-w-[1066px]">
-        <header className="flex h-[112px] w-full items-start justify-between">
-          <div className="flex h-[112px] w-[680px] min-w-0 flex-col gap-[3px]">
-            <h1 className="font-poppins text-[48px] font-semibold leading-[1.25] text-[#0B2C25]">
+      <div className="mx-auto w-full max-w-[1066px] min-w-0 pb-8">
+        <header className="flex w-full items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h1
+              className="overflow-hidden text-ellipsis whitespace-nowrap font-poppins text-[clamp(30px,3.35vw,48px)] font-semibold leading-[1.25] text-[#0B2C25]"
+              title={`Bonjour, ${shopName} !`}
+            >
               Bonjour, {shopName} !
             </h1>
 
-            <p className="font-poppins text-[20px] leading-[1.5] text-[rgba(11,44,37,0.79)]">
+            <p className="mt-2 font-poppins text-[15px] leading-[1.5] text-[rgba(11,44,37,0.79)] sm:text-[20px]">
               Voici un aperçu de votre activité aujourd’hui
             </p>
           </div>
 
-          <div className="flex h-[48px] shrink-0 items-start gap-[14px] pt-[0px]">
+          <div className="flex shrink-0 items-center gap-[14px] pt-[2px]">
             <button
               type="button"
               aria-label="Notifications"
-              className="flex h-[45px] w-[45px] items-center justify-center"
+              className="flex h-[42px] w-[42px] items-center justify-center text-[#17233D]"
             >
-              <img
-                src={`${ASSET}/afff4.svg`}
-                alt=""
-                className="h-[45px] w-[45px]"
-              />
+              <Bell size={34} strokeWidth={1.8} />
             </button>
 
             <img
@@ -490,15 +420,39 @@ export const MerchantDashboardPage: React.FC = () => {
 
         <section
           aria-label="Statistiques du commerce"
-          className="mt-[50px] flex w-full flex-wrap items-center gap-[33px] xl:flex-nowrap"
+          className="mt-[50px] grid w-full grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-[220fr_280fr_232fr_226fr] xl:gap-[32px]"
         >
-          {statCards.map((card) => (
-            <StatCard key={card.label} {...card} />
-          ))}
+          <StatCard
+            value={stats.activeOffers}
+            label="offres actives"
+            icon={<Tag size={45} strokeWidth={1.9} />}
+            iconBackground="rgba(134,207,238,0.34)"
+          />
+
+          <StatCard
+            value={stats.reservedProducts}
+            label="produits réservés"
+            icon={<CalendarCheck2 size={43} strokeWidth={1.8} />}
+            iconBackground="rgba(238,214,134,0.47)"
+          />
+
+          <StatCard
+            value={stats.soldOutOffers}
+            label="offres épuisées"
+            icon={<TriangleAlert size={44} strokeWidth={1.8} />}
+            iconBackground="rgba(206,86,86,0.47)"
+          />
+
+          <StatCard
+            value={averageRating}
+            label="note moyenne"
+            icon={<Star size={46} strokeWidth={1.8} />}
+            iconBackground="#EAF5EB"
+          />
         </section>
 
         <section className="mt-[50px]">
-          <h2 className="mb-[22px] font-poppins text-[36px] font-semibold leading-[1.5] text-[#0B2C25]">
+          <h2 className="mb-[22px] font-poppins text-[32px] font-semibold leading-[1.35] text-[#0B2C25] sm:text-[36px]">
             Vos offres du jour
           </h2>
 
@@ -521,12 +475,12 @@ export const MerchantDashboardPage: React.FC = () => {
           )}
         </section>
 
-        <div className="mt-[70px] flex justify-end pb-8">
+        <div className="mt-[70px] flex justify-end">
           <Link
             to="/merchant/create-offer"
-            className="inline-flex h-[50px] items-center gap-[7px] rounded-[10px] bg-[#0B2C25] px-[10px] font-poppins text-[20px] font-semibold text-white transition-colors hover:bg-[#17664E]"
+            className="inline-flex h-[50px] items-center gap-[7px] rounded-[10px] bg-[#0B2C25] px-[13px] font-poppins text-[19px] font-semibold text-white transition-colors hover:bg-[#17664E]"
           >
-            <Plus className="h-[30px] w-[30px]" strokeWidth={1.8} />
+            <Plus size={29} strokeWidth={1.8} />
             Ajouter une offre
           </Link>
         </div>
