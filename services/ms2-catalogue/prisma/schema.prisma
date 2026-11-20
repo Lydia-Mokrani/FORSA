@@ -14,12 +14,13 @@ datasource db {
 // ─────────────────────────────────────────────────────────────────────────────
 // CATEGORIES
 // ─────────────────────────────────────────────────────────────────────────────
+
 model Category {
   id         String   @id @default(uuid())
   slug       String   @unique
-  name_fr    String // French display name
-  name_ar    String // Arabic display name
-  icon       String? // Icon identifier or URL
+  name_fr    String
+  name_ar    String
+  icon       String?
   sort_order Int      @default(0)
   created_at DateTime @default(now())
 
@@ -30,12 +31,11 @@ model Category {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHOP SNAPSHOTS
-// MS2 maintains a local read-only copy of shop info.
-// Updated exclusively via RabbitMQ events from MS1.
-// Never query MS1's database directly.
+// Read-only local copy of shop information received from MS1 through RabbitMQ.
 // ─────────────────────────────────────────────────────────────────────────────
+
 model ShopSnapshot {
-  id             String     @id // = shopId from MS1 (UUID)
+  id             String     @id
   name           String
   address        String
   latitude       Float
@@ -43,7 +43,7 @@ model ShopSnapshot {
   status         ShopStatus @default(ACTIVE)
   average_rating Float      @default(0)
   sales_count    Int        @default(0)
-  merchant_id    String // merchantId from MS1
+  merchant_id    String
   updated_at     DateTime   @updatedAt
 
   offers Offer[]
@@ -59,38 +59,36 @@ enum ShopStatus {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OFFERS
-// Core entity of MS2.
 // ─────────────────────────────────────────────────────────────────────────────
+
 model Offer {
   id          String @id @default(uuid())
-  merchant_id String // from JWT — merchantId in MS1
-  shop_id     String // references shop_snapshots.id
+  merchant_id String
+  shop_id     String
   category_id String
 
   // Product information
   name             String
   description      String      @db.Text
-  product_type     ProductType
+  product_type     ProductType @default(FRESH)
   same_day_expiry  Boolean     @default(false)
   original_price   Decimal     @db.Decimal(10, 2)
   discounted_price Decimal     @db.Decimal(10, 2)
-  discount_percent Int // auto-calculated: round((1 - discounted/original) * 100)
+  discount_percent Int
 
   // Stock
   quantity_available Int @default(1)
-  quantity_initial   Int // immutable after creation — used for sold-out detection
+  quantity_initial   Int
 
   // Dates
-  expires_at          DateTime // offer deadline (when the basket must be picked up by)
-  product_expiry_date DateTime? // for packaged products requiring date verification
+  expires_at          DateTime
+  product_expiry_date DateTime?
 
-  // Status
-  status          OfferStatus  @default(DRAFT)
-  previous_status OfferStatus? // preserved during merchant suspension so reactivation restores correctly
-
-  // Verification tracking
-  date_photo_url        String? // photo of product expiry date label (for packaged goods)
-  verification_event_id String? // eventId sent to MS4 for OCR verification
+  // Status & Verification tracking
+  status                OfferStatus  @default(DRAFT)
+  previous_status       OfferStatus? // preserved during merchant suspension so reactivation restores correctly
+  date_photo_url        String?
+  verification_event_id String?
   rejection_reason      String?
 
   // Timestamps
@@ -105,7 +103,7 @@ model Offer {
   photos          OfferPhoto[]
   stock_movements StockMovement[]
 
-  // Indexes for search & filtering
+  // Indexes
   @@index([status])
   @@index([merchant_id])
   @@index([shop_id])
@@ -124,24 +122,25 @@ enum ProductType {
 }
 
 enum OfferStatus {
-  DRAFT // created but not yet submitted
-  PENDING_VERIFICATION // awaiting MS4 OCR date verification
-  ACTIVE // visible to customers
-  EXPIRED // past deadline
-  SOLD_OUT // quantity_available = 0
-  REJECTED // rejected by MS4 or moderation
-  HIDDEN // merchant suspended
-  WITHDRAWN // voluntarily withdrawn by merchant
+  DRAFT
+  PENDING_VERIFICATION
+  ACTIVE
+  EXPIRED
+  SOLD_OUT
+  REJECTED
+  HIDDEN
+  WITHDRAWN
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OFFER PHOTOS
 // ─────────────────────────────────────────────────────────────────────────────
+
 model OfferPhoto {
   id         String   @id @default(uuid())
   offer_id   String
-  url        String // public URL through /media route
-  filename   String // stored filename on disk
+  url        String
+  filename   String
   size_bytes Int
   mime_type  String
   sort_order Int      @default(0)
@@ -155,24 +154,25 @@ model OfferPhoto {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STOCK MOVEMENTS
-// Every reservation or release of stock is recorded here.
-// Critical for auditability and idempotency.
+// Records reservations, releases, adjustments and pickups.
 // ─────────────────────────────────────────────────────────────────────────────
+
 model StockMovement {
   id             String       @id @default(uuid())
   offer_id       String
-  reservation_id String? // from MS3 (optional for manual adjustments)
+  reservation_id String?
   movement_type  MovementType
   quantity       Int
-  reason         String? // for adjustments or operational audit
+  reason         String?
   created_at     DateTime     @default(now())
 
   offer Offer @relation(fields: [offer_id], references: [id])
 
-  // CRITICAL: Prevent duplicate reserve or release for the same reservation
+  // CRITICAL: Prevent duplicate reserve, release, or pickup for the same reservation
   @@unique([reservation_id, movement_type])
   @@index([offer_id])
   @@index([reservation_id])
+  @@index([movement_type])
   @@map("stock_movements")
 }
 
