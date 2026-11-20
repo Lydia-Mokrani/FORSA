@@ -34,15 +34,39 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
       prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.WITHDRAWN } }),
     ]);
 
-    // Stock reservations count (how many times stock was reserved across all offers)
-    const reservedCount = await prisma.stockMovement.count({
-      where: {
-        offer:         { merchant_id: merchantId },
-        movement_type: MovementType.RESERVE,
-      },
-    });
+    // Calculate outstanding reserved quantity:
+    // (Total items reserved) - (Total items released + Total items picked up)
+    const [reserveAgg, releaseAgg, pickupAgg] = await Promise.all([
+      prisma.stockMovement.aggregate({
+        where: {
+          offer:         { merchant_id: merchantId },
+          movement_type: MovementType.RESERVE,
+        },
+        _sum: { quantity: true },
+      }),
+      prisma.stockMovement.aggregate({
+        where: {
+          offer:         { merchant_id: merchantId },
+          movement_type: MovementType.RELEASE,
+        },
+        _sum: { quantity: true },
+      }),
+      prisma.stockMovement.aggregate({
+        where: {
+          offer:         { merchant_id: merchantId },
+          movement_type: MovementType.PICKUP,
+        },
+        _sum: { quantity: true },
+      }),
+    ]);
 
-    // Actual confirmed customer pickups (PICKUP movement type)
+    const totalReservedQty = reserveAgg._sum.quantity ?? 0;
+    const totalReleasedQty = releaseAgg._sum.quantity ?? 0;
+    const totalPickedUpQty = pickupAgg._sum.quantity ?? 0;
+
+    const outstandingReservedProducts = Math.max(0, totalReservedQty - totalReleasedQty - totalPickedUpQty);
+
+    // Number of confirmed customer pickup movements
     const pickupCount = await prisma.stockMovement.count({
       where: {
         offer:         { merchant_id: merchantId },
@@ -73,7 +97,7 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
           soldOutOffers,
           hiddenOffers,
           withdrawnOffers,
-          reservedProducts: reservedCount,
+          reservedProducts: outstandingReservedProducts,
           pickups:          pickupCount,
           // Reviews are managed by MS4 — return 0 until MS4 provides them
           reviews:          0,

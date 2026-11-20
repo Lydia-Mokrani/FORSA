@@ -5,7 +5,7 @@ info:
   description: |
     API documentation for MS2 (Catalogue & Search microservice) of FORSA (فرصة).
     Handles offers, categories, product photos, search & filtering, merchant dashboard,
-    and internal stock reservation/release.
+    and internal stock reservation/release/pickup.
 servers:
   - url: http://localhost:3002
     description: Local MS2 Direct Port
@@ -73,6 +73,9 @@ components:
           type: number
         salesCount:
           type: integer
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED, CLOSED]
 
     Offer:
       type: object
@@ -93,6 +96,11 @@ components:
           type: string
         description:
           type: string
+        productType:
+          type: string
+          enum: [PACKAGED, FRESH]
+        sameDayExpiry:
+          type: boolean
         originalPrice:
           type: number
         discountedPrice:
@@ -109,10 +117,9 @@ components:
         productExpiryDate:
           type: string
           format: date-time
-          nullable: true
         status:
           type: string
-          enum: [DRAFT, PENDING_VERIFICATION, ACTIVE, EXPIRED, SOLD_OUT, REJECTED, HIDDEN]
+          enum: [DRAFT, PENDING_VERIFICATION, ACTIVE, EXPIRED, SOLD_OUT, REJECTED, HIDDEN, WITHDRAWN]
         datePhotoUrl:
           type: string
           nullable: true
@@ -203,11 +210,16 @@ paths:
         - in: query
           name: q
           schema: { type: string }
-          description: Search by offer name
+          description: Search by offer name or description
         - in: query
           name: category
           schema: { type: string }
           description: Category slug
+        - in: query
+          name: productType
+          schema:
+            type: string
+            enum: [PACKAGED, FRESH]
         - in: query
           name: minPrice
           schema: { type: number }
@@ -257,7 +269,7 @@ paths:
                     $ref: '#/components/schemas/PaginationMeta'
 
     post:
-      summary: Create a new offer
+      summary: Create a new offer in DRAFT status
       tags: [Offers - Merchant]
       security:
         - BearerAuth: []
@@ -267,7 +279,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [shopId, categoryId, name, description, originalPrice, discountedPrice, quantityAvailable, expiresAt]
+              required: [shopId, categoryId, name, description, productType, originalPrice, discountedPrice, quantityAvailable, expiresAt, productExpiryDate]
               properties:
                 shopId:
                   type: string
@@ -279,6 +291,12 @@ paths:
                   type: string
                 description:
                   type: string
+                productType:
+                  type: string
+                  enum: [PACKAGED, FRESH]
+                sameDayExpiry:
+                  type: boolean
+                  default: false
                 originalPrice:
                   type: number
                 discountedPrice:
@@ -293,7 +311,7 @@ paths:
                   format: date-time
       responses:
         '201':
-          description: Offer created
+          description: Offer created in DRAFT status
         '400':
           $ref: '#/components/responses/400Error'
         '401':
@@ -353,9 +371,10 @@ paths:
               properties:
                 name: { type: string }
                 description: { type: string }
+                productType: { type: string, enum: [PACKAGED, FRESH] }
+                sameDayExpiry: { type: boolean }
                 originalPrice: { type: number }
                 discountedPrice: { type: number }
-                quantityAvailable: { type: integer }
                 expiresAt: { type: string, format: date-time }
                 productExpiryDate: { type: string, format: date-time }
                 categoryId: { type: string, format: uuid }
@@ -370,7 +389,7 @@ paths:
           $ref: '#/components/responses/404Error'
 
     delete:
-      summary: Delete an offer
+      summary: Withdraw an offer (soft withdrawal)
       tags: [Offers - Merchant]
       security:
         - BearerAuth: []
@@ -381,15 +400,15 @@ paths:
           schema: { type: string, format: uuid }
       responses:
         '204':
-          description: Offer deleted
+          description: Offer withdrawn
         '403':
           $ref: '#/components/responses/403Error'
-        '409':
-          description: Cannot delete offer with active reservations
+        '404':
+          $ref: '#/components/responses/404Error'
 
   /api/offers/{id}/photos:
     post:
-      summary: Upload photos for an offer
+      summary: Upload product photos for an offer (max 5 per offer total)
       tags: [Offers - Merchant]
       security:
         - BearerAuth: []
@@ -413,6 +432,93 @@ paths:
       responses:
         '201':
           description: Photos uploaded and compressed successfully
+
+  /api/offers/{id}/date-photo:
+    post:
+      summary: Upload expiry date label photo (required for packaged products)
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Date photo uploaded
+
+  /api/offers/{id}/submit:
+    post:
+      summary: Submit offer for verification (transitions to PENDING_VERIFICATION)
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Offer submitted for verification
+
+  /api/offers/{id}/withdraw:
+    post:
+      summary: Withdraw an offer from marketplace
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Offer withdrawn
+
+  /api/offers/{id}/stock-adjustment:
+    post:
+      summary: Adjust available stock
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                quantityDelta:
+                  type: integer
+                newQuantity:
+                  type: integer
+                  minimum: 0
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 255
+      responses:
+        '200':
+          description: Stock adjusted
 
   /api/merchant/dashboard:
     get:
@@ -475,6 +581,31 @@ paths:
       responses:
         '200':
           description: Stock released
+
+  /internal/offers/{id}/pickup:
+    post:
+      summary: Record confirmed customer pickup
+      tags: [Internal Service-to-Service]
+      security:
+        - InternalApiKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity, reservationId]
+              properties:
+                quantity: { type: integer, minimum: 1 }
+                reservationId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Pickup recorded
 
 responses:
   400Error:

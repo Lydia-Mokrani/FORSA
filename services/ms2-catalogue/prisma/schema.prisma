@@ -70,7 +70,7 @@ model Offer {
   // Product information
   name             String
   description      String      @db.Text
-  product_type     ProductType @default(FRESH)
+  product_type     ProductType
   same_day_expiry  Boolean     @default(false)
   original_price   Decimal     @db.Decimal(10, 2)
   discounted_price Decimal     @db.Decimal(10, 2)
@@ -82,7 +82,7 @@ model Offer {
 
   // Dates
   expires_at          DateTime
-  product_expiry_date DateTime?
+  product_expiry_date DateTime
 
   // Status & Verification tracking
   status                OfferStatus  @default(DRAFT)

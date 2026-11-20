@@ -53,52 +53,73 @@ async function main() {
   const fruitCategory  = await prisma.category.findUnique({ where: { slug: 'fruits-vegetables' } });
 
   if (bakeryCategory && fruitCategory) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const now = new Date();
+
+    // Offer 1: Same-day bakery items (expires end of today)
+    const todayExpiry = new Date(now);
+    todayExpiry.setUTCHours(23, 59, 59, 999);
+    const todayDeadline = new Date(now);
+    todayDeadline.setUTCHours(21, 0, 0, 0);
+
+    // Offer 2: Fresh fruits (good for 2 more days)
+    const tomorrowDeadline = new Date(now);
+    tomorrowDeadline.setDate(tomorrowDeadline.getDate() + 1);
+    tomorrowDeadline.setUTCHours(18, 0, 0, 0);
+    const futureExpiry = new Date(now);
+    futureExpiry.setDate(futureExpiry.getDate() + 2);
+    futureExpiry.setUTCHours(23, 59, 59, 999);
 
     await prisma.offer.upsert({
       where: { id: 'offer-demo-00000000-0000-0000-0000-000000000001' },
-      update: {},
+      update: {
+        product_expiry_date: todayExpiry,
+        expires_at:          todayDeadline,
+      },
       create: {
-        id:                 'offer-demo-00000000-0000-0000-0000-000000000001',
-        merchant_id:        'merchant-demo-00000000-0000-0000-0001',
-        shop_id:            demoShop.id,
-        category_id:        bakeryCategory.id,
-        name:               'Panier de croissants du soir',
-        description:        'Assortiment de croissants et viennoiseries invendus de la journée. Frais et délicieux.',
-        product_type:       ProductType.FRESH,
-        same_day_expiry:    true,
-        original_price:     650,
-        discounted_price:   250,
-        discount_percent:   62,
-        quantity_available: 5,
-        quantity_initial:   5,
-        expires_at:         tomorrow,
-        status:             OfferStatus.ACTIVE,
-        published_at:       new Date(),
+        id:                  'offer-demo-00000000-0000-0000-0000-000000000001',
+        merchant_id:         'merchant-demo-00000000-0000-0000-0001',
+        shop_id:             demoShop.id,
+        category_id:         bakeryCategory.id,
+        name:                'Panier de croissants du soir',
+        description:         'Assortiment de croissants et viennoiseries invendus de la journée. Frais et délicieux.',
+        product_type:        ProductType.FRESH,
+        same_day_expiry:     true,
+        original_price:      650,
+        discounted_price:    250,
+        discount_percent:    62,
+        quantity_available:  5,
+        quantity_initial:    5,
+        expires_at:          todayDeadline,
+        product_expiry_date: todayExpiry,
+        status:              OfferStatus.ACTIVE,
+        published_at:        now,
       },
     });
 
     await prisma.offer.upsert({
       where: { id: 'offer-demo-00000000-0000-0000-0000-000000000002' },
-      update: {},
+      update: {
+        product_expiry_date: futureExpiry,
+        expires_at:          tomorrowDeadline,
+      },
       create: {
-        id:                 'offer-demo-00000000-0000-0000-0000-000000000002',
-        merchant_id:        'merchant-demo-00000000-0000-0000-0001',
-        shop_id:            demoShop.id,
-        category_id:        fruitCategory.id,
-        name:               'Boîte de fraises fraîches',
-        description:        'Fraises locales, légèrement trop mûres pour la vente standard. Idéales pour confitures.',
-        product_type:       ProductType.FRESH,
-        same_day_expiry:    false,
-        original_price:     400,
-        discounted_price:   150,
-        discount_percent:   63,
-        quantity_available: 10,
-        quantity_initial:   10,
-        expires_at:         tomorrow,
-        status:             OfferStatus.ACTIVE,
-        published_at:       new Date(),
+        id:                  'offer-demo-00000000-0000-0000-0000-000000000002',
+        merchant_id:         'merchant-demo-00000000-0000-0000-0001',
+        shop_id:             demoShop.id,
+        category_id:         fruitCategory.id,
+        name:                'Boîte de fraises fraîches',
+        description:         'Fraises locales, légèrement trop mûres pour la vente standard. Idéales pour confitures.',
+        product_type:        ProductType.FRESH,
+        same_day_expiry:     false,
+        original_price:      400,
+        discounted_price:    150,
+        discount_percent:    63,
+        quantity_available:  10,
+        quantity_initial:    10,
+        expires_at:          tomorrowDeadline,
+        product_expiry_date: futureExpiry,
+        status:              OfferStatus.ACTIVE,
+        published_at:        now,
       },
     });
 

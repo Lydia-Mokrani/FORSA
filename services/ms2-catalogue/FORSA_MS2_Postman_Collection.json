@@ -100,7 +100,7 @@
           }
         },
         {
-          "name": "Create new offer",
+          "name": "Create new offer (starts in DRAFT)",
           "request": {
             "method": "POST",
             "header": [
@@ -109,13 +109,70 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"shopId\": \"shop-demo-00000000-0000-0000-0000-000000000001\",\n  \"categoryId\": \"b1000000-0000-0000-0000-000000000001\",\n  \"name\": \"Panier Viennoiserie Fraîche\",\n  \"description\": \"Assortiment de 6 viennoiseries du jour\",\n  \"originalPrice\": 600,\n  \"discountedPrice\": 250,\n  \"quantityAvailable\": 5,\n  \"expiresAt\": \"2026-11-21T20:00:00.000Z\"\n}"
+              "raw": "{\n  \"shopId\": \"shop-demo-00000000-0000-0000-0000-000000000001\",\n  \"categoryId\": \"b1000000-0000-0000-0000-000000000001\",\n  \"name\": \"Panier Viennoiserie Fraîche\",\n  \"description\": \"Assortiment de 6 viennoiseries du jour fraîches.\",\n  \"productType\": \"FRESH\",\n  \"sameDayExpiry\": true,\n  \"originalPrice\": 600,\n  \"discountedPrice\": 250,\n  \"quantityAvailable\": 5,\n  \"expiresAt\": \"2026-11-21T21:00:00.000Z\",\n  \"productExpiryDate\": \"2026-11-21T22:00:00.000Z\"\n}"
             },
             "url": "{{baseUrl}}/api/offers"
           }
         },
         {
-          "name": "Update offer",
+          "name": "Upload offer photos (max 5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "photos", "type": "file", "src": "" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/offers/{{offerId}}/photos"
+          }
+        },
+        {
+          "name": "Upload expiry date photo (for PACKAGED)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "photo", "type": "file", "src": "" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/offers/{{offerId}}/date-photo"
+          }
+        },
+        {
+          "name": "Submit offer for verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/offers/{{offerId}}/submit"
+          }
+        },
+        {
+          "name": "Adjust offer stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantityDelta\": 3,\n  \"reason\": \"Added fresh items from kitchen\"\n}"
+            },
+            "url": "{{baseUrl}}/api/offers/{{offerId}}/stock-adjustment"
+          }
+        },
+        {
+          "name": "Update offer details",
           "request": {
             "method": "PATCH",
             "header": [
@@ -124,13 +181,23 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"discountedPrice\": 200,\n  \"quantityAvailable\": 3\n}"
+              "raw": "{\n  \"name\": \"Panier Viennoiserie - Fin de journée\",\n  \"discountedPrice\": 200\n}"
             },
             "url": "{{baseUrl}}/api/offers/{{offerId}}"
           }
         },
         {
-          "name": "Delete offer",
+          "name": "Withdraw offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/offers/{{offerId}}/withdraw"
+          }
+        },
+        {
+          "name": "Delete offer (soft-withdrawal)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -172,6 +239,21 @@
               "raw": "{\n  \"quantity\": 2,\n  \"reservationId\": \"a0000000-0000-0000-0000-000000000001\"\n}"
             },
             "url": "{{baseUrl}}/internal/offers/{{offerId}}/release"
+          }
+        },
+        {
+          "name": "Record customer pickup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Internal-Api-Key", "value": "{{internalKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 2,\n  \"reservationId\": \"a0000000-0000-0000-0000-000000000001\"\n}"
+            },
+            "url": "{{baseUrl}}/internal/offers/{{offerId}}/pickup"
           }
         }
       ]

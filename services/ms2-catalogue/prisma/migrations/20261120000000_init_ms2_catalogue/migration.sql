@@ -55,7 +55,7 @@ CREATE TABLE "offers" (
     "quantity_available" INTEGER NOT NULL DEFAULT 1,
     "quantity_initial" INTEGER NOT NULL,
     "expires_at" TIMESTAMP(3) NOT NULL,
-    "product_expiry_date" TIMESTAMP(3),
+    "product_expiry_date" TIMESTAMP(3) NOT NULL,
     "status" "OfferStatus" NOT NULL DEFAULT 'DRAFT',
     "previous_status" "OfferStatus",
     "date_photo_url" TEXT,
@@ -134,6 +134,9 @@ CREATE INDEX "stock_movements_offer_id_idx" ON "stock_movements"("offer_id");
 
 -- CreateIndex
 CREATE INDEX "stock_movements_reservation_id_idx" ON "stock_movements"("reservation_id");
+
+-- CreateIndex
+CREATE INDEX "stock_movements_movement_type_idx" ON "stock_movements"("movement_type");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "stock_movements_reservation_id_movement_type_key" ON "stock_movements"("reservation_id", "movement_type");

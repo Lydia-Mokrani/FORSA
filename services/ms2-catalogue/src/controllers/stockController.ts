@@ -5,7 +5,7 @@
 
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { Prisma, OfferStatus, MovementType } from '@prisma/client';
+import { Prisma, OfferStatus, MovementType, ShopStatus } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { Errors } from '../utils/apiError';
 import { logger } from '../config/logger';
@@ -118,10 +118,10 @@ export async function reserveStock(
       if (offer.expires_at <= now) {
         return { kind: 'deadline_passed' as const };
       }
-      if (offer.product_expiry_date && offer.product_expiry_date <= now) {
+      if (offer.product_expiry_date <= now) {
         return { kind: 'product_expired' as const };
       }
-      if (offer.shop?.status !== 'ACTIVE') {
+      if (offer.shop?.status !== ShopStatus.ACTIVE) {
         return { kind: 'shop_inactive' as const };
       }
 
@@ -374,17 +374,21 @@ export async function releaseStock(
         },
       });
 
-      // 6. Restore SOLD_OUT offers only if their deadline has not passed.
+      // 6. Restore SOLD_OUT offers only if their deadline, product expiry, and shop status remain valid.
       const offer = await tx.offer.findUnique({
         where: { id: offerId },
+        include: { shop: true },
       });
 
       let reactivated = false;
+      const now = new Date();
 
       if (
         offer &&
         offer.status === OfferStatus.SOLD_OUT &&
-        offer.expires_at > new Date() &&
+        offer.expires_at > now &&
+        offer.product_expiry_date > now &&
+        offer.shop?.status === ShopStatus.ACTIVE &&
         offer.quantity_available + quantity > 0
       ) {
         await tx.offer.update({
