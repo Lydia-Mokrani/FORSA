@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Phone, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
+import { FigmaGalleryBar } from './FigmaGalleryBar';
 
 export const VerifyPhonePage: React.FC = () => {
   const navigate = useNavigate();
@@ -108,6 +109,9 @@ export const VerifyPhonePage: React.FC = () => {
         <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-[#FFFAF0]/25 backdrop-blur-[2px]" />
       </div>
+
+      {/* Galerie de sélection Figma (19 Écrans) */}
+      <FigmaGalleryBar />
 
       <header className="w-full max-w-6xl flex items-center justify-between mb-8 sm:mb-12 px-2 sm:px-6">
         <Link to="/" className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">

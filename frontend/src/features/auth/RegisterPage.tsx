@@ -3,13 +3,16 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Store, Mail, Lock, Phone, Upload, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, ShieldCheck, FileText, Camera } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
 
+import { FigmaGalleryBar } from './FigmaGalleryBar';
+
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialRole = searchParams.get('role') === 'merchant' ? 'MERCHANT' : 'CUSTOMER';
+  const initialStep = (Number(searchParams.get('step')) as 1 | 2 | 3 | 4) || 1;
 
   const [role, setRole] = useState<'CUSTOMER' | 'MERCHANT'>(initialRole);
-  const [merchantStep, setMerchantStep] = useState<1 | 2 | 3 | 4>(1);
+  const [merchantStep, setMerchantStep] = useState<1 | 2 | 3 | 4>(initialStep);
 
   // Client form states
   const [clientData, setClientData] = useState({
@@ -165,6 +168,9 @@ export const RegisterPage: React.FC = () => {
         <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-[#FFFAF0]/25 backdrop-blur-[2px]" />
       </div>
+
+      {/* Galerie de sélection Figma (19 Écrans) */}
+      <FigmaGalleryBar />
 
       {/* En-tête officiel */}
       <header className="w-full max-w-6xl flex items-center justify-between mb-6 sm:mb-8 px-2 sm:px-6">

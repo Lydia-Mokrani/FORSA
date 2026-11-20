@@ -5,6 +5,7 @@ export const authRouter = Router();
 
 authRouter.post('/register', AuthController.register);
 authRouter.post('/login', AuthController.login);
+authRouter.post('/google', AuthController.googleLogin);
 authRouter.post('/refresh', AuthController.refresh);
 authRouter.post('/logout', AuthController.logout);
 authRouter.get('/public-key', AuthController.getPublicKey);

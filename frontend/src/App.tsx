@@ -21,10 +21,13 @@ import { MyOffersPage } from './features/catalogue/pages/MyOffersPage';
 import { CreateOfferPage } from './features/catalogue/pages/CreateOfferPage';
 import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
 
-// Pages Authentification MS1 (design Figma)
+// Suite Complète Authentification MS1 (Design Figma - 19 Écrans)
 import {
+  WelcomePage,
+  RoleChoicePage,
   LoginPage,
   RegisterPage,
+  EmailVerificationPage,
   VerifyPhonePage,
   ForgotPasswordPage,
 } from './features/auth';
@@ -66,9 +69,12 @@ export const App: React.FC = () => {
             <Route path="/map" element={<ShopsMapViewPage />} />
           </Route>
 
-          {/* AUTHENTICATION SUITE (MS1 - Design Figma) */}
+          {/* AUTHENTICATION SUITE MS1 (19 Écrans Figma) */}
+          <Route path="/welcome" element={<WelcomePage />} />
+          <Route path="/role-select" element={<RoleChoicePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify-email" element={<EmailVerificationPage />} />
           <Route path="/verify-phone" element={<VerifyPhonePage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
