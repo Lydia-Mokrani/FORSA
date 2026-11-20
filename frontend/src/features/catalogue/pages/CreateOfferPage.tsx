@@ -16,6 +16,8 @@ import {
   UploadCloud,
   UserRound,
   Edit2,
+  FileImage,
+  ScanSearch,
 } from 'lucide-react';
 
 import { CatalogueApi } from '../services/api';
@@ -34,6 +36,16 @@ const today = () => {
   return new Date(date.getTime() - offset * 60000)
     .toISOString()
     .slice(0, 10);
+};
+
+const formatDate = (value: string) => {
+  if (!value) return '—';
+
+  return new Date(`${value}T12:00:00`).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
 };
 
 export const CreateOfferPage: React.FC = () => {
@@ -62,11 +74,12 @@ export const CreateOfferPage: React.FC = () => {
   const [pickupStart, setPickupStart] = useState('16:00');
   const [pickupEnd, setPickupEnd] = useState('20:00');
 
-  // Packaging information
+  // Packaging and date verification
   const [isPackaged, setIsPackaged] = useState(true);
   const [datePhoto, setDatePhoto] = useState<File | null>(null);
+  const [datePhotoPreview, setDatePhotoPreview] = useState('');
 
-  // Load categories and the merchant's actual shop ID
+  // Load categories and merchant shop ID
   useEffect(() => {
     let active = true;
 
@@ -97,12 +110,20 @@ export const CreateOfferPage: React.FC = () => {
     };
   }, []);
 
-  // Clean up temporary photo preview URLs
+  // Clean up temporary image URLs
   useEffect(() => {
     return () => {
       photoPreviews.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [photoPreviews]);
+
+  useEffect(() => {
+    return () => {
+      if (datePhotoPreview) {
+        URL.revokeObjectURL(datePhotoPreview);
+      }
+    };
+  }, [datePhotoPreview]);
 
   // Calculate discount
   const discount = useMemo(() => {
@@ -139,7 +160,26 @@ export const CreateOfferPage: React.FC = () => {
     );
   };
 
-  // Validate each step before proceeding
+  // Date photo selection
+  const handleDatePhoto = (file: File | null) => {
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setError('Veuillez choisir une image JPG ou PNG.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('La photo de la date ne doit pas dépasser 5 Mo.');
+      return;
+    }
+
+    setError(null);
+    setDatePhoto(file);
+    setDatePhotoPreview(URL.createObjectURL(file));
+  };
+
+  // Validate each step
   const validateStep = () => {
     setError(null);
 
@@ -266,7 +306,7 @@ export const CreateOfferPage: React.FC = () => {
   return (
     <div className="mx-auto w-full max-w-[1066px] pb-10 text-[#0B2C25]">
 
-      {/* Header */}
+      {/* HEADER */}
       <header className="mb-7 flex items-start justify-between gap-5">
         <div>
           <h1 className="font-poppins text-[clamp(30px,3.35vw,48px)] font-semibold leading-tight">
@@ -293,7 +333,7 @@ export const CreateOfferPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Three-step progress indicator */}
+      {/* PROGRESS INDICATOR */}
       <div className="mb-8 flex items-center justify-between gap-2 px-0 sm:px-2">
         {[
           { number: 1, title: 'Produit' },
@@ -334,7 +374,7 @@ export const CreateOfferPage: React.FC = () => {
         ))}
       </div>
 
-      {/* Error message */}
+      {/* ERROR MESSAGE */}
       {error && (
         <div
           role="alert"
@@ -350,7 +390,6 @@ export const CreateOfferPage: React.FC = () => {
         <section
           className={`${cardClass} grid gap-8 lg:grid-cols-[312px_minmax(0,1fr)] lg:items-center lg:gap-[58px]`}
         >
-          {/* Photo upload */}
           <label className="relative flex min-h-[260px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[20px] border-[1.5px] border-dashed border-[#0B2C25]/45 bg-[#FFFAF0] p-5 text-center lg:h-[300px]">
             {photoPreviews.length > 0 ? (
               <div className="grid h-full w-full grid-cols-2 gap-2">
@@ -394,7 +433,6 @@ export const CreateOfferPage: React.FC = () => {
             />
           </label>
 
-          {/* Product fields */}
           <div className="space-y-5">
             <div>
               <label className={labelClass} htmlFor="offer-name">
@@ -424,9 +462,7 @@ export const CreateOfferPage: React.FC = () => {
                     setCategoryId(event.target.value)
                   }
                 >
-                  <option value="">
-                    Choisir une catégorie
-                  </option>
+                  <option value="">Choisir une catégorie</option>
 
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
@@ -453,9 +489,7 @@ export const CreateOfferPage: React.FC = () => {
                 className={`${inputClass} h-[90px] resize-none py-3`}
                 placeholder="Écrivez ici"
                 value={description}
-                onChange={(event) =>
-                  setDescription(event.target.value)
-                }
+                onChange={(event) => setDescription(event.target.value)}
               />
             </div>
           </div>
@@ -467,7 +501,6 @@ export const CreateOfferPage: React.FC = () => {
         <section
           className={`${cardClass} grid gap-8 lg:grid-cols-[312px_minmax(0,1fr)] lg:gap-[58px]`}
         >
-          {/* Product image preview */}
           <div className="relative flex min-h-[300px] items-center justify-center overflow-hidden rounded-[20px] bg-[#FFFAF0]">
             {photoPreviews[0] ? (
               <img
@@ -490,8 +523,7 @@ export const CreateOfferPage: React.FC = () => {
           </div>
 
           <div className="space-y-6">
-
-            {/* Prices */}
+            {/* PRICES */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className={labelClass} htmlFor="original-price">
@@ -544,7 +576,7 @@ export const CreateOfferPage: React.FC = () => {
                 : 'La réduction sera calculée automatiquement'}
             </p>
 
-            {/* Quantity and expiry */}
+            {/* QUANTITY AND EXPIRY */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>
@@ -605,7 +637,7 @@ export const CreateOfferPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Pickup time */}
+            {/* PICKUP TIME */}
             <div>
               <label className={labelClass}>
                 Créneau de retrait
@@ -652,7 +684,7 @@ export const CreateOfferPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Packaged product toggle */}
+            {/* PACKAGED PRODUCT TOGGLE */}
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-[15px] font-medium text-black">
                 Produit emballé ?
@@ -665,6 +697,7 @@ export const CreateOfferPage: React.FC = () => {
                 onClick={() => {
                   setIsPackaged((value) => !value);
                   setDatePhoto(null);
+                  setDatePhotoPreview('');
                 }}
                 className={`relative h-7 w-[50px] rounded-full transition ${
                   isPackaged ? 'bg-[#0B2C25]' : 'bg-gray-300'
@@ -687,7 +720,7 @@ export const CreateOfferPage: React.FC = () => {
               aucune photo de date n’est demandée.
             </p>
 
-            {/* Date photo */}
+            {/* DATE PHOTO UPLOAD */}
             {isPackaged && (
               <label className="flex cursor-pointer flex-wrap items-center gap-4 rounded-2xl border-[1.5px] border-dashed border-[#0B2C25]/45 bg-[#FFFAF0] p-4">
                 <UploadCloud size={30} />
@@ -699,7 +732,7 @@ export const CreateOfferPage: React.FC = () => {
 
                   <small className="mt-1 block text-[11px] text-[#0B2C25]/60">
                     Date bien visible (DLC, DDM ou EXP).
-                    Elle sera lue automatiquement à l’étape suivante.
+                    Elle sera présentée à l’étape suivante.
                   </small>
 
                   {datePhoto && (
@@ -718,7 +751,7 @@ export const CreateOfferPage: React.FC = () => {
                   accept="image/jpeg,image/png"
                   className="sr-only"
                   onChange={(event) =>
-                    setDatePhoto(event.target.files?.[0] ?? null)
+                    handleDatePhoto(event.target.files?.[0] ?? null)
                   }
                 />
               </label>
@@ -732,7 +765,7 @@ export const CreateOfferPage: React.FC = () => {
         <section
           className={`${cardClass} grid gap-8 lg:grid-cols-[312px_minmax(0,1fr)] lg:gap-[58px]`}
         >
-          {/* Product image */}
+          {/* PRODUCT IMAGE */}
           <div className="flex min-h-[300px] items-center justify-center overflow-hidden rounded-[20px] bg-[#FFFAF0]">
             {photoPreviews[0] ? (
               <img
@@ -745,10 +778,9 @@ export const CreateOfferPage: React.FC = () => {
             )}
           </div>
 
-          {/* Summary */}
+          {/* VERIFICATION SUMMARY */}
           <div className="space-y-6">
-
-            {/* Product summary */}
+            {/* PRODUCT SUMMARY */}
             <div>
               <div className="mb-4 flex items-center justify-between border-b border-black/10 pb-3">
                 <h2 className="text-[20px] font-medium">
@@ -788,7 +820,7 @@ export const CreateOfferPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Offer summary */}
+            {/* OFFER SUMMARY */}
             <div className="border-t border-black/10 pt-5">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-[20px] font-medium">
@@ -831,7 +863,7 @@ export const CreateOfferPage: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-black/55">Péremption</span>
                   <strong className="font-medium">
-                    {expiryDate}
+                    {formatDate(expiryDate)}
                   </strong>
                 </div>
 
@@ -845,11 +877,139 @@ export const CreateOfferPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* DATE VERIFICATION SECTION */}
+            <div className="border-t border-black/10 pt-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <ScanSearch size={21} />
+                  <h2 className="text-[20px] font-medium">
+                    Vérification de la date
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="shrink-0 text-[13px] font-medium text-[#17664E] underline"
+                >
+                  modifier
+                </button>
+              </div>
+
+              {isPackaged ? (
+                <div className="space-y-4 rounded-[20px] bg-[#FFFAF0] p-5">
+                  <div className="flex items-center gap-2">
+                    <FileImage size={18} />
+                    <h3 className="text-[14px] font-medium">
+                      Photo de la date sur l'emballage
+                    </h3>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)]">
+                    {/* UPLOADED DATE PHOTO */}
+                    <div className="flex min-h-[145px] items-center justify-center overflow-hidden rounded-xl border border-[#0B2C25]/15 bg-white">
+                      {datePhotoPreview ? (
+                        <img
+                          src={datePhotoPreview}
+                          alt="Photo de la date sur l'emballage"
+                          className="h-full max-h-[190px] w-full object-contain"
+                        />
+                      ) : (
+                        <div className="p-3 text-center text-[#0B2C25]/50">
+                          <ImagePlus
+                            size={32}
+                            className="mx-auto mb-2"
+                          />
+                          <span className="text-xs">
+                            Aucune photo disponible
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* OCR INFORMATION */}
+                    <div className="space-y-3">
+                      <div>
+                        <span className="inline-flex items-center gap-2 rounded-full bg-[#FFF0D5] px-3 py-1.5 text-[11px] font-medium text-[#94651A]">
+                          <Clock3 size={14} />
+                          En attente d'analyse OCR
+                        </span>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-[#0B2C25]/55">
+                          Date détectée par reconnaissance automatique
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-[#0B2C25]">
+                          Non disponible
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-[#0B2C25]/55">
+                          Fichier sélectionné
+                        </p>
+                        <p className="mt-1 break-all text-xs text-[#0B2C25]">
+                          {datePhoto?.name ?? 'Aucun fichier'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ENTERED EXPIRY DATE */}
+                  <div className="rounded-xl border border-[#0B2C25]/10 bg-white p-4">
+                    <div className="flex items-center gap-2">
+                      <CalendarDays
+                        size={17}
+                        className="text-[#0B2C25]/65"
+                      />
+                      <p className="text-xs text-[#0B2C25]/55">
+                        Date de péremption saisie
+                      </p>
+                    </div>
+
+                    <p className="mt-2 text-[17px] font-semibold text-[#0B2C25]">
+                      {formatDate(expiryDate)}
+                    </p>
+
+                    <p className="mt-2 text-[11px] leading-relaxed text-[#0B2C25]/55">
+                      Cette date sera comparée à celle extraite de
+                      la photo lorsque le service OCR sera connecté.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-[20px] bg-[#FFFAF0] p-5">
+                  <div className="flex items-center gap-2">
+                    <Check size={19} className="text-[#17664E]" />
+                    <p className="text-[15px] font-medium">
+                      Produit frais : pas de vérification de date
+                    </p>
+                  </div>
+
+                  <p className="mt-3 text-[13px] leading-relaxed text-black/60">
+                    Ce type de produit ne possède pas de date imprimée
+                    sur un emballage. La date de péremption est
+                    enregistrée selon les informations saisies.
+                  </p>
+
+                  <div className="mt-4 rounded-xl border border-[#0B2C25]/10 bg-white p-4">
+                    <p className="text-xs text-[#0B2C25]/55">
+                      Date de péremption saisie
+                    </p>
+                    <p className="mt-1 font-semibold text-[#0B2C25]">
+                      {formatDate(expiryDate)}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </section>
       )}
 
-      {/* Navigation buttons */}
+      {/* NAVIGATION BUTTONS */}
       <footer className="mt-8 flex flex-wrap items-center justify-end gap-3">
         <Link
           to="/merchant/my-offers"
