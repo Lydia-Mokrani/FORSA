@@ -18,7 +18,6 @@ const assets = {
   rating: `${FIGMA_ASSETS}/65f25.svg`,
   clock: `${FIGMA_ASSETS}/815bb.svg`,
   edit: `${FIGMA_ASSETS}/48081.svg`,
-  delete: `${FIGMA_ASSETS}/df08e.svg`,
 };
 
 type DashboardOffer = MerchantDashboardData['recentOffers'][number] & {
@@ -105,9 +104,14 @@ const StatCard: React.FC<StatCardProps> = ({
 interface OfferCardProps {
   offer: DashboardOffer;
   onDelete: (offer: DashboardOffer) => void;
+  showEditIcon: boolean;
 }
 
-const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
+const OfferCard: React.FC<OfferCardProps> = ({
+  offer,
+  onDelete,
+  showEditIcon,
+}) => {
   const originalPrice = getOriginalPrice(offer);
   const quantityAvailable = offer.quantityAvailable;
   const quantityInitial = offer.quantityInitial;
@@ -128,8 +132,8 @@ const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
   const pickupEnd = formatTime(offer.pickupEndTime);
 
   return (
-    <article className="w-full min-w-0 rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)]">
-      <div className="flex flex-col gap-[14px]">
+    <article className="h-[330px] w-full min-w-0 rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)]">
+      <div className="flex h-full flex-col gap-[14px]">
         <div className="flex flex-col gap-[9px]">
           <div className="flex flex-col gap-[6px]">
             <div className="relative h-[140px] w-full overflow-hidden rounded-[12px]">
@@ -139,26 +143,28 @@ const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
                 className="absolute inset-0 h-full w-full object-cover"
               />
 
-              <Link
-                to={`/merchant/edit-offer/${offer.id}`}
-                aria-label={`Modifier ${offer.name}`}
-                className="absolute right-[9px] top-[9px] flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[rgba(255,255,255,0.79)]"
-              >
-                <img
-                  src={assets.edit}
-                  alt=""
-                  className="h-[24px] w-[24px]"
-                />
-              </Link>
+              {showEditIcon && (
+                <Link
+                  to={`/merchant/edit-offer/${offer.id}`}
+                  aria-label={`Modifier ${offer.name}`}
+                  className="absolute right-[5px] top-[9px] flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[rgba(255,255,255,0.79)] transition hover:bg-white"
+                >
+                  <img
+                    src={assets.edit}
+                    alt=""
+                    className="h-[24px] w-[24px]"
+                  />
+                </Link>
+              )}
             </div>
 
-            <div className="flex min-h-[12px] items-center gap-[6px]">
+            <div className="flex h-[12px] items-center gap-[6px]">
               <img
                 src={assets.clock}
                 alt=""
-                className="h-[10px] w-[10px]"
+                className="h-[10px] w-[10px] shrink-0"
               />
-              <p className="font-poppins text-[8px] leading-normal text-[#78847F]">
+              <p className="font-poppins text-[8px] leading-[12px] text-[#78847F]">
                 Retrait :{' '}
                 {pickupStart && pickupEnd
                   ? `${pickupStart} – ${pickupEnd}`
@@ -167,17 +173,18 @@ const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
             </div>
           </div>
 
-          <div className="flex items-start justify-between gap-[8px]">
-            <div className="min-w-0">
-              <h3 className="truncate font-poppins text-[17px] font-semibold leading-[26px] text-[#0B2C25]">
+          <div className="flex h-[38px] items-start justify-between gap-[25px]">
+            <div className="flex h-[38px] min-w-0 flex-1 flex-col">
+              <h3 className="h-[26px] w-full truncate font-poppins text-[17px] font-semibold leading-[26px] text-[#0B2C25]">
                 {offer.name}
               </h3>
-              <p className="truncate font-poppins text-[8px] leading-[12px] text-[rgba(11,44,37,0.66)]">
+
+              <p className="w-full truncate font-poppins text-[8px] leading-[12px] text-[rgba(11,44,37,0.66)]">
                 {offer.description || offer.category?.nameFr || ''}
               </p>
             </div>
 
-            <div className="flex shrink-0 items-baseline gap-[4px] whitespace-nowrap pt-[4px]">
+            <div className="flex shrink-0 items-baseline gap-[4px] whitespace-nowrap py-[4px]">
               <span className="font-poppins text-[14px] font-bold text-[#17664E]">
                 {formatPrice(offer.discountedPrice)}
               </span>
@@ -191,8 +198,8 @@ const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
           </div>
         </div>
 
-        <div className="flex flex-col gap-[4px]">
-          <p className="font-poppins text-[7px] leading-normal text-[rgba(11,44,37,0.59)]">
+        <div className="flex h-[21px] flex-col gap-[4px]">
+          <p className="font-poppins text-[7px] leading-[11px] text-[rgba(11,44,37,0.59)]">
             {hasStock
               ? `${quantityAvailable} pièces restantes sur ${quantityInitial}`
               : 'Quantité restante non renseignée'}
@@ -206,12 +213,12 @@ const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
           </div>
         </div>
 
-        <div className="h-[1px] w-full bg-[#F0F0F0]" />
+        <div className="h-[6px] w-[214px] max-w-full shrink-0 bg-[#F0F0F0]" />
 
-        <div className="flex items-center gap-[10px]">
+        <div className="flex h-[32px] shrink-0 items-center gap-[10px]">
           <Link
             to={`/merchant/edit-offer/${offer.id}`}
-            className="flex min-w-0 flex-1 items-center justify-center rounded-[8px] bg-[#0B2C25] px-[12px] py-[8px] font-poppins text-[10px] font-bold text-white transition-colors hover:bg-[#17664E]"
+            className="flex h-[32px] min-w-0 flex-1 items-center justify-center rounded-[8px] bg-[#0B2C25] px-[12px] font-poppins text-[10px] font-bold text-white transition-colors hover:bg-[#17664E]"
           >
             Gérer
           </Link>
@@ -221,13 +228,9 @@ const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
             onClick={() => onDelete(offer)}
             title="Supprimer l'offre"
             aria-label={`Supprimer ${offer.name}`}
-            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[8px] border border-[rgba(0,0,0,0.1)] transition hover:border-red-300 hover:bg-red-50"
+            className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white text-[#0B2C25] transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
           >
-            <img
-              src={assets.delete}
-              alt=""
-              className="h-[16px] w-[16px]"
-            />
+            <Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -480,7 +483,6 @@ export const MerchantDashboardPage: React.FC = () => {
   return (
     <>
       <div className="w-full max-w-[1066px]">
-        {/* Welcome header */}
         <header className="flex min-h-[112px] items-start justify-between gap-6">
           <div className="min-w-0">
             <h1 className="font-poppins text-[clamp(30px,3.35vw,48px)] font-semibold leading-[1.25] text-[#0B2C25]">
@@ -521,7 +523,6 @@ export const MerchantDashboardPage: React.FC = () => {
           </div>
         </header>
 
-        {/* Statistics */}
         <section
           aria-label="Statistiques du commerce"
           className="mt-[50px] grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-4 xl:gap-[33px]"
@@ -531,7 +532,6 @@ export const MerchantDashboardPage: React.FC = () => {
           ))}
         </section>
 
-        {/* Today's offers */}
         <section className="mt-[50px]">
           <h2 className="mb-[22px] font-poppins text-[36px] font-semibold leading-[1.3] text-[#0B2C25]">
             Vos offres du jour
@@ -539,11 +539,12 @@ export const MerchantDashboardPage: React.FC = () => {
 
           {offers.length > 0 ? (
             <div className="grid grid-cols-1 gap-[30px] sm:grid-cols-2 xl:grid-cols-4">
-              {offers.slice(0, 4).map((offer) => (
+              {offers.slice(0, 4).map((offer, index) => (
                 <OfferCard
                   key={offer.id}
                   offer={offer}
                   onDelete={openDeleteModal}
+                  showEditIcon={index !== 0}
                 />
               ))}
             </div>
@@ -554,7 +555,6 @@ export const MerchantDashboardPage: React.FC = () => {
           )}
         </section>
 
-        {/* Add offer action */}
         <div className="mt-[50px] flex justify-end pb-8">
           <Link
             to="/merchant/create-offer"
@@ -566,7 +566,6 @@ export const MerchantDashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Delete confirmation modal */}
       {offerToDelete && (
         <DeleteOfferModal
           offer={offerToDelete}
