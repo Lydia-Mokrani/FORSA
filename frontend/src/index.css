@@ -1,6 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
-
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 
 @theme {
   --color-forsa-dark: #0B2C25;
@@ -18,9 +17,9 @@
 }
 
 body {
-  background-color: var(--color-forsa-cream);
-  color: var(--color-forsa-dark);
-  font-family: var(--font-poppins);
+  background-color: #FAF6ED;
+  color: #0B2C25;
+  font-family: 'Poppins', sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
@@ -55,7 +54,7 @@ body {
 
 /* Bouton CTA Principal */
 .forsa-btn-primary {
-  background-color: var(--color-forsa-dark);
+  background-color: #0B2C25;
   color: white;
   font-weight: 500;
   border-radius: 14px;
@@ -79,7 +78,7 @@ body {
   border-radius: 14px;
   height: 48px;
   font-weight: 500;
-  color: var(--color-forsa-dark);
+  color: #0B2C25;
   transition: all 0.2s ease-in-out;
   display: flex;
   align-items: center;
