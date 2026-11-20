@@ -22,6 +22,7 @@ import { MerchantDashboardPage } from './features/catalogue/pages/MerchantDashbo
 import { MyOffersPage } from './features/catalogue/pages/MyOffersPage';
 import { CreateOfferPage } from './features/catalogue/pages/CreateOfferPage';
 import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
+import { LoginPage } from './features/auth/LoginPage';
 
 export const App: React.FC = () => {
   return (
@@ -64,6 +65,9 @@ export const App: React.FC = () => {
             <Route path="/offers/:id" element={<OfferDetailsPage />} />
             <Route path="/map" element={<ShopsMapViewPage />} />
           </Route>
+
+          {/* AUTHENTICATION */}
+          <Route path="/login" element={<LoginPage />} />
 
           {/* FALLBACK */}
           <Route path="*" element={<Navigate to="/" replace />} />
