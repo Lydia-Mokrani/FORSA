@@ -5,7 +5,7 @@ import {
   Routes,
   Route,
   Navigate,
-  Outlet,
+  useLocation as useRouterLocation,
 } from 'react-router-dom';
 
 import { LocationProvider } from './features/catalogue/context/LocationContext';
@@ -23,52 +23,68 @@ import { MyOffersPage } from './features/catalogue/pages/MyOffersPage';
 import { CreateOfferPage } from './features/catalogue/pages/CreateOfferPage';
 import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
 
+const AppRoutes: React.FC = () => {
+  const location = useRouterLocation();
+
+  // When an offer is opened from another page, keep that page in the background.
+  const backgroundLocation = (
+    location.state as { backgroundLocation?: typeof location } | null
+  )?.backgroundLocation;
+
+  return (
+    <>
+      <Routes location={backgroundLocation || location}>
+        {/* MERCHANT LAYOUT */}
+        <Route element={<MerchantLayout />}>
+          <Route
+            path="/merchant"
+            element={<Navigate to="/merchant/dashboard" replace />}
+          />
+          <Route
+            path="/merchant/dashboard"
+            element={<MerchantDashboardPage />}
+          />
+          <Route
+            path="/merchant/my-offers"
+            element={<MyOffersPage />}
+          />
+          <Route
+            path="/merchant/create-offer"
+            element={<CreateOfferPage />}
+          />
+          <Route
+            path="/merchant/edit-offer/:id"
+            element={<EditOfferPage />}
+          />
+        </Route>
+
+        {/* CLIENT LAYOUT */}
+        <Route element={<ClientLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/explore" element={<ExploreOffersPage />} />
+          <Route path="/offers/:id" element={<OfferDetailsPage />} />
+          <Route path="/map" element={<ShopsMapViewPage />} />
+        </Route>
+
+        {/* FALLBACK */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+
+      {/* Render the offer popup above the page that opened it. */}
+      {backgroundLocation && (
+        <Routes>
+          <Route path="/offers/:id" element={<OfferDetailsPage />} />
+        </Routes>
+      )}
+    </>
+  );
+};
+
 export const App: React.FC = () => {
   return (
     <LocationProvider>
       <BrowserRouter>
-        <Routes>
-
-          {/* MERCHANT LAYOUT */}
-          <Route element={<MerchantLayout />}>
-            <Route
-              path="/merchant"
-              element={<Navigate to="/merchant/dashboard" replace />}
-            />
-
-            <Route
-              path="/merchant/dashboard"
-              element={<MerchantDashboardPage />}
-            />
-
-            <Route
-              path="/merchant/my-offers"
-              element={<MyOffersPage />}
-            />
-
-            <Route
-              path="/merchant/create-offer"
-              element={<CreateOfferPage />}
-            />
-
-            <Route
-              path="/merchant/edit-offer/:id"
-              element={<EditOfferPage />}
-            />
-          </Route>
-
-          {/* CLIENT LAYOUT */}
-          <Route element={<ClientLayout />}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/explore" element={<ExploreOffersPage />} />
-            <Route path="/offers/:id" element={<OfferDetailsPage />} />
-            <Route path="/map" element={<ShopsMapViewPage />} />
-          </Route>
-
-          {/* FALLBACK */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-
-        </Routes>
+        <AppRoutes />
       </BrowserRouter>
     </LocationProvider>
   );
