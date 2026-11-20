@@ -1,4 +1,5 @@
-
+import HomeSearchControls from '../components/HomeSearchControls';
+import { Category, Offer, OfferFilterParams } from '../types';
 import React, { useEffect, useState } from 'react';
 import {
   Link,
