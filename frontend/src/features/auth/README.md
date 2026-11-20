@@ -1,7 +1,8 @@
-# Frontend — Authentification & Profils 👤 Hambli Hiba
+# Frontend — Authentification & Profils 👤 @hyb0hb (Hambli Hiba)
 
-**Responsable :** Hambli Hiba  
+**Responsable :** Hambli Hiba (`@hyb0hb`)  
 **Microservice associé :** `services/ms1-accounts` (Port 3001)  
+**Branche Git dédiée :** `feature/ms1-accounts`  
 
 ---
 

@@ -1,10 +1,11 @@
-# MS1 — Accounts & Shops Service 👤 @Hambli-Hiba
+# MS1 — Accounts & Shops Service 👤 @hyb0hb (Hambli Hiba)
 
-**Responsable :** Hambli Hiba (Personne 1)  
+**Responsable :** Hambli Hiba (Personne 1 — GitHub : `@hyb0hb`)  
 **Serveur de déploiement :** S1 (`10.0.0.11`)  
 **Port HTTP :** `3001`  
 **Base de données :** `forsa_ms1_accounts` (PostgreSQL 16 - Port 5432 sur S1)  
 **Routage Traefik :** `/api/auth`, `/api/users`, `/api/shops`  
+**Branche Git dédiée :** `feature/ms1-accounts`  
 
 ---
 
