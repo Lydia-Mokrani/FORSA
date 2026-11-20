@@ -8,20 +8,28 @@ export default {
     extend: {
       colors: {
         forsa: {
-          // Palette Officielle FORSA extraite de Figma
-          dark: '#0B2C25',       // Vert forêt profond (Textes principaux, Header, Boutons primaires)
-          leaf: '#84B140',       // Vert feuille vif (Accents, badges nature, logos)
-          emerald: '#17664E',    // Vert émeraude (Liens, actions secondaires, validation)
-          cream: '#FFFDF0',      // Fond crème chaud officiel
+          // Palette Officielle FORSA
+          dark: '#0B2C25',       // Vert forêt profond
+          leaf: '#84B140',       // Vert feuille vif
+          emerald: '#17664E',    // Vert émeraude
+          cream: '#FFFDF0',      // Fond crème chaud
           sand: '#C0B49B',       // Taupe / sable chaleureux
-          muted: '#4A5B55',      // Gris vert atténué pour placeholders et sous-titres
-          border: 'rgba(11, 44, 37, 0.12)', // Bordures subtiles
+          muted: '#4A5B55',      // Gris vert atténué
+          border: 'rgba(11, 44, 37, 0.12)',
           
-          // Statuts fonctionnels (MS1 à MS4)
-          success: '#10B981',    // Approuvé, Actif, Vendu
-          warning: '#F59E0B',    // En attente de validation, Date limite proche
-          danger: '#EF4444',     // Rejeté, Suspendu, Expiré
-          info: '#3B82F6',       // Notification, En cours
+          // Compatibilité composants catalogue
+          primary: '#10B981',
+          primaryHover: '#059669',
+          secondary: '#F59E0B',
+          light: '#F8FAFC',
+          card: '#FFFFFF',
+          accent: '#EC4899',
+
+          // Statuts fonctionnels
+          success: '#10B981',
+          warning: '#F59E0B',
+          danger: '#EF4444',
+          info: '#3B82F6',
         },
         glass: {
           DEFAULT: 'rgba(255, 255, 255, 0.40)',
@@ -52,12 +60,12 @@ export default {
         'glass-lg': '48px',
       },
       screens: {
-        'xs': '390px',  // Mobile référence Figma
+        'xs': '390px',
         'sm': '640px',
-        'md': '768px',  // Tablette
-        'lg': '1024px', // PC portable
+        'md': '768px',
+        'lg': '1024px',
         'xl': '1280px',
-        '2xl': '1440px',// Desktop référence Figma
+        '2xl': '1440px',
       }
     },
   },

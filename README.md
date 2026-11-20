@@ -105,15 +105,19 @@ npm run dev:infra
 ```
 * **Dashboard Traefik :** [http://localhost:8080](http://localhost:8080)
 * **UI Consul :** [http://localhost:8500](http://localhost:8500)
-* **Management RabbitMQ :** [http://localhost:15672](http://localhost:15672) *(guest / guest)*
+* **Management RabbitMQ :** [http://localhost:15672](http://localhost:15672) *(forsa / forsa_password ou guest / guest)*
 
-### 3. Lancer votre microservice (Ex: MS1 Accounts)
+### 3. Lancer les microservices
 ```bash
-# Générer le client Prisma
+# MS1: Accounts & Shops (Hiba)
 npm run prisma:ms1
-
-# Démarrer MS1 en mode hot-reload
 npm run dev:ms1
+
+# MS2: Catalogue & Search (Lydia)
+cd services/ms2-catalogue && npm install && npm run dev
+
+# Frontend React SPA
+cd frontend && npm install && npm run dev
 ```
 
 ---
