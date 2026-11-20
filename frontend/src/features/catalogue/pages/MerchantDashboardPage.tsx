@@ -1,45 +1,33 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, X, Clock, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, X, AlertTriangle } from 'lucide-react';
 
 import { CatalogueApi } from '../services/api';
 import { MerchantDashboardData } from '../types';
 
-const FIGMA_ASSETS =
-  'https://www.figma.com/api/mcp/asset/a9b292fb-1ade-425d-b43f-b930a09ee78d';
+const ASSET =
+  'https://www.figma.com/api/mcp/asset/cc438a28-a653-4f3c-af2f-672fcc42c3cb';
 
 const assets = {
-  avatar: `${FIGMA_ASSETS}/6247d.png`,
-  product: `${FIGMA_ASSETS}/a9c3d.png`,
-  active: `${FIGMA_ASSETS}/50881.svg`,
-  reservations: `${FIGMA_ASSETS}/f8563.svg`,
-  soldOut: `${FIGMA_ASSETS}/6047d.svg`,
-  rating: `${FIGMA_ASSETS}/65f25.svg`,
-  clock: `${FIGMA_ASSETS}/815bb.svg`,
-  edit: `${FIGMA_ASSETS}/48081.svg`,
+  edit: `${ASSET}/48081.svg`,
+  avatar: `${ASSET}/6247d.png`,
+  product: `${ASSET}/a9c3d.png`,
+  active: `${ASSET}/50881.svg`,
+  reservations: `${ASSET}/f8563.svg`,
+  soldOut: `${ASSET}/6047d.svg`,
+  rating: `${ASSET}/65f25.svg`,
+  clock: `${ASSET}/815bb.svg`,
+  divider: `${ASSET}/8f6e0.svg`,
 };
 
-type DashboardOffer = MerchantDashboardData['recentOffers'][number] & {
-  description?: string;
-  originalPrice?: number;
-  quantityAvailable?: number;
-  quantityInitial?: number;
-  pickupStartTime?: string;
-  pickupEndTime?: string;
-};
-
-type ExtendedStats = MerchantDashboardData['stats'] & {
-  todayReservations?: number;
-};
+type DashboardOffer = MerchantDashboardData['recentOffers'][number];
 
 const formatPrice = (price: number) =>
   `${new Intl.NumberFormat('fr-FR').format(price)} DA`;
 
 const getOriginalPrice = (offer: DashboardOffer) => {
-  if (offer.originalPrice != null) return offer.originalPrice;
-
-  if (offer.discountPercent >= 100 || offer.discountPercent <= 0) {
+  if (offer.discountPercent <= 0 || offer.discountPercent >= 100) {
     return null;
   }
 
@@ -48,12 +36,10 @@ const getOriginalPrice = (offer: DashboardOffer) => {
   );
 };
 
-const formatTime = (value?: string) => {
-  if (!value) return null;
-  if (/^\d{2}:\d{2}$/.test(value)) return value;
-
+const formatDeadline = (value: string) => {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+
+  if (Number.isNaN(date.getTime())) return '—';
 
   return date.toLocaleTimeString('fr-FR', {
     hour: '2-digit',
@@ -61,12 +47,24 @@ const formatTime = (value?: string) => {
   });
 };
 
+const statusLabel: Record<string, string> = {
+  ACTIVE: 'Offre active',
+  PENDING_VERIFICATION: 'En attente de vérification',
+  SOLD_OUT: 'Offre épuisée',
+  EXPIRED: 'Offre expirée',
+  WITHDRAWN: 'Offre retirée',
+  HIDDEN: 'Offre masquée',
+  REJECTED: 'Offre refusée',
+  DRAFT: 'Brouillon',
+};
+
 interface StatCardProps {
   value: string | number;
   label: string;
   icon: string;
   iconBackground: string;
-  iconSize?: number;
+  width: number;
+  iconSize: number;
 }
 
 const StatCard: React.FC<StatCardProps> = ({
@@ -74,9 +72,13 @@ const StatCard: React.FC<StatCardProps> = ({
   label,
   icon,
   iconBackground,
-  iconSize = 54,
+  width,
+  iconSize,
 }) => (
-  <div className="flex min-w-0 flex-1 items-center justify-center gap-[23px] rounded-[19px] bg-white px-[13px] py-[12px] shadow-[0px_4px_3px_rgba(0,0,0,0.05)]">
+  <div
+    className="flex h-[108px] shrink-0 items-center justify-center gap-[23px] rounded-[19px] bg-white px-[13px] py-[12px] shadow-[0px_4px_3px_rgba(0,0,0,0.05)]"
+    style={{ width }}
+  >
     <div
       className="flex h-[84px] w-[84px] shrink-0 items-center justify-center rounded-[17px]"
       style={{ backgroundColor: iconBackground }}
@@ -90,11 +92,11 @@ const StatCard: React.FC<StatCardProps> = ({
       />
     </div>
 
-    <div className="min-w-0">
+    <div className="min-w-0 flex-1">
       <p className="font-poppins text-[40px] font-semibold leading-[1.15] text-[#0B2C25]">
         {value}
       </p>
-      <p className="mt-[2px] font-poppins text-[13px] leading-[1.35] text-[rgba(11,44,37,0.71)]">
+      <p className="font-poppins text-[13px] leading-[1.35] text-[rgba(11,44,37,0.71)]">
         {label}
       </p>
     </div>
@@ -104,36 +106,15 @@ const StatCard: React.FC<StatCardProps> = ({
 interface OfferCardProps {
   offer: DashboardOffer;
   onDelete: (offer: DashboardOffer) => void;
-  showEditIcon: boolean;
 }
 
-const OfferCard: React.FC<OfferCardProps> = ({
-  offer,
-  onDelete,
-  showEditIcon,
-}) => {
+const OfferCard: React.FC<OfferCardProps> = ({ offer, onDelete }) => {
   const originalPrice = getOriginalPrice(offer);
-  const quantityAvailable = offer.quantityAvailable;
-  const quantityInitial = offer.quantityInitial;
-
-  const hasStock =
-    typeof quantityAvailable === 'number' &&
-    typeof quantityInitial === 'number' &&
-    quantityInitial > 0;
-
-  const stockPercentage = hasStock
-    ? Math.min(
-        100,
-        Math.max(0, (quantityAvailable / quantityInitial) * 100),
-      )
-    : 0;
-
-  const pickupStart = formatTime(offer.pickupStartTime);
-  const pickupEnd = formatTime(offer.pickupEndTime);
+  const isActive = offer.status === 'ACTIVE';
 
   return (
-    <article className="h-[330px] w-full min-w-0 rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)]">
-      <div className="flex h-full flex-col gap-[14px]">
+    <article className="flex h-[330px] w-full min-w-0 flex-col rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)]">
+      <div className="flex flex-col gap-[14px]">
         <div className="flex flex-col gap-[9px]">
           <div className="flex flex-col gap-[6px]">
             <div className="relative h-[140px] w-full overflow-hidden rounded-[12px]">
@@ -143,19 +124,17 @@ const OfferCard: React.FC<OfferCardProps> = ({
                 className="absolute inset-0 h-full w-full object-cover"
               />
 
-              {showEditIcon && (
-                <Link
-                  to={`/merchant/edit-offer/${offer.id}`}
-                  aria-label={`Modifier ${offer.name}`}
-                  className="absolute right-[5px] top-[9px] flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[rgba(255,255,255,0.79)] transition hover:bg-white"
-                >
-                  <img
-                    src={assets.edit}
-                    alt=""
-                    className="h-[24px] w-[24px]"
-                  />
-                </Link>
-              )}
+              <Link
+                to={`/merchant/edit-offer/${offer.id}`}
+                aria-label={`Modifier ${offer.name}`}
+                className="absolute right-[5px] top-[9px] flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[rgba(255,255,255,0.79)] transition hover:bg-white"
+              >
+                <img
+                  src={assets.edit}
+                  alt=""
+                  className="h-[24px] w-[24px]"
+                />
+              </Link>
             </div>
 
             <div className="flex h-[12px] items-center gap-[6px]">
@@ -165,10 +144,7 @@ const OfferCard: React.FC<OfferCardProps> = ({
                 className="h-[10px] w-[10px] shrink-0"
               />
               <p className="font-poppins text-[8px] leading-[12px] text-[#78847F]">
-                Retrait :{' '}
-                {pickupStart && pickupEnd
-                  ? `${pickupStart} – ${pickupEnd}`
-                  : '—'}
+                Fin de l'offre : {formatDeadline(offer.expiresAt)}
               </p>
             </div>
           </div>
@@ -180,7 +156,7 @@ const OfferCard: React.FC<OfferCardProps> = ({
               </h3>
 
               <p className="w-full truncate font-poppins text-[8px] leading-[12px] text-[rgba(11,44,37,0.66)]">
-                {offer.description || offer.category?.nameFr || ''}
+                {offer.category.nameFr}
               </p>
             </div>
 
@@ -189,7 +165,7 @@ const OfferCard: React.FC<OfferCardProps> = ({
                 {formatPrice(offer.discountedPrice)}
               </span>
 
-              {originalPrice != null && (
+              {originalPrice !== null && (
                 <span className="font-poppins text-[8px] text-[#78847F] line-through">
                   {formatPrice(originalPrice)}
                 </span>
@@ -200,20 +176,28 @@ const OfferCard: React.FC<OfferCardProps> = ({
 
         <div className="flex h-[21px] flex-col gap-[4px]">
           <p className="font-poppins text-[7px] leading-[11px] text-[rgba(11,44,37,0.59)]">
-            {hasStock
-              ? `${quantityAvailable} pièces restantes sur ${quantityInitial}`
-              : 'Quantité restante non renseignée'}
+            {statusLabel[offer.status] || offer.status}
           </p>
 
           <div className="h-[6px] w-full overflow-hidden rounded-[3px] bg-[#D9D9D9]">
             <div
-              className="h-full rounded-[3px] bg-[#0B2C25]"
-              style={{ width: `${stockPercentage}%` }}
+              className={`h-full rounded-[3px] ${
+                isActive ? 'bg-[#0B2C25]' : 'bg-[#78847F]'
+              }`}
+              style={{
+                width: isActive ? '50%' : '0%',
+              }}
             />
           </div>
         </div>
 
-        <div className="h-[6px] w-[214px] max-w-full shrink-0 bg-[#F0F0F0]" />
+        <div className="h-[6px] w-[214px] max-w-full shrink-0">
+          <img
+            src={assets.divider}
+            alt=""
+            className="h-full w-full object-fill"
+          />
+        </div>
 
         <div className="flex h-[32px] shrink-0 items-center gap-[10px]">
           <Link
@@ -334,10 +318,8 @@ const DeleteOfferModal: React.FC<DeleteOfferModalProps> = ({
 export const MerchantDashboardPage: React.FC = () => {
   const [data, setData] = useState<MerchantDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-
   const [offerToDelete, setOfferToDelete] =
     useState<DashboardOffer | null>(null);
-
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
@@ -407,24 +389,8 @@ export const MerchantDashboardPage: React.FC = () => {
     return (
       <div className="w-full max-w-[1066px] animate-pulse space-y-[50px]">
         <div className="h-[112px] rounded-xl bg-[#F2EEE5]" />
-
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-[108px] rounded-[19px] bg-white"
-            />
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 gap-6 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-[330px] rounded-[16px] bg-white"
-            />
-          ))}
-        </div>
+        <div className="h-[108px] rounded-xl bg-white" />
+        <div className="h-[406px] rounded-xl bg-white" />
       </div>
     );
   }
@@ -438,16 +404,19 @@ export const MerchantDashboardPage: React.FC = () => {
   }
 
   const { stats, recentOffers, shops } = data;
-  const extendedStats = stats as ExtendedStats;
-  const offers = (recentOffers || []) as DashboardOffer[];
 
   const averageRating =
-    shops?.length > 0 && typeof shops[0].averageRating === 'number'
-      ? shops[0].averageRating.toLocaleString('fr-FR', {
+    shops.length > 0
+      ? (
+          shops.reduce((sum, shop) => sum + shop.averageRating, 0) /
+          shops.length
+        ).toLocaleString('fr-FR', {
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         })
       : '—';
+
+  const shopName = shops[0]?.name || '[Commerce]';
 
   const statCards: StatCardProps[] = [
     {
@@ -455,13 +424,15 @@ export const MerchantDashboardPage: React.FC = () => {
       value: stats.activeOffers,
       icon: assets.active,
       iconBackground: 'rgba(134,207,238,0.34)',
+      width: 220,
       iconSize: 54,
     },
     {
-      label: 'réservations du jour',
-      value: extendedStats.todayReservations ?? '—',
+      label: 'produits réservés',
+      value: stats.reservedProducts,
       icon: assets.reservations,
       iconBackground: 'rgba(238,214,134,0.47)',
+      width: 280,
       iconSize: 48,
     },
     {
@@ -469,6 +440,7 @@ export const MerchantDashboardPage: React.FC = () => {
       value: stats.soldOutOffers,
       icon: assets.soldOut,
       iconBackground: 'rgba(206,86,86,0.47)',
+      width: 232,
       iconSize: 53,
     },
     {
@@ -476,6 +448,7 @@ export const MerchantDashboardPage: React.FC = () => {
       value: averageRating,
       icon: assets.rating,
       iconBackground: '#EAF5EB',
+      width: 226,
       iconSize: 54,
     },
   ];
@@ -483,36 +456,28 @@ export const MerchantDashboardPage: React.FC = () => {
   return (
     <>
       <div className="w-full max-w-[1066px]">
-        <header className="flex min-h-[112px] items-start justify-between gap-6">
-          <div className="min-w-0">
-            <h1 className="font-poppins text-[clamp(30px,3.35vw,48px)] font-semibold leading-[1.25] text-[#0B2C25]">
-              Bonjour, {shops?.[0]?.name || '[Commerce]'} !
+        <header className="flex h-[112px] w-full items-start justify-between">
+          <div className="flex h-[112px] w-[680px] min-w-0 flex-col gap-[3px]">
+            <h1 className="font-poppins text-[48px] font-semibold leading-[1.25] text-[#0B2C25]">
+              Bonjour, {shopName} !
             </h1>
 
-            <p className="mt-[3px] font-poppins text-[20px] leading-[1.5] text-[rgba(11,44,37,0.79)]">
+            <p className="font-poppins text-[20px] leading-[1.5] text-[rgba(11,44,37,0.79)]">
               Voici un aperçu de votre activité aujourd’hui
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-[14px] pt-[2px]">
+          <div className="flex h-[48px] shrink-0 items-start gap-[14px] pt-[0px]">
             <button
               type="button"
               aria-label="Notifications"
-              className="flex h-[45px] w-[45px] items-center justify-center text-[#0B2C25]"
+              className="flex h-[45px] w-[45px] items-center justify-center"
             >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-[32px] w-[32px]"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-                <path d="M10 21h4" />
-                <path d="M12 2V1" />
-              </svg>
+              <img
+                src={`${ASSET}/afff4.svg`}
+                alt=""
+                className="h-[45px] w-[45px]"
+              />
             </button>
 
             <img
@@ -525,7 +490,7 @@ export const MerchantDashboardPage: React.FC = () => {
 
         <section
           aria-label="Statistiques du commerce"
-          className="mt-[50px] grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-4 xl:gap-[33px]"
+          className="mt-[50px] flex w-full flex-wrap items-center gap-[33px] xl:flex-nowrap"
         >
           {statCards.map((card) => (
             <StatCard key={card.label} {...card} />
@@ -533,32 +498,33 @@ export const MerchantDashboardPage: React.FC = () => {
         </section>
 
         <section className="mt-[50px]">
-          <h2 className="mb-[22px] font-poppins text-[36px] font-semibold leading-[1.3] text-[#0B2C25]">
+          <h2 className="mb-[22px] font-poppins text-[36px] font-semibold leading-[1.5] text-[#0B2C25]">
             Vos offres du jour
           </h2>
 
-          {offers.length > 0 ? (
+          {recentOffers.length > 0 ? (
             <div className="grid grid-cols-1 gap-[30px] sm:grid-cols-2 xl:grid-cols-4">
-              {offers.slice(0, 4).map((offer, index) => (
+              {recentOffers.slice(0, 4).map((offer) => (
                 <OfferCard
                   key={offer.id}
                   offer={offer}
                   onDelete={openDeleteModal}
-                  showEditIcon={index !== 0}
                 />
               ))}
             </div>
           ) : (
-            <p className="rounded-[16px] bg-white p-6 font-poppins text-sm text-[#78847F]">
-              Aucune offre à afficher pour le moment.
-            </p>
+            <div className="flex min-h-[220px] items-center justify-center rounded-[16px] bg-white px-6 text-center">
+              <p className="font-poppins text-[14px] text-[#78847F]">
+                Aucune offre à afficher pour le moment.
+              </p>
+            </div>
           )}
         </section>
 
-        <div className="mt-[50px] flex justify-end pb-8">
+        <div className="mt-[70px] flex justify-end pb-8">
           <Link
             to="/merchant/create-offer"
-            className="inline-flex items-center gap-[7px] rounded-[10px] bg-[#0B2C25] px-[10px] py-[10px] font-poppins text-[20px] font-semibold text-white transition-colors hover:bg-[#17664E]"
+            className="inline-flex h-[50px] items-center gap-[7px] rounded-[10px] bg-[#0B2C25] px-[10px] font-poppins text-[20px] font-semibold text-white transition-colors hover:bg-[#17664E]"
           >
             <Plus className="h-[30px] w-[30px]" strokeWidth={1.8} />
             Ajouter une offre
