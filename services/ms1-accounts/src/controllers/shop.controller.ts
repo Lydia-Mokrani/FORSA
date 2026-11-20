@@ -63,15 +63,17 @@ export class ShopController {
         },
       });
 
-      // Émission de l'événement shop.created sur RabbitMQ
+      // Émission de l'événement shop.created sur RabbitMQ pour MS2 (ShopSnapshot) et MS4/MS5
       await rabbitMQ.publish('shop.created', {
         shopId: shop.id,
+        merchantId: shop.userId,
         userId: shop.userId,
         name: shop.name,
         address: shop.address,
         latitude: shop.latitude,
         longitude: shop.longitude,
         phone: shop.phone,
+        status: shop.status,
       }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.created warning:', err.message));
 
       res.status(201).json({ shop });

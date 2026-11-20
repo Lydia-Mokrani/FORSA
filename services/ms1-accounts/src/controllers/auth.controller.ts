@@ -69,6 +69,12 @@ export class AuthController {
         email: user.email,
         role: user.role,
         fullName: user.fullName,
+        emailVerified: user.emailVerified,
+        phoneVerified: user.phoneVerified,
+        shopId: null,
+        merchantId: null,
+        shopStatus: null,
+        merchantStatus: null,
       });
 
       const { token: rawRefreshToken, hash: refreshHash } = jwtService.generateRefreshToken();
@@ -129,12 +135,20 @@ export class AuthController {
         throw new UnauthorizedError('Identifiants invalides.');
       }
 
+      const shopId = user.shop?.id || null;
+      const shopStatus = user.shop?.status || null;
+
       const accessToken = jwtService.generateAccessToken({
         sub: user.id,
         email: user.email,
         role: user.role,
         fullName: user.fullName,
-        shopId: user.shop?.id,
+        emailVerified: user.emailVerified,
+        phoneVerified: user.phoneVerified,
+        shopId,
+        merchantId: shopId,
+        shopStatus,
+        merchantStatus: shopStatus,
       });
 
       const { token: rawRefreshToken, hash: refreshHash } = jwtService.generateRefreshToken();
@@ -195,12 +209,20 @@ export class AuthController {
       });
 
       const { user } = savedToken;
+      const shopId = user.shop?.id || null;
+      const shopStatus = user.shop?.status || null;
+
       const newAccessToken = jwtService.generateAccessToken({
         sub: user.id,
         email: user.email,
         role: user.role,
         fullName: user.fullName,
-        shopId: user.shop?.id,
+        emailVerified: user.emailVerified,
+        phoneVerified: user.phoneVerified,
+        shopId,
+        merchantId: shopId,
+        shopStatus,
+        merchantStatus: shopStatus,
       });
 
       const { token: newRawRefreshToken, hash: newRefreshHash } = jwtService.generateRefreshToken();

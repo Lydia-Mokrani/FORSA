@@ -4,11 +4,20 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config/env';
 
 export interface TokenPayload {
-  sub: string;
+  sub: string;                      // ID utilisateur (userId)
   email: string;
   role: 'CUSTOMER' | 'MERCHANT' | 'ADMIN';
   fullName: string;
-  shopId?: string;
+  emailVerified: boolean;
+  phoneVerified?: boolean;
+  
+  // Identifiant de la boutique (aligné avec MS2)
+  shopId?: string | null;
+  merchantId?: string | null;       // Alias direct attendu par MS2
+
+  // Statut d'approbation boutique / commerçant (aligné avec MS2)
+  shopStatus?: string | null;
+  merchantStatus?: string | null;   // 'PENDING' | 'APPROVED' | 'SUSPENDED' (attendu par MS2)
 }
 
 class JwtService {
