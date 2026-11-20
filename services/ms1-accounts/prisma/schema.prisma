@@ -1,0 +1,128 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CUSTOMER
+  MERCHANT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum ShopStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum DocumentType {
+  COMMERCIAL_REGISTER
+  TAX_ID
+  STOREFRONT
+}
+
+enum DocumentStatus {
+  SUBMITTED
+  VALIDATED
+  REJECTED
+}
+
+model User {
+  id             String         @id @default(uuid())
+  email          String         @unique
+  passwordHash   String
+  fullName       String
+  phone          String?
+  role           Role           @default(CUSTOMER)
+  emailVerified  Boolean        @default(false)
+  phoneVerified  Boolean        @default(false)
+  status         UserStatus     @default(ACTIVE)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  shop           Shop?
+  refreshTokens  RefreshToken[]
+  phoneOtps      PhoneOtp[]
+
+  @@map("users")
+}
+
+model PhoneOtp {
+  id        String   @id @default(uuid())
+  userId    String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("phone_otps")
+}
+
+model Shop {
+  id               String         @id @default(uuid())
+  userId           String         @unique
+  name             String
+  description      String?
+  address          String
+  latitude         Float
+  longitude        Float
+  phone            String
+  openingHours     Json?
+  logoUrl          String?
+  status           ShopStatus     @default(PENDING)
+  suspensionReason String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents        ShopDocument[]
+
+  @@index([latitude, longitude])
+  @@map("shops")
+}
+
+model ShopDocument {
+  id           String         @id @default(uuid())
+  shopId       String
+  type         DocumentType
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  fileUrl      String
+  status       DocumentStatus @default(SUBMITTED)
+  createdAt    DateTime       @default(now())
+
+  shop         Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
+  @@map("shop_documents")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
