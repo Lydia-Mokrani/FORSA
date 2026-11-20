@@ -1,6 +1,11 @@
 
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import {
+  Link,
+  useNavigate,
+  useLocation as useRouterLocation,
+} from 'react-router-dom';
+
 import {
   Search,
   SlidersHorizontal,
@@ -61,11 +66,15 @@ interface HomeOfferCardProps {
 }
 
 const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
+  // Remember the current page so the offer can open as a popup over it.
+  const backgroundLocation = useRouterLocation();
+
   const photo =
     offer.photos?.[0]?.url ||
     'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80';
 
   const quantityAvailable = offer.quantityAvailable;
+
   const quantityInitial =
     offer.quantityInitial || offer.quantityAvailable || 1;
 
@@ -79,10 +88,11 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
   return (
     <Link
       to={`/offers/${offer.id}`}
+      state={{ backgroundLocation }}
       className="group flex min-w-0 flex-col rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)] transition hover:-translate-y-1 hover:shadow-lg"
     >
       {/* Product image */}
-      <div className="relative h-[150px] w-full overflow-hidden rounded-[12px] bg-[#F0EEE8]">
+      <div className="relative h-[125px] w-full overflow-hidden rounded-[12px] bg-[#F0EEE8]">
         <img
           src={photo}
           alt={offer.name}
@@ -179,20 +189,26 @@ export const HomePage: React.FC = () => {
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
 
+  // Load categories
   useEffect(() => {
     let cancelled = false;
 
     CatalogueApi.getCategories()
       .then((result) => {
-        if (!cancelled) setCategories(result);
+        if (!cancelled) {
+          setCategories(result);
+        }
       })
-      .catch((err) => console.error('Unable to load categories:', err));
+      .catch((err) => {
+        console.error('Unable to load categories:', err);
+      });
 
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // Load nearby offers
   useEffect(() => {
     let cancelled = false;
 
@@ -221,7 +237,9 @@ export const HomePage: React.FC = () => {
           setNearbyOffers([]);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
@@ -232,6 +250,7 @@ export const HomePage: React.FC = () => {
     };
   }, [location, selectedCategory, searchQuery, retryCount]);
 
+  // Search
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSearchQuery(searchInput.trim());
@@ -239,6 +258,7 @@ export const HomePage: React.FC = () => {
 
   const displayedCategories = categories.slice(0, 4);
 
+  // Map
   const mapBox = [
     location.lng - 0.012,
     location.lat - 0.008,
@@ -275,7 +295,9 @@ export const HomePage: React.FC = () => {
               className="hidden items-center gap-2 text-xs font-medium text-[#0B2C25] sm:flex"
             >
               <MapPin size={18} />
-              <span className="max-w-[160px] truncate">{location.label}</span>
+              <span className="max-w-[160px] truncate">
+                {location.label}
+              </span>
             </button>
 
             <button
@@ -307,7 +329,10 @@ export const HomePage: React.FC = () => {
         </button>
 
         {/* Search */}
-        <form onSubmit={handleSearch} className="mb-6 flex max-w-[666px] gap-3">
+        <form
+          onSubmit={handleSearch}
+          className="mb-6 flex max-w-[666px] gap-3"
+        >
           <div className="flex h-[46px] flex-1 items-center gap-3 rounded-[13px] border border-[#E6E4DD] bg-white px-4">
             <Search size={19} className="shrink-0 text-[#0B2C25]" />
 
@@ -361,7 +386,10 @@ export const HomePage: React.FC = () => {
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F0EDE2] text-lg">
               🥖
             </span>
-            <span className="text-xs font-medium text-[#0B2C25]">Tout</span>
+
+            <span className="text-xs font-medium text-[#0B2C25]">
+              Tout
+            </span>
           </button>
 
           {displayedCategories.map((category) => (
@@ -412,11 +440,11 @@ export const HomePage: React.FC = () => {
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {[1, 2, 3].map((item) => (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+              {[1, 2, 3, 4].map((item) => (
                 <div
                   key={item}
-                  className="h-[350px] animate-pulse rounded-[16px] bg-[#EEECE4]"
+                  className="h-[320px] animate-pulse rounded-[16px] bg-[#EEECE4]"
                 />
               ))}
             </div>
@@ -433,11 +461,11 @@ export const HomePage: React.FC = () => {
               </button>
             </div>
           ) : nearbyOffers.length > 0 ? (
-           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-  {nearbyOffers.map((offer) => (
-    <HomeOfferCard key={offer.id} offer={offer} />
-  ))}
-</div>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {nearbyOffers.map((offer) => (
+                <HomeOfferCard key={offer.id} offer={offer} />
+              ))}
+            </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-[#DCD9CF] bg-white p-10 text-center">
               <ShoppingBasket
@@ -473,6 +501,7 @@ export const HomePage: React.FC = () => {
 
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">Mes réservations</p>
+
             <p className="mt-1 truncate text-[11px] text-white/70">
               Retrouvez ici les offres que vous avez réservées.
             </p>
