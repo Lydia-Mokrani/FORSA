@@ -33,7 +33,7 @@ const getDistance = (
   lat1: number,
   lng1: number,
   lat2: number,
-  lng2: number
+  lng2: number,
 ) => {
   const toRadians = (value: number) => (value * Math.PI) / 180;
   const earthRadius = 6371;
@@ -57,6 +57,47 @@ const formatDistance = (distance: number) => {
 
   return `${distance.toFixed(1)} km`;
 };
+
+type EmptyMapStateProps = {
+  onExpandZone: () => void;
+  onResetFilters: () => void;
+};
+
+const EmptyMapState: React.FC<EmptyMapStateProps> = ({
+  onExpandZone,
+  onResetFilters,
+}) => (
+  <div className="flex w-full flex-col items-center gap-[10px] rounded-[20px] border border-[rgba(11,44,37,0.10)] bg-white p-[18px] text-center">
+    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#DBF0DD]">
+      <MapPin size={30} strokeWidth={1.8} className="text-[#17664E]" />
+    </div>
+
+    <h2 className="text-[18px] font-semibold leading-[1.3] text-[#0B2C25]">
+      Aucune offre dans cette zone
+    </h2>
+
+    <p className="text-[12px] leading-relaxed text-[#526C63]">
+      Aucune offre ne correspond à votre recherche et à vos filtres.
+      Élargissez la zone ou assouplissez vos critères.
+    </p>
+
+    <button
+      type="button"
+      onClick={onExpandZone}
+      className="mt-1 flex h-12 w-full items-center justify-center rounded-[14px] bg-[#0B2C25] px-4 text-[13px] font-semibold text-white transition hover:bg-[#17664E]"
+    >
+      Élargir la zone
+    </button>
+
+    <button
+      type="button"
+      onClick={onResetFilters}
+      className="flex h-12 w-full items-center justify-center rounded-[14px] border border-[rgba(11,44,37,0.10)] bg-white px-4 text-[13px] font-semibold text-[#0B2C25] transition hover:bg-[#FFFAF0]"
+    >
+      Réinitialiser les filtres
+    </button>
+  </div>
+);
 
 export const ShopsMapViewPage: React.FC = () => {
   const { location, openModal } = useLocation();
@@ -156,7 +197,7 @@ export const ShopsMapViewPage: React.FC = () => {
       const matchesCategory =
         selectedCategory === 'all' ||
         shopOffers.some(
-          (offer) => offer.category?.slug === selectedCategory
+          (offer) => offer.category?.slug === selectedCategory,
         );
 
       return matchesSearch && matchesCategory;
@@ -168,7 +209,7 @@ export const ShopsMapViewPage: React.FC = () => {
       filteredShops.find(({ shop }) => shop.id === selectedShopId) ??
       filteredShops[0] ??
       null,
-    [filteredShops, selectedShopId]
+    [filteredShops, selectedShopId],
   );
 
   const selectedOffer = selectedShop?.offers[0] ?? null;
@@ -178,8 +219,15 @@ export const ShopsMapViewPage: React.FC = () => {
       location.lat,
       location.lng,
       shop.latitude,
-      shop.longitude
+      shop.longitude,
     );
+
+  const resetFilters = () => {
+    setSearchInput('');
+    setSelectedCategory('all');
+    setSelectedShopId(null);
+    setShowFilters(false);
+  };
 
   // Initialize the map once.
   useEffect(() => {
@@ -234,7 +282,7 @@ export const ShopsMapViewPage: React.FC = () => {
 
     userMarkerRef.current = L.marker(
       [location.lat, location.lng],
-      { icon: userIcon, zIndexOffset: 1000 }
+      { icon: userIcon, zIndexOffset: 1000 },
     )
       .bindPopup('Votre position')
       .addTo(map);
@@ -280,7 +328,7 @@ export const ShopsMapViewPage: React.FC = () => {
 
       const marker = L.marker(
         [shop.latitude, shop.longitude],
-        { icon: markerIcon }
+        { icon: markerIcon },
       ).addTo(map);
 
       marker.on('click', () => {
@@ -296,7 +344,7 @@ export const ShopsMapViewPage: React.FC = () => {
           ({ shop }) =>
             Number.isFinite(shop.latitude) &&
             Number.isFinite(shop.longitude) &&
-            !(shop.latitude === 0 && shop.longitude === 0)
+            !(shop.latitude === 0 && shop.longitude === 0),
         )
         .map(({ shop }) => [shop.latitude, shop.longitude] as L.LatLngTuple);
 
@@ -344,11 +392,13 @@ export const ShopsMapViewPage: React.FC = () => {
     const bounds = map.getBounds();
 
     const visibleShops = filteredShops.filter(({ shop }) =>
-      bounds.contains([shop.latitude, shop.longitude])
+      bounds.contains([shop.latitude, shop.longitude]),
     );
 
     if (visibleShops.length > 0) {
       setSelectedShopId(visibleShops[0].shop.id);
+    } else {
+      setSelectedShopId(null);
     }
   };
 
@@ -362,6 +412,7 @@ export const ShopsMapViewPage: React.FC = () => {
             <h1 className="text-[22px] font-semibold tracking-tight text-[#0B2C25] sm:text-[28px]">
               Carte des commerces
             </h1>
+
             <p className="mt-1 text-[12px] text-[#0B2C25]/65 sm:text-sm">
               Découvrez les commerces et leurs offres près de {location.label}
             </p>
@@ -420,7 +471,9 @@ export const ShopsMapViewPage: React.FC = () => {
           {showFilters && (
             <div className="absolute right-0 top-[56px] z-[1000] w-full max-w-[340px] rounded-2xl border border-[#0B2C25]/10 bg-[#FFFAF0] p-5 shadow-[0_12px_35px_rgba(11,44,37,0.15)]">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Filtrer les commerces</h3>
+                <h3 className="text-sm font-semibold">
+                  Filtrer les commerces
+                </h3>
 
                 <button
                   type="button"
@@ -528,7 +581,9 @@ export const ShopsMapViewPage: React.FC = () => {
 
             {/* Nearby count */}
             <div className="absolute bottom-4 left-4 z-[400] rounded-full bg-[#0B2C25] px-4 py-2 text-[11px] font-medium text-[#FFFAF0] shadow-sm">
-              {filteredShops.length} commerce{filteredShops.length !== 1 ? 's' : ''} trouvé{filteredShops.length !== 1 ? 's' : ''}
+              {filteredShops.length} commerce
+              {filteredShops.length !== 1 ? 's' : ''} trouvé
+              {filteredShops.length !== 1 ? 's' : ''}
             </div>
 
             {/* Mobile selected-shop preview */}
@@ -539,6 +594,7 @@ export const ShopsMapViewPage: React.FC = () => {
                     <h3 className="truncate text-[14px] font-semibold text-[#0B2C25]">
                       {selectedShop.shop.name}
                     </h3>
+
                     <p className="mt-0.5 truncate text-[10px] text-[#17664E]">
                       {formatDistance(getShopDistance(selectedShop.shop))}
                     </p>
@@ -570,7 +626,7 @@ export const ShopsMapViewPage: React.FC = () => {
                       <Clock3 size={11} />
                       {new Date(selectedOffer.expiresAt).toLocaleTimeString(
                         'fr-FR',
-                        { hour: '2-digit', minute: '2-digit' }
+                        { hour: '2-digit', minute: '2-digit' },
                       )}
                     </p>
                   </div>
@@ -579,6 +635,7 @@ export const ShopsMapViewPage: React.FC = () => {
                     <p className="text-[14px] font-semibold text-[#17664E]">
                       {formatPrice(selectedOffer.discountedPrice)}
                     </p>
+
                     <p className="text-[10px] text-[#0B2C25]/50 line-through">
                       {formatPrice(selectedOffer.originalPrice)}
                     </p>
@@ -604,141 +661,142 @@ export const ShopsMapViewPage: React.FC = () => {
 
           {/* Desktop shop list */}
           <aside className="hidden h-[720px] flex-col overflow-hidden rounded-[20px] border border-[#0B2C25]/10 bg-white p-5 lg:flex">
-            <div className="mb-4 flex items-center justify-between border-b border-[#0B2C25]/10 pb-4">
-              <div>
-                <h2 className="text-[15px] font-semibold text-[#0B2C25]">
-                  Commerces à proximité
-                </h2>
-                <p className="mt-1 text-[11px] text-[#0B2C25]/55">
-                  {filteredShops.length} résultat(s)
-                </p>
+            {loading ? (
+              <p className="py-8 text-center text-xs text-[#0B2C25]/55">
+                Chargement des commerces…
+              </p>
+            ) : filteredShops.length === 0 ? (
+              <div className="flex flex-1 items-center">
+                <EmptyMapState
+                  onExpandZone={openModal}
+                  onResetFilters={resetFilters}
+                />
               </div>
+            ) : (
+              <>
+                <div className="mb-4 flex items-center justify-between border-b border-[#0B2C25]/10 pb-4">
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-[#0B2C25]">
+                      Commerces à proximité
+                    </h2>
 
-              <Store size={19} className="text-[#17664E]" />
-            </div>
+                    <p className="mt-1 text-[11px] text-[#0B2C25]/55">
+                      {filteredShops.length} résultat(s)
+                    </p>
+                  </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto pr-1">
-              {loading ? (
-                <p className="py-8 text-center text-xs text-[#0B2C25]/55">
-                  Chargement des commerces…
-                </p>
-              ) : filteredShops.length === 0 ? (
-                <div className="py-10 text-center">
-                  <MapPin size={25} className="mx-auto text-[#17664E]/50" />
-                  <p className="mt-3 text-xs font-medium">
-                    Aucun commerce trouvé
-                  </p>
-                  <p className="mt-1 text-[11px] text-[#0B2C25]/55">
-                    Essayez une autre recherche ou catégorie.
-                  </p>
+                  <Store size={19} className="text-[#17664E]" />
                 </div>
-              ) : (
-                filteredShops.map(({ shop, offers: shopOffers }) => {
-                  const isSelected = selectedShop?.shop.id === shop.id;
-                  const firstOffer = shopOffers[0];
 
-                  return (
-                    <button
-                      type="button"
-                      key={shop.id}
-                      onClick={() => handleSelectShop(shop)}
-                      className={`w-full rounded-[15px] border p-4 text-left transition ${
-                        isSelected
-                          ? 'border-[#17664E] bg-[#DBF0DD]/50'
-                          : 'border-[#0B2C25]/10 bg-white hover:border-[#17664E]/40 hover:bg-[#FFFAF0]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#DBF0DD] text-[#17664E]">
-                            <Store size={18} />
+                <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+                  {filteredShops.map(({ shop, offers: shopOffers }) => {
+                    const isSelected = selectedShop?.shop.id === shop.id;
+                    const firstOffer = shopOffers[0];
+
+                    return (
+                      <button
+                        type="button"
+                        key={shop.id}
+                        onClick={() => handleSelectShop(shop)}
+                        className={`w-full rounded-[15px] border p-4 text-left transition ${
+                          isSelected
+                            ? 'border-[#17664E] bg-[#DBF0DD]/50'
+                            : 'border-[#0B2C25]/10 bg-white hover:border-[#17664E]/40 hover:bg-[#FFFAF0]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#DBF0DD] text-[#17664E]">
+                              <Store size={18} />
+                            </div>
+
+                            <div className="min-w-0">
+                              <h3 className="truncate text-[12px] font-semibold text-[#0B2C25]">
+                                {shop.name}
+                              </h3>
+
+                              <p className="mt-1 truncate text-[10px] text-[#0B2C25]/55">
+                                {shop.address}
+                              </p>
+                            </div>
                           </div>
 
-                          <div className="min-w-0">
-                            <h3 className="truncate text-[12px] font-semibold text-[#0B2C25]">
-                              {shop.name}
-                            </h3>
-                            <p className="mt-1 truncate text-[10px] text-[#0B2C25]/55">
-                              {shop.address}
-                            </p>
-                          </div>
+                          <span className="shrink-0 rounded-full bg-[#DBF0DD] px-2 py-1 text-[10px] font-medium text-[#17664E]">
+                            {shopOffers.length} offre(s)
+                          </span>
                         </div>
 
-                        <span className="shrink-0 rounded-full bg-[#DBF0DD] px-2 py-1 text-[10px] font-medium text-[#17664E]">
-                          {shopOffers.length} offre(s)
-                        </span>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between border-t border-[#0B2C25]/10 pt-3">
-                        <span className="text-[10px] text-[#17664E]">
-                          {formatDistance(getShopDistance(shop))}
-                        </span>
-
-                        {firstOffer && (
-                          <span className="text-[11px] font-semibold text-[#17664E]">
-                            Dès {formatPrice(firstOffer.discountedPrice)}
+                        <div className="mt-3 flex items-center justify-between border-t border-[#0B2C25]/10 pt-3">
+                          <span className="text-[10px] text-[#17664E]">
+                            {formatDistance(getShopDistance(shop))}
                           </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
 
-            {selectedShop && selectedOffer && (
-              <div className="mt-4 rounded-[16px] bg-[#FFFAF0] p-4">
-                <p className="mb-3 text-[11px] font-semibold text-[#0B2C25]">
-                  Offre sélectionnée
-                </p>
-
-                <div className="flex items-center gap-3">
-                  <img
-                    src={selectedOffer.photos?.[0]?.url || ''}
-                    alt={selectedOffer.name}
-                    className="h-[62px] w-[62px] shrink-0 rounded-xl bg-[#EBEEE1] object-cover"
-                  />
-
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-[11px] font-semibold">
-                      {selectedOffer.name}
-                    </p>
-                    <p className="mt-1 text-[10px] text-[#0B2C25]/55">
-                      {selectedOffer.quantityAvailable} restant(s)
-                    </p>
-                  </div>
-
-                  <div className="text-right">
-                    <p className="text-[13px] font-semibold text-[#17664E]">
-                      {formatPrice(selectedOffer.discountedPrice)}
-                    </p>
-                    <p className="text-[10px] text-[#0B2C25]/50 line-through">
-                      {formatPrice(selectedOffer.originalPrice)}
-                    </p>
-                  </div>
+                          {firstOffer && (
+                            <span className="text-[11px] font-semibold text-[#17664E]">
+                              Dès {formatPrice(firstOffer.discountedPrice)}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <Link
-                  to={`/offers/${selectedOffer.id}`}
-                  className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0B2C25] text-[11px] font-semibold text-[#FFFAF0] transition hover:bg-[#17664E]"
-                >
-                  Voir l'offre
-                  <ArrowRight size={14} />
-                </Link>
-              </div>
+                {selectedShop && selectedOffer && (
+                  <div className="mt-4 rounded-[16px] bg-[#FFFAF0] p-4">
+                    <p className="mb-3 text-[11px] font-semibold text-[#0B2C25]">
+                      Offre sélectionnée
+                    </p>
+
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={selectedOffer.photos?.[0]?.url || ''}
+                        alt={selectedOffer.name}
+                        className="h-[62px] w-[62px] shrink-0 rounded-xl bg-[#EBEEE1] object-cover"
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-[11px] font-semibold">
+                          {selectedOffer.name}
+                        </p>
+
+                        <p className="mt-1 text-[10px] text-[#0B2C25]/55">
+                          {selectedOffer.quantityAvailable} restant(s)
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-[13px] font-semibold text-[#17664E]">
+                          {formatPrice(selectedOffer.discountedPrice)}
+                        </p>
+
+                        <p className="text-[10px] text-[#0B2C25]/50 line-through">
+                          {formatPrice(selectedOffer.originalPrice)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Link
+                      to={`/offers/${selectedOffer.id}`}
+                      className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0B2C25] text-[11px] font-semibold text-[#FFFAF0] transition hover:bg-[#17664E]"
+                    >
+                      Voir l'offre
+                      <ArrowRight size={14} />
+                    </Link>
+                  </div>
+                )}
+              </>
             )}
           </aside>
         </div>
 
+        {/* Mobile empty state */}
         {!loading && filteredShops.length === 0 && (
-          <div className="rounded-2xl border border-[#0B2C25]/10 bg-white p-8 text-center lg:hidden">
-            <MapPin size={28} className="mx-auto text-[#17664E]/50" />
-            <p className="mt-3 text-sm font-semibold text-[#0B2C25]">
-              Aucun commerce trouvé
-            </p>
-            <p className="mt-1 text-xs text-[#0B2C25]/55">
-              Essayez une autre recherche ou catégorie.
-            </p>
+          <div className="lg:hidden">
+            <EmptyMapState
+              onExpandZone={openModal}
+              onResetFilters={resetFilters}
+            />
           </div>
         )}
       </div>

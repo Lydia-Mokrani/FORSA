@@ -16,11 +16,18 @@ import {
   ArrowRight,
   PackageSearch,
   RotateCcw,
+  Bell,
 } from 'lucide-react';
 
 import { CatalogueApi } from '../services/api';
 import { Category, Offer, OfferFilterParams } from '../types';
 import { useLocation } from '../context/LocationContext';
+
+const SUGGESTED_SEARCHES = [
+  'Pain complet',
+  'Pâtisserie',
+  'Épicerie',
+];
 
 const formatPrice = (price: number) =>
   `${new Intl.NumberFormat('fr-FR').format(price)} DA`;
@@ -28,7 +35,9 @@ const formatPrice = (price: number) =>
 const formatTime = (dateString: string) => {
   const date = new Date(dateString);
 
-  if (Number.isNaN(date.getTime())) return 'Horaire non précisé';
+  if (Number.isNaN(date.getTime())) {
+    return 'Horaire non précisé';
+  }
 
   return date.toLocaleTimeString('fr-FR', {
     hour: '2-digit',
@@ -63,7 +72,8 @@ const getDistance = (
       Math.cos(toRadians(lat2)) *
       Math.sin(dLng / 2) ** 2;
 
-  const distance = earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance =
+    earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   if (distance < 1) {
     return `${Math.round(distance * 1000)} m`;
@@ -137,7 +147,7 @@ const ResultOfferCard: React.FC<ResultOfferCardProps> = ({
           className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
         />
 
-        <span className="absolute left-[10px] top-[10px] rounded-full bg-[#0B2C25] px-[9px] py-[4px] font-poppins text-[10px] font-medium text-[#FFFAF0]">
+        <span className="absolute left-[10px] top-[10px] rounded-full bg-[#0B2C25] px-[9px] py-[4px] text-[10px] font-medium text-[#FFFAF0]">
           -{offer.discountPercent}%
         </span>
       </div>
@@ -148,12 +158,12 @@ const ResultOfferCard: React.FC<ResultOfferCardProps> = ({
           {offer.shop?.address || 'Adresse non précisée'}
         </p>
 
-        <h2 className="line-clamp-2 font-poppins text-[18px] font-semibold leading-[1.4] text-[#0B2C25]">
+        <h2 className="line-clamp-2 text-[18px] font-semibold leading-[1.4] text-[#0B2C25]">
           {offer.name}
         </h2>
 
         <div className="flex flex-wrap items-center gap-[7px]">
-          <span className="font-poppins text-[21px] font-semibold text-[#17664E]">
+          <span className="text-[21px] font-semibold text-[#17664E]">
             {formatPrice(offer.discountedPrice)}
           </span>
 
@@ -192,7 +202,10 @@ export const ExploreOffersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [totalCount, setTotalCount] = useState(0);
-  const [searchInput, setSearchInput] = useState(searchParams.get('q') || '');
+  const [searchInput, setSearchInput] = useState(
+    searchParams.get('q') || '',
+  );
+  const [reloadKey, setReloadKey] = useState(0);
 
   const filters = useMemo(
     () => readFilters(searchParams),
@@ -203,6 +216,7 @@ export const ExploreOffersPage: React.FC = () => {
     setSearchInput(searchParams.get('q') || '');
   }, [searchParams]);
 
+  // Load real categories from the existing catalogue API.
   useEffect(() => {
     let cancelled = false;
 
@@ -221,6 +235,7 @@ export const ExploreOffersPage: React.FC = () => {
     };
   }, []);
 
+  // Load offers using the existing supported filter parameters.
   useEffect(() => {
     let cancelled = false;
 
@@ -236,8 +251,12 @@ export const ExploreOffersPage: React.FC = () => {
         });
 
         if (!cancelled) {
-          setOffers(result.data || []);
-          setTotalCount(result.pagination?.total ?? result.data.length);
+          const receivedOffers = result.data || [];
+
+          setOffers(receivedOffers);
+          setTotalCount(
+            result.pagination?.total ?? receivedOffers.length,
+          );
         }
       } catch (err) {
         console.error('Unable to load filtered offers:', err);
@@ -245,7 +264,9 @@ export const ExploreOffersPage: React.FC = () => {
         if (!cancelled) {
           setOffers([]);
           setTotalCount(0);
-          setError('Impossible de charger les résultats pour le moment.');
+          setError(
+            'Impossible de charger les résultats pour le moment.',
+          );
         }
       } finally {
         if (!cancelled) {
@@ -259,15 +280,11 @@ export const ExploreOffersPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [filters, location]);
+  }, [filters, location.lat, location.lng, reloadKey]);
 
   const selectedCategory = categories.find(
     (category) => category.slug === filters.category,
   );
-
-  const merchantCount = new Set(
-    offers.map((offer) => offer.shopId),
-  ).size;
 
   const activeFilterCount = [
     filters.category,
@@ -287,7 +304,10 @@ export const ExploreOffersPage: React.FC = () => {
   const updateParams = (nextFilters: OfferFilterParams) => {
     const params = new URLSearchParams();
 
-    if (nextFilters.q) params.set('q', nextFilters.q);
+    if (nextFilters.q) {
+      params.set('q', nextFilters.q);
+    }
+
     if (nextFilters.category) {
       params.set('category', nextFilters.category);
     }
@@ -318,17 +338,32 @@ export const ExploreOffersPage: React.FC = () => {
   const removeFilter = (key: string) => {
     const nextFilters = { ...filters };
 
-    if (key === 'category') nextFilters.category = undefined;
-    if (key === 'minPrice') nextFilters.minPrice = undefined;
-    if (key === 'maxPrice') nextFilters.maxPrice = undefined;
-    if (key === 'minDiscount') nextFilters.minDiscount = undefined;
-    if (key === 'available') nextFilters.available = true;
-    if (key === 'q') nextFilters.q = undefined;
+    if (key === 'category') {
+      nextFilters.category = undefined;
+    }
+
+    if (key === 'minPrice') {
+      nextFilters.minPrice = undefined;
+    }
+
+    if (key === 'maxPrice') {
+      nextFilters.maxPrice = undefined;
+    }
+
+    if (key === 'minDiscount') {
+      nextFilters.minDiscount = undefined;
+    }
+
+    if (key === 'available') {
+      nextFilters.available = true;
+    }
 
     updateParams(nextFilters);
   };
 
   const clearFilters = () => {
+    setSearchInput('');
+
     updateParams({
       available: true,
       sort: 'distance',
@@ -343,6 +378,16 @@ export const ExploreOffersPage: React.FC = () => {
     updateParams({
       ...filters,
       q: searchInput.trim() || undefined,
+      page: 1,
+    });
+  };
+
+  const handleSuggestedSearch = (term: string) => {
+    setSearchInput(term);
+
+    updateParams({
+      ...filters,
+      q: term,
       page: 1,
     });
   };
@@ -389,17 +434,13 @@ export const ExploreOffersPage: React.FC = () => {
     });
   }
 
-  if (filters.q) {
-    chips.push({
-      key: 'q',
-      label: `Recherche : ${filters.q}`,
-      remove: () => removeFilter('q'),
-    });
-  }
+  const hasNoResults =
+    !loading && !error && offers.length === 0;
 
   return (
     <div className="min-h-screen bg-[#FFFAF0] px-5 pb-12 pt-7 sm:px-8 lg:px-10">
       <div className="mx-auto max-w-[1440px] space-y-6">
+
         {/* PAGE HEADER */}
         <section className="flex flex-wrap items-center justify-between gap-5">
           <div>
@@ -414,9 +455,9 @@ export const ExploreOffersPage: React.FC = () => {
             </h1>
 
             <p className="mt-1 text-[13px] text-[rgba(11,44,37,0.71)]">
-              {totalCount} offre{totalCount > 1 ? 's' : ''} ·{' '}
-              {activeFilterCount} filtre{activeFilterCount > 1 ? 's' : ''}{' '}
-              actif{activeFilterCount > 1 ? 's' : ''}
+              {hasNoResults
+                ? 'Aucune offre trouvée'
+                : `${totalCount} offre${totalCount > 1 ? 's' : ''}`}
             </p>
           </div>
 
@@ -429,11 +470,10 @@ export const ExploreOffersPage: React.FC = () => {
             <button
               type="button"
               aria-label="Notifications"
-              className="flex h-[42px] w-[42px] items-center justify-center rounded-full border border-[rgba(11,44,37,0.10)] bg-white text-[#0B2C25]"
+              className="relative flex h-[42px] w-[42px] items-center justify-center rounded-full border border-[rgba(11,44,37,0.10)] bg-white text-[#0B2C25]"
             >
-              <span className="relative">
-                <SlidersHorizontal size={19} />
-              </span>
+              <Bell size={19} />
+              <span className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full bg-[#17664E]" />
             </button>
           </div>
         </section>
@@ -444,7 +484,10 @@ export const ExploreOffersPage: React.FC = () => {
           className="flex w-full items-center gap-[10px]"
         >
           <div className="flex h-[46px] min-w-0 flex-1 items-center gap-[10px] rounded-[14px] border border-[rgba(11,44,37,0.10)] bg-white px-[14px]">
-            <Search size={20} className="shrink-0 text-[#0B2C25]" />
+            <Search
+              size={20}
+              className="shrink-0 text-[#0B2C25]"
+            />
 
             <input
               type="search"
@@ -511,54 +554,8 @@ export const ExploreOffersPage: React.FC = () => {
           </section>
         )}
 
-        {/* RESULTS HEADER */}
-        <section className="flex flex-wrap items-center gap-3">
-          <div className="flex items-end gap-2">
-            <h2 className="text-[18px] font-semibold text-[#0B2C25]">
-              {totalCount} offre{totalCount > 1 ? 's' : ''}
-            </h2>
-
-            <p className="pb-[2px] text-[12px] text-[rgba(11,44,37,0.71)]">
-              · triées par {sortLabel[filters.sort || 'distance']}
-            </p>
-          </div>
-
-          <div className="flex-1" />
-
-          <label className="flex h-[38px] items-center gap-[6px] rounded-full border border-[rgba(11,44,37,0.10)] bg-white px-[14px] text-[12px] text-[#0B2C25]">
-            <span className="whitespace-nowrap">Trier :</span>
-
-            <select
-              value={filters.sort || 'distance'}
-              onChange={(event) =>
-                updateParams({
-                  ...filters,
-                  sort: event.target.value as OfferFilterParams['sort'],
-                  page: 1,
-                })
-              }
-              className="max-w-[155px] cursor-pointer bg-transparent font-medium outline-none"
-            >
-              <option value="distance">Plus proches</option>
-              <option value="price">Prix croissant</option>
-              <option value="discount">Meilleures réductions</option>
-              <option value="deadline">Expiration la plus proche</option>
-            </select>
-
-            <ChevronDown size={14} />
-          </label>
-
-          <Link
-            to="/map"
-            className="flex h-[38px] items-center justify-center gap-[6px] rounded-full border border-[rgba(11,44,37,0.10)] bg-white px-[14px] text-[12px] font-medium text-[#0B2C25] transition hover:bg-[#DBF0DD]"
-          >
-            <MapPin size={16} />
-            Voir sur la carte
-          </Link>
-        </section>
-
-        {/* RESULTS */}
-        {loading ? (
+        {/* LOADING STATE */}
+        {loading && (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((item) => (
               <div
@@ -567,85 +564,168 @@ export const ExploreOffersPage: React.FC = () => {
               />
             ))}
           </div>
-        ) : error ? (
+        )}
+
+        {/* ERROR STATE */}
+        {!loading && error && (
           <div className="rounded-[20px] border border-[#E8E6DF] bg-white p-12 text-center">
             <p className="text-sm text-[#526C63]">{error}</p>
 
             <button
               type="button"
-              onClick={() => window.location.reload()}
-              className="mt-4 rounded-[12px] bg-[#0B2C25] px-5 py-3 text-xs font-semibold text-white"
+              onClick={() => setReloadKey((value) => value + 1)}
+              className="mt-4 rounded-[12px] bg-[#0B2C25] px-5 py-3 text-xs font-semibold text-white transition hover:bg-[#17664E]"
             >
               Réessayer
             </button>
           </div>
-        ) : offers.length > 0 ? (
-          <div className="grid grid-cols-1 items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {offers.map((offer) => (
-              <ResultOfferCard
-                key={offer.id}
-                offer={offer}
-                latitude={location.lat}
-                longitude={location.lng}
-              />
-            ))}
-
-            {/* EXPAND SEARCH CARD */}
-            {chips.length > 0 && (
-              <div className="flex min-h-[330px] flex-col items-center justify-center gap-[14px] rounded-[20px] bg-[#DBF0DD] p-8 text-center">
-                <div className="flex h-[48px] w-[48px] items-center justify-center rounded-full bg-white text-[#17664E]">
-                  <RotateCcw size={22} />
-                </div>
-
-                <h3 className="text-[15px] font-semibold text-[#0B2C25]">
-                  Pas assez de choix ?
-                </h3>
-
-                <p className="max-w-[240px] text-[12px] leading-relaxed text-[rgba(11,44,37,0.71)]">
-                  Retirez un filtre pour voir plus d’offres près de vous.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="rounded-full bg-[#0B2C25] px-[18px] py-[9px] text-[12px] font-semibold text-[#FFFAF0] transition hover:bg-[#17664E]"
-                >
-                  Effacer les filtres
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-[20px] border border-[rgba(11,44,37,0.10)] bg-white px-6 py-14 text-center">
-            <div className="mx-auto flex h-[64px] w-[64px] items-center justify-center rounded-full bg-[#DBF0DD] text-[#17664E]">
-              <PackageSearch size={30} />
-            </div>
-
-            <h3 className="mt-5 text-[18px] font-semibold text-[#0B2C25]">
-              Aucune offre ne correspond à vos filtres
-            </h3>
-
-            <p className="mx-auto mt-2 max-w-[440px] text-[12px] leading-relaxed text-[#526C63]">
-              Essayez un autre mot-clé ou retirez un filtre pour découvrir
-              davantage d’offres.
-            </p>
-
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="mt-6 inline-flex h-[46px] items-center justify-center gap-2 rounded-[14px] bg-[#0B2C25] px-5 text-[12px] font-semibold text-white transition hover:bg-[#17664E]"
-            >
-              <RotateCcw size={15} />
-              Effacer les filtres
-            </button>
-          </div>
         )}
 
-        {totalCount > offers.length && (
-          <p className="text-center text-[11px] text-[#526C63]">
-            {offers.length} offres affichées sur {totalCount}. La pagination
-            sera disponible avec le chargement des pages suivantes.
-          </p>
+        {/* RESULTS HEADER AND SORTING */}
+        {!loading && !error && offers.length > 0 && (
+          <>
+            <section className="flex flex-wrap items-center gap-3">
+              <div className="flex items-end gap-2">
+                <h2 className="text-[18px] font-semibold text-[#0B2C25]">
+                  {totalCount} offre{totalCount > 1 ? 's' : ''}
+                </h2>
+
+                <p className="pb-[2px] text-[12px] text-[rgba(11,44,37,0.71)]">
+                  · triées par {sortLabel[filters.sort || 'distance']}
+                </p>
+              </div>
+
+              <div className="flex-1" />
+
+              <label className="flex h-[38px] items-center gap-[6px] rounded-full border border-[rgba(11,44,37,0.10)] bg-white px-[14px] text-[12px] text-[#0B2C25]">
+                <span className="whitespace-nowrap">Trier :</span>
+
+                <select
+                  value={filters.sort || 'distance'}
+                  onChange={(event) =>
+                    updateParams({
+                      ...filters,
+                      sort: event.target.value as OfferFilterParams['sort'],
+                      page: 1,
+                    })
+                  }
+                  className="max-w-[155px] cursor-pointer bg-transparent font-medium outline-none"
+                >
+                  <option value="distance">Plus proches</option>
+                  <option value="price">Prix croissant</option>
+                  <option value="discount">Meilleures réductions</option>
+                  <option value="deadline">Expiration la plus proche</option>
+                </select>
+
+                <ChevronDown size={14} />
+              </label>
+
+              <Link
+                to="/map"
+                className="flex h-[38px] items-center justify-center gap-[6px] rounded-full border border-[rgba(11,44,37,0.10)] bg-white px-[14px] text-[12px] font-medium text-[#0B2C25] transition hover:bg-[#DBF0DD]"
+              >
+                <MapPin size={16} />
+                Voir sur la carte
+              </Link>
+            </section>
+
+            {/* OFFER CARDS */}
+            <div className="grid grid-cols-1 items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {offers.map((offer) => (
+                <ResultOfferCard
+                  key={offer.id}
+                  offer={offer}
+                  latitude={location.lat}
+                  longitude={location.lng}
+                />
+              ))}
+
+              {chips.length > 0 && (
+                <div className="flex min-h-[330px] flex-col items-center justify-center gap-[14px] rounded-[20px] bg-[#DBF0DD] p-8 text-center">
+                  <div className="flex h-[48px] w-[48px] items-center justify-center rounded-full bg-white text-[#17664E]">
+                    <RotateCcw size={22} />
+                  </div>
+
+                  <h3 className="text-[15px] font-semibold text-[#0B2C25]">
+                    Pas assez de choix ?
+                  </h3>
+
+                  <p className="max-w-[240px] text-[12px] leading-relaxed text-[rgba(11,44,37,0.71)]">
+                    Retirez un filtre pour voir plus d’offres près de vous.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="rounded-full bg-[#0B2C25] px-[18px] py-[9px] text-[12px] font-semibold text-[#FFFAF0] transition hover:bg-[#17664E]"
+                  >
+                    Effacer les filtres
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {totalCount > offers.length && (
+              <p className="text-center text-[11px] text-[#526C63]">
+                Affichage de {offers.length} offres sur {totalCount}.
+              </p>
+            )}
+          </>
+        )}
+
+        {/* FIGMA EMPTY SEARCH STATE */}
+        {hasNoResults && (
+          <section className="flex w-full flex-col items-center rounded-[20px] border border-[rgba(11,44,37,0.10)] bg-white px-5 py-12 text-center sm:px-8 sm:py-[56px]">
+            <div className="flex h-[84px] w-[84px] shrink-0 items-center justify-center rounded-full bg-[#DBF0DD] text-[#17664E]">
+              <PackageSearch size={36} strokeWidth={1.7} />
+            </div>
+
+            <h2 className="mt-[14px] text-[20px] font-semibold leading-tight text-[#0B2C25] sm:text-[22px]">
+              {filters.q
+                ? `Aucune offre pour « ${filters.q} »`
+                : 'Aucune offre ne correspond à vos filtres'}
+            </h2>
+
+            <p className="mt-[10px] max-w-[420px] text-[13px] leading-[21px] text-[rgba(11,44,37,0.71)]">
+              Nous n’avons rien trouvé avec ces filtres. Essayez un autre
+              mot-clé ou retirez un filtre.
+            </p>
+
+            <div className="mt-[22px] flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="flex h-[46px] w-full items-center justify-center rounded-[14px] bg-[#0B2C25] px-6 text-[13px] font-medium text-[#FFFAF0] transition hover:bg-[#17664E] sm:w-auto"
+              >
+                Effacer les filtres
+              </button>
+
+              <Link
+                to="/map"
+                className="flex h-[46px] w-full items-center justify-center gap-2 rounded-[14px] border border-[rgba(11,44,37,0.10)] bg-white px-6 text-[13px] font-medium text-[#0B2C25] transition hover:bg-[#FFFAF0] sm:w-auto"
+              >
+                <MapPin size={18} />
+                Voir la carte
+              </Link>
+            </div>
+
+            <div className="mt-[26px] flex flex-wrap items-center justify-center gap-2">
+              <span className="mr-1 text-[12px] text-[rgba(11,44,37,0.71)]">
+                Essayez plutôt :
+              </span>
+
+              {SUGGESTED_SEARCHES.map((term) => (
+                <button
+                  type="button"
+                  key={term}
+                  onClick={() => handleSuggestedSearch(term)}
+                  className="rounded-full border border-[rgba(11,44,37,0.10)] bg-white px-[14px] py-[8px] text-[12px] font-medium text-[#0B2C25] transition hover:border-[#17664E] hover:bg-[#DBF0DD]"
+                >
+                  {term}
+                </button>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </div>
