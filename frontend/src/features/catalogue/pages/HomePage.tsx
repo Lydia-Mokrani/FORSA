@@ -1,6 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
-import { Link, useLocation as useRouterLocation } from 'react-router-dom';
+import {
+  Link,
+  useLocation as useRouterLocation,
+  useNavigate,
+} from 'react-router-dom';
 
 import {
   MapPin,
@@ -68,7 +72,6 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
     'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80';
 
   const quantityAvailable = offer.quantityAvailable;
-
   const quantityInitial =
     offer.quantityInitial || offer.quantityAvailable || 1;
 
@@ -85,7 +88,6 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
       state={{ backgroundLocation }}
       className="group flex min-w-0 flex-col rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)] transition hover:-translate-y-1 hover:shadow-lg"
     >
-      {/* Product image */}
       <div className="relative h-[125px] w-full overflow-hidden rounded-[12px] bg-[#F0EEE8]">
         <img
           src={photo}
@@ -105,16 +107,13 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
         )}
       </div>
 
-      {/* Pickup information */}
       <div className="mt-[9px] flex items-center gap-[6px]">
         <Clock size={12} className="shrink-0 text-[#78847F]" />
-
         <p className="font-poppins text-[9px] text-[#78847F]">
           Retrait avant {formatPickupTime(offer.expiresAt)}
         </p>
       </div>
 
-      {/* Product title and merchant */}
       <div className="mt-[9px] min-h-[65px]">
         <h3 className="line-clamp-1 font-poppins text-[16px] font-semibold leading-[24px] text-[#0B2C25]">
           {offer.name}
@@ -125,7 +124,6 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
         </p>
       </div>
 
-      {/* Pricing */}
       <div className="mt-[8px] flex flex-wrap items-baseline gap-[7px]">
         <span className="font-poppins text-[17px] font-bold text-[#17664E]">
           {formatPrice(offer.discountedPrice)}
@@ -136,7 +134,6 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
         </span>
       </div>
 
-      {/* Stock progress */}
       <div className="mt-[13px]">
         <div className="mb-[5px] flex items-center justify-between gap-2">
           <p className="font-poppins text-[9px] text-[rgba(11,44,37,0.65)]">
@@ -159,7 +156,6 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
         </div>
       </div>
 
-      {/* Action */}
       <div className="mt-[13px] border-t border-[#F0F0F0] pt-[11px]">
         <span className="flex w-full items-center justify-center gap-2 rounded-[8px] bg-[#0B2C25] px-3 py-[9px] font-poppins text-[11px] font-bold text-white transition-colors group-hover:bg-[#17664E]">
           Voir l'offre
@@ -171,6 +167,7 @@ const HomeOfferCard: React.FC<HomeOfferCardProps> = ({ offer }) => {
 };
 
 export const HomePage: React.FC = () => {
+  const navigate = useNavigate();
   const { location, openModal } = useLocation();
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -189,7 +186,6 @@ export const HomePage: React.FC = () => {
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
 
-  // Load categories from the existing API
   useEffect(() => {
     let cancelled = false;
 
@@ -208,7 +204,6 @@ export const HomePage: React.FC = () => {
     };
   }, []);
 
-  // Load offers using only the existing API filter parameters
   useEffect(() => {
     let cancelled = false;
 
@@ -258,7 +253,6 @@ export const HomePage: React.FC = () => {
 
   const displayedCategories = categories.slice(0, 4);
 
-  // Map
   const mapBox = [
     location.lng - 0.012,
     location.lat - 0.008,
@@ -268,11 +262,48 @@ export const HomePage: React.FC = () => {
 
   const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${mapBox}&layer=mapnik&marker=${location.lat}%2C${location.lng}`;
 
+  // Send the selected filters to the dedicated results page.
+  const handleApplyFilters = (
+    nextFilters: OfferFilterParams,
+    category?: string,
+  ) => {
+    const params = new URLSearchParams();
+
+    const nextQuery = searchQuery.trim();
+
+    if (nextQuery) params.set('q', nextQuery);
+    if (category) params.set('category', category);
+
+    if (nextFilters.minPrice !== undefined) {
+      params.set('minPrice', String(nextFilters.minPrice));
+    }
+
+    if (nextFilters.maxPrice !== undefined) {
+      params.set('maxPrice', String(nextFilters.maxPrice));
+    }
+
+    if (nextFilters.minDiscount !== undefined) {
+      params.set('minDiscount', String(nextFilters.minDiscount));
+    }
+
+    if (nextFilters.available === false) {
+      params.set('available', 'false');
+    }
+
+    if (nextFilters.sort) {
+      params.set('sort', nextFilters.sort);
+    }
+
+    setAppliedFilters(nextFilters);
+    setSelectedCategory(category);
+
+    navigate(`/explore?${params.toString()}`);
+  };
+
   return (
     <div className="min-h-screen bg-[#FFFAF0] px-5 pb-32 pt-7 sm:px-8 lg:px-10">
       <div className="mx-auto max-w-[1200px]">
-
-        {/* Heading */}
+        {/* HEADING */}
         <section className="mb-6 flex flex-wrap items-center justify-between gap-5">
           <div>
             <p className="mb-2 text-xs font-medium text-[#7B8178]">
@@ -318,7 +349,7 @@ export const HomePage: React.FC = () => {
           </div>
         </section>
 
-        {/* Mobile location */}
+        {/* MOBILE LOCATION */}
         <button
           type="button"
           onClick={openModal}
@@ -328,7 +359,7 @@ export const HomePage: React.FC = () => {
           <span className="truncate">{location.label}</span>
         </button>
 
-        {/* Search and filters */}
+        {/* SEARCH AND FILTERS */}
         <HomeSearchControls
           categories={categories}
           offers={nearbyOffers}
@@ -338,13 +369,10 @@ export const HomePage: React.FC = () => {
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
           filters={appliedFilters}
-          onApplyFilters={(nextFilters, category) => {
-            setAppliedFilters(nextFilters);
-            setSelectedCategory(category);
-          }}
+          onApplyFilters={handleApplyFilters}
         />
 
-        {/* Map */}
+        {/* MAP */}
         <section className="relative mb-6 h-[210px] overflow-hidden rounded-[22px] border border-[#E8E5DC] bg-[#E5E8D8] sm:h-[234px]">
           <iframe
             title="Carte des commerces à proximité"
@@ -361,7 +389,7 @@ export const HomePage: React.FC = () => {
           </div>
         </section>
 
-        {/* Categories */}
+        {/* CATEGORIES */}
         <section className="mb-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <button
             type="button"
@@ -411,7 +439,7 @@ export const HomePage: React.FC = () => {
           ))}
         </section>
 
-        {/* Offers */}
+        {/* OFFERS */}
         <section>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-[20px] font-semibold text-[#0B2C25]">
@@ -482,7 +510,7 @@ export const HomePage: React.FC = () => {
           )}
         </section>
 
-        {/* Bottom reservation bar */}
+        {/* BOTTOM RESERVATION BAR */}
         <section className="fixed bottom-3 left-3 right-3 z-30 flex min-h-[70px] items-center gap-3 rounded-[16px] bg-[#0B2C25] px-4 py-3 text-white shadow-xl md:left-[258px] md:right-10 md:px-5">
           <div className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-xl bg-[#FFFAF0] text-[#0B2C25]">
             <ShoppingBasket size={20} />
