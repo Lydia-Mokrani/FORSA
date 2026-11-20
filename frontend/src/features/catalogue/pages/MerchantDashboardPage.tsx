@@ -1,255 +1,397 @@
-// frontend/src/features/catalogue/pages/MerchantDashboardPage.tsx
+
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { CatalogueApi } from '../services/api';
 import { MerchantDashboardData } from '../types';
-import {
-  PackageCheck,
-  Clock,
-  AlertTriangle,
-  Store,
-  Plus,
-  ShoppingBag,
-  TrendingUp,
-  CheckCircle,
-  Eye,
-  FileCheck,
-  Star,
-} from 'lucide-react';
+
+const FIGMA_ASSETS =
+  'https://www.figma.com/api/mcp/asset/a9b292fb-1ade-425d-b43f-b930a09ee78d';
+
+const assets = {
+  avatar: `${FIGMA_ASSETS}/6247d.png`,
+  product: `${FIGMA_ASSETS}/a9c3d.png`,
+  active: `${FIGMA_ASSETS}/50881.svg`,
+  reservations: `${FIGMA_ASSETS}/f8563.svg`,
+  soldOut: `${FIGMA_ASSETS}/6047d.svg`,
+  rating: `${FIGMA_ASSETS}/65f25.svg`,
+  clock: `${FIGMA_ASSETS}/815bb.svg`,
+  edit: `${FIGMA_ASSETS}/48081.svg`,
+  delete: `${FIGMA_ASSETS}/df08e.svg`,
+};
+
+type DashboardOffer = MerchantDashboardData['recentOffers'][number] & {
+  description?: string;
+  originalPrice?: number;
+  quantityAvailable?: number;
+  quantityInitial?: number;
+  pickupStartTime?: string;
+  pickupEndTime?: string;
+};
+
+type ExtendedStats = MerchantDashboardData['stats'] & {
+  todayReservations?: number;
+};
+
+const formatPrice = (price: number) =>
+  `${new Intl.NumberFormat('fr-FR').format(price)} DA`;
+
+const getOriginalPrice = (offer: DashboardOffer) => {
+  if (offer.originalPrice != null) return offer.originalPrice;
+
+  if (offer.discountPercent >= 100 || offer.discountPercent <= 0) {
+    return null;
+  }
+
+  return Math.round(
+    offer.discountedPrice / (1 - offer.discountPercent / 100),
+  );
+};
+
+const formatTime = (value?: string) => {
+  if (!value) return null;
+
+  // Accept either "16:00" or a full ISO date.
+  if (/^\d{2}:\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+interface StatCardProps {
+  value: string | number;
+  label: string;
+  icon: string;
+  iconBackground: string;
+  iconSize?: number;
+}
+
+const StatCard: React.FC<StatCardProps> = ({
+  value,
+  label,
+  icon,
+  iconBackground,
+  iconSize = 54,
+}) => (
+  <div className="flex min-w-0 flex-1 items-center justify-center gap-[23px] rounded-[19px] bg-white px-[13px] py-[12px] shadow-[0px_4px_3px_rgba(0,0,0,0.05)]">
+    <div
+      className="flex h-[84px] w-[84px] shrink-0 items-center justify-center rounded-[17px]"
+      style={{ backgroundColor: iconBackground }}
+    >
+      <img
+        src={icon}
+        alt=""
+        aria-hidden="true"
+        className="object-contain"
+        style={{ width: iconSize, height: iconSize }}
+      />
+    </div>
+
+    <div className="min-w-0">
+      <p className="font-poppins text-[40px] font-semibold leading-[1.15] text-[#0B2C25]">
+        {value}
+      </p>
+      <p className="mt-[2px] font-poppins text-[13px] leading-[1.35] text-[rgba(11,44,37,0.71)]">
+        {label}
+      </p>
+    </div>
+  </div>
+);
+
+interface OfferCardProps {
+  offer: DashboardOffer;
+}
+
+const OfferCard: React.FC<OfferCardProps> = ({ offer }) => {
+  const originalPrice = getOriginalPrice(offer);
+  const quantityAvailable = offer.quantityAvailable;
+  const quantityInitial = offer.quantityInitial;
+
+  const hasStock =
+    typeof quantityAvailable === 'number' &&
+    typeof quantityInitial === 'number' &&
+    quantityInitial > 0;
+
+  const stockPercentage = hasStock
+    ? Math.min(100, Math.max(0, (quantityAvailable / quantityInitial) * 100))
+    : 0;
+
+  const pickupStart = formatTime(offer.pickupStartTime);
+  const pickupEnd = formatTime(offer.pickupEndTime);
+
+  return (
+    <article className="w-full min-w-0 rounded-[16px] bg-white p-[12px] shadow-[0px_4px_7px_rgba(0,0,0,0.06)]">
+      <div className="flex flex-col gap-[14px]">
+        <div className="flex flex-col gap-[9px]">
+          <div className="flex flex-col gap-[6px]">
+            <div className="relative h-[140px] w-full overflow-hidden rounded-[12px]">
+              <img
+                src={offer.thumbnailUrl || assets.product}
+                alt={offer.name}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+
+              <Link
+                to={`/merchant/edit-offer/${offer.id}`}
+                aria-label={`Modifier ${offer.name}`}
+                className="absolute right-[9px] top-[9px] flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[rgba(255,255,255,0.79)]"
+              >
+                <img src={assets.edit} alt="" className="h-[24px] w-[24px]" />
+              </Link>
+            </div>
+
+            <div className="flex min-h-[12px] items-center gap-[6px]">
+              <img src={assets.clock} alt="" className="h-[10px] w-[10px]" />
+              <p className="font-poppins text-[8px] leading-normal text-[#78847F]">
+                Retrait :{' '}
+                {pickupStart && pickupEnd
+                  ? `${pickupStart} – ${pickupEnd}`
+                  : '—'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start justify-between gap-[8px]">
+            <div className="min-w-0">
+              <h3 className="truncate font-poppins text-[17px] font-semibold leading-[26px] text-[#0B2C25]">
+                {offer.name}
+              </h3>
+              <p className="truncate font-poppins text-[8px] leading-[12px] text-[rgba(11,44,37,0.66)]">
+                {offer.description || offer.category?.nameFr || ''}
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-baseline gap-[4px] whitespace-nowrap pt-[4px]">
+              <span className="font-poppins text-[14px] font-bold text-[#17664E]">
+                {formatPrice(offer.discountedPrice)}
+              </span>
+              {originalPrice != null && (
+                <span className="font-poppins text-[8px] text-[#78847F] line-through">
+                  {formatPrice(originalPrice)}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-[4px]">
+          <p className="font-poppins text-[7px] leading-normal text-[rgba(11,44,37,0.59)]">
+            {hasStock
+              ? `${quantityAvailable} pièces restantes sur ${quantityInitial}`
+              : 'Quantité restante non renseignée'}
+          </p>
+
+          <div className="h-[6px] w-full overflow-hidden rounded-[3px] bg-[#D9D9D9]">
+            <div
+              className="h-full rounded-[3px] bg-[#0B2C25]"
+              style={{ width: `${stockPercentage}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="h-[1px] w-full bg-[#F0F0F0]" />
+
+        <div className="flex items-center gap-[10px]">
+          <Link
+            to={`/merchant/edit-offer/${offer.id}`}
+            className="flex min-w-0 flex-1 items-center justify-center rounded-[8px] bg-[#0B2C25] px-[12px] py-[8px] font-poppins text-[10px] font-bold text-white transition-colors hover:bg-[#17664E]"
+          >
+            Gérer
+          </Link>
+
+          <span
+            title="Supprimer l'offre"
+            aria-label="Supprimer l'offre"
+            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[8px] border border-[rgba(0,0,0,0.1)]"
+          >
+            <img src={assets.delete} alt="" className="h-[16px] w-[16px]" />
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+};
 
 export const MerchantDashboardPage: React.FC = () => {
   const [data, setData] = useState<MerchantDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     CatalogueApi.getMerchantDashboard()
-      .then(setData)
-      .finally(() => setLoading(false));
+      .then((result) => {
+        if (mounted) setData(result);
+      })
+      .catch((error) => {
+        console.error('Unable to load merchant dashboard:', error);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  if (loading || !data) {
+  if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8 animate-pulse">
-        <div className="h-8 w-64 bg-gray-200 rounded-lg" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-28 bg-gray-200 rounded-2xl" />
+      <div className="w-full max-w-[1066px] animate-pulse space-y-[50px]">
+        <div className="h-[112px] rounded-xl bg-[#F2EEE5]" />
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-[108px] rounded-[19px] bg-white" />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-6 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-[330px] rounded-[16px] bg-white" />
           ))}
         </div>
       </div>
     );
   }
 
-  const { stats, recentOffers, shops } = data;
+  if (!data) {
+    return (
+      <div className="w-full max-w-[1066px] py-12 text-center font-poppins text-[#0B2C25]">
+        Impossible de charger les données du tableau de bord.
+      </div>
+    );
+  }
 
-  const statCards = [
+  const { stats, recentOffers, shops } = data;
+  const extendedStats = stats as ExtendedStats;
+  const offers = (recentOffers || []) as DashboardOffer[];
+
+  const averageRating =
+    shops?.length > 0 && typeof shops[0].averageRating === 'number'
+      ? shops[0].averageRating.toLocaleString('fr-FR', {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })
+      : '—';
+
+  const statCards: StatCardProps[] = [
     {
-      title: 'Offres Actives',
+      label: 'offres actives',
       value: stats.activeOffers,
-      icon: PackageCheck,
-      color: 'text-emerald-600 bg-emerald-50 border-emerald-100',
+      icon: assets.active,
+      iconBackground: 'rgba(134,207,238,0.34)',
+      iconSize: 54,
     },
     {
-      title: 'Réservations en cours',
-      value: stats.reservedProducts,
-      icon: Clock,
-      color: 'text-amber-600 bg-amber-50 border-amber-100',
+      label: 'réservations du jour',
+      value: extendedStats.todayReservations ?? '—',
+      icon: assets.reservations,
+      iconBackground: 'rgba(238,214,134,0.47)',
+      iconSize: 48,
     },
     {
-      title: 'Commandes Récupérées',
-      value: stats.pickups,
-      icon: CheckCircle,
-      color: 'text-blue-600 bg-blue-50 border-blue-100',
+      label: 'offres épuisées',
+      value: stats.soldOutOffers,
+      icon: assets.soldOut,
+      iconBackground: 'rgba(206,86,86,0.47)',
+      iconSize: 53,
     },
     {
-      title: 'En attente OCR (MS4)',
-      value: stats.pendingVerification,
-      icon: FileCheck,
-      color: 'text-purple-600 bg-purple-50 border-purple-100',
+      label: 'note moyenne',
+      value: averageRating,
+      icon: assets.rating,
+      iconBackground: '#EAF5EB',
+      iconSize: 54,
     },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Top Welcome Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-6">
-        <div>
-          <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
-            Espace Commerçant • MS2 Catalogue & Stocks
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 mt-0.5">
-            Tableau de Bord Commerçant
+    <div className="w-full max-w-[1066px]">
+      {/* Welcome header */}
+      <header className="flex min-h-[112px] items-start justify-between gap-6">
+        <div className="min-w-0">
+          <h1 className="font-poppins text-[clamp(30px,3.35vw,48px)] font-semibold leading-[1.25] text-[#0B2C25]">
+            Bonjour, {shops?.[0]?.name || '[Commerce]'} !
           </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            Gérez vos surplus alimentaires, suivez les réservations et réduisez le gaspillage.
+          <p className="mt-[3px] font-poppins text-[20px] leading-[1.5] text-[rgba(11,44,37,0.79)]">
+            Voici un aperçu de votre activité aujourd’hui
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Link
-            to="/merchant/create-offer"
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-2"
+        <div className="flex shrink-0 items-center gap-[14px] pt-[2px]">
+          <button
+            type="button"
+            aria-label="Notifications"
+            className="flex h-[45px] w-[45px] items-center justify-center text-[#0B2C25]"
           >
-            <Plus className="w-4 h-4" />
-            <span>Créer une nouvelle offre</span>
-          </Link>
-          <Link
-            to="/merchant/my-offers"
-            className="px-4 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl shadow-xs transition"
-          >
-            Toutes mes offres
-          </Link>
-        </div>
-      </div>
-
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
-        {statCards.map((c, i) => {
-          const Icon = c.icon;
-          return (
-            <div
-              key={i}
-              className={`p-5 rounded-3xl border bg-white shadow-xs space-y-3 transition hover:shadow-md`}
+            <svg
+              viewBox="0 0 24 24"
+              className="h-[32px] w-[32px]"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500">{c.title}</span>
-                <div className={`p-2.5 rounded-xl border ${c.color}`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="text-3xl font-black text-gray-900">{c.value}</div>
-            </div>
-          );
-        })}
-      </div>
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+              <path d="M10 21h4" />
+              <path d="M12 2V1" />
+            </svg>
+          </button>
 
-      {/* Grid: Recent Offers + Shop Snapshot Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Recent Offers Feed (8 cols) */}
-        <div className="lg:col-span-8 bg-white rounded-3xl border border-gray-100 p-6 sm:p-7 shadow-xs space-y-5">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-            <h3 className="text-sm font-bold text-gray-900">Activité récente de vos offres</h3>
-            <Link
-              to="/merchant/my-offers"
-              className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
-            >
-              Voir tout ({stats.totalOffers}) &rarr;
-            </Link>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-gray-100 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">
-                  <th className="pb-3">Produit</th>
-                  <th className="pb-3">Prix</th>
-                  <th className="pb-3">Statut</th>
-                  <th className="pb-3">Échéance</th>
-                  <th className="pb-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {recentOffers.map((offer) => (
-                  <tr key={offer.id} className="hover:bg-gray-50/60 transition">
-                    <td className="py-3 font-semibold text-gray-900 flex items-center gap-2">
-                      <span className="text-base">{offer.category?.icon || '🛍️'}</span>
-                      <span className="truncate max-w-[200px]">{offer.name}</span>
-                    </td>
-                    <td className="py-3 font-bold text-emerald-700">
-                      {offer.discountedPrice} DA{' '}
-                      <span className="text-[10px] text-amber-600">(-{offer.discountPercent}%)</span>
-                    </td>
-                    <td className="py-3">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          offer.status === 'ACTIVE'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : offer.status === 'PENDING_VERIFICATION'
-                            ? 'bg-purple-100 text-purple-800'
-                            : offer.status === 'SOLD_OUT'
-                            ? 'bg-gray-100 text-gray-700'
-                            : 'bg-rose-100 text-rose-800'
-                        }`}
-                      >
-                        {offer.status}
-                      </span>
-                    </td>
-                    <td className="py-3 text-gray-500">
-                      {new Date(offer.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="py-3 text-right space-x-2">
-                      <Link
-                        to={`/offers/${offer.id}`}
-                        className="text-gray-400 hover:text-emerald-600 font-semibold"
-                        title="Voir la page publique"
-                      >
-                        Aperçu
-                      </Link>
-                      <Link
-                        to={`/merchant/edit-offer/${offer.id}`}
-                        className="text-emerald-600 hover:text-emerald-800 font-semibold"
-                      >
-                        Modifier
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <img
+            src={assets.avatar}
+            alt="Profil du commerce"
+            className="h-[48px] w-[48px] rounded-full object-cover"
+          />
         </div>
+      </header>
 
-        {/* Shop Snapshot & Sync Status (4 cols) */}
-        <div className="lg:col-span-4 bg-white rounded-3xl border border-gray-100 p-6 sm:p-7 shadow-xs space-y-6">
-          <div className="border-b border-gray-100 pb-3">
-            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-              <Store className="w-4 h-4 text-emerald-600" />
-              <span>Snapshot du Commerce (MS1 Sync)</span>
-            </h3>
-            <p className="text-[11px] text-gray-400 mt-0.5">
-              Données synchronisées en temps réel via RabbitMQ
-            </p>
+      {/* Statistics */}
+      <section
+        aria-label="Statistiques du commerce"
+        className="mt-[50px] grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-4 xl:gap-[33px]"
+      >
+        {statCards.map((card) => (
+          <StatCard key={card.label} {...card} />
+        ))}
+      </section>
+
+      {/* Today's offers */}
+      <section className="mt-[50px]">
+        <h2 className="mb-[22px] font-poppins text-[36px] font-semibold leading-[1.3] text-[#0B2C25]">
+          Vos offres du jour
+        </h2>
+
+        {offers.length > 0 ? (
+          <div className="grid grid-cols-1 gap-[30px] sm:grid-cols-2 xl:grid-cols-4">
+            {offers.slice(0, 4).map((offer) => (
+              <OfferCard key={offer.id} offer={offer} />
+            ))}
           </div>
+        ) : (
+          <p className="rounded-[16px] bg-white p-6 font-poppins text-sm text-[#78847F]">
+            Aucune offre à afficher pour le moment.
+          </p>
+        )}
+      </section>
 
-          {shops.map((shop) => (
-            <div key={shop.id} className="space-y-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-gray-900">{shop.name}</h4>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-full">
-                  {shop.status}
-                </span>
-              </div>
-              <p className="text-xs text-gray-500">{shop.address}</p>
-
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200/60 text-xs">
-                <div>
-                  <span className="text-[10px] text-gray-400 block">Note moyenne</span>
-                  <div className="flex items-center gap-1 font-bold text-gray-800">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{shop.averageRating.toFixed(1)} / 5</span>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-[10px] text-gray-400 block">Ventes totales</span>
-                  <span className="font-bold text-gray-800">{shop.salesCount} paniers</span>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {/* Quick Guidance Box */}
-          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-xs text-emerald-900 space-y-2">
-            <h5 className="font-bold text-emerald-950 flex items-center gap-1.5">
-              <span>💡</span>
-              <span>Conseil anti-gaspi</span>
-            </h5>
-            <p className="text-emerald-800 leading-relaxed text-[11px]">
-              Publiez vos invendus alimentaires vers 16h30 pour permettre aux clients de réserver et récupérer
-              leurs paniers avant votre heure de fermeture habituelle.
-            </p>
-          </div>
-        </div>
+      {/* Add offer action */}
+      <div className="mt-[50px] flex justify-end pb-8">
+        <Link
+          to="/merchant/create-offer"
+          className="inline-flex items-center gap-[7px] rounded-[10px] bg-[#0B2C25] px-[10px] py-[10px] font-poppins text-[20px] font-semibold text-white transition-colors hover:bg-[#17664E]"
+        >
+          <Plus className="h-[30px] w-[30px]" strokeWidth={1.8} />
+          Ajouter une offre
+        </Link>
       </div>
     </div>
   );
 };
+
+export default MerchantDashboardPage;
