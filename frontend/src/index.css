@@ -1,74 +1,104 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@layer base {
-  body {
-    @apply bg-forsa-cream text-forsa-dark font-poppins antialiased min-h-screen selection:bg-forsa-leaf selection:text-white;
-  }
+@theme {
+  --color-forsa-dark: #0B2C25;
+  --color-forsa-primary: #17664E;
+  --color-forsa-leaf: #2A9D74;
+  --color-forsa-soft: #4E8773;
+  --color-forsa-mint: #E1EBE6;
+  --color-forsa-cream: #FAF6ED;
+  --color-forsa-card: #FFFFFF;
+  --color-forsa-terracotta: #D96B43;
+  --color-forsa-sand: #F0EAD6;
+  --font-poppins: 'Poppins', sans-serif;
+  --radius-card: 28px;
+  --radius-btn: 14px;
 }
 
-@layer components {
-  /* Carte Glassmorphism fidèle au style ScentCraft & FORSA */
-  .forsa-glass-card {
-    background: rgba(255, 255, 255, 0.40);
-    backdrop-filter: blur(40px);
-    -webkit-backdrop-filter: blur(40px);
-    border: 1.5px solid rgba(255, 255, 255, 0.80);
-    box-shadow: 0 20px 40px -15px rgba(11, 44, 37, 0.10);
-    border-radius: 28px;
-  }
+body {
+  background-color: var(--color-forsa-cream);
+  color: var(--color-forsa-dark);
+  font-family: var(--font-poppins);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
 
-  /* Champ de saisie Glass */
-  .forsa-input {
-    background: rgba(255, 255, 255, 0.70);
-    border: 1.2px solid rgba(255, 255, 255, 0.95);
-    border-radius: 14px;
-    height: 52px;
-    padding: 0 16px;
-    color: #0B2C25;
-    transition: all 0.2s ease-in-out;
-  }
+/* Carte Glassmorphism fidèle au style ScentCraft & FORSA */
+.forsa-glass-card {
+  background: rgba(255, 255, 255, 0.40);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1.5px solid rgba(255, 255, 255, 0.80);
+  box-shadow: 0 20px 40px -15px rgba(11, 44, 37, 0.10);
+  border-radius: 28px;
+}
 
-  .forsa-input:focus {
-    outline: none;
-    background: rgba(255, 255, 255, 0.90);
-    border-color: #17664E;
-    box-shadow: 0 0 0 3px rgba(23, 102, 78, 0.15);
-  }
+/* Champ de saisie Glass */
+.forsa-input {
+  background: rgba(255, 255, 255, 0.70);
+  border: 1.2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 14px;
+  height: 52px;
+  padding: 0 16px;
+  color: #0B2C25;
+  transition: all 0.2s ease-in-out;
+}
 
-  /* Bouton CTA Principal */
-  .forsa-btn-primary {
-    @apply bg-forsa-dark text-white font-medium rounded-btn transition-all duration-200 flex items-center justify-center;
-    box-shadow: 0 10px 20px -5px rgba(11, 44, 37, 0.30);
-  }
+.forsa-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.90);
+  border-color: #17664E;
+  box-shadow: 0 0 0 3px rgba(23, 102, 78, 0.15);
+}
 
-  .forsa-btn-primary:hover {
-    @apply opacity-95 translate-y-[-1px];
-    box-shadow: 0 12px 24px -4px rgba(11, 44, 37, 0.38);
-  }
+/* Bouton CTA Principal */
+.forsa-btn-primary {
+  background-color: var(--color-forsa-dark);
+  color: white;
+  font-weight: 500;
+  border-radius: 14px;
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 20px -5px rgba(11, 44, 37, 0.30);
+}
 
-  /* Bouton Social Glass */
-  .forsa-btn-social {
-    background: rgba(255, 255, 255, 0.60);
-    border: 1px solid rgba(11, 44, 37, 0.18);
-    border-radius: 14px;
-    height: 48px;
-    @apply font-medium text-forsa-dark transition-all duration-200 flex items-center justify-center gap-2;
-  }
+.forsa-btn-primary:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px -4px rgba(11, 44, 37, 0.38);
+}
 
-  .forsa-btn-social:hover {
-    background: rgba(255, 255, 255, 0.85);
-  }
+/* Bouton Social Glass */
+.forsa-btn-social {
+  background: rgba(255, 255, 255, 0.60);
+  border: 1px solid rgba(11, 44, 37, 0.18);
+  border-radius: 14px;
+  height: 48px;
+  font-weight: 500;
+  color: var(--color-forsa-dark);
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
 
-  /* Pilule de Rôle (MS1) */
-  .forsa-role-pill {
-    background: rgba(255, 255, 255, 0.65);
-    border: 1px solid rgba(11, 44, 37, 0.18);
-    border-radius: 9999px;
-    padding: 6px 14px;
-    @apply text-xs font-medium inline-flex items-center gap-2;
-  }
+.forsa-btn-social:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(11, 44, 37, 0.30);
+}
+
+/* Badge Réduction & Type */
+.forsa-badge {
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
