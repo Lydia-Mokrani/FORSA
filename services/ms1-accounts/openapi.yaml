@@ -1,0 +1,231 @@
+openapi: 3.0.3
+info:
+  title: FORSA - MS1 Accounts & Shops API
+  version: 1.0.0
+  description: >
+    Service de gestion des comptes utilisateurs, profils commerçants,
+    authentification JWT asymétrique (RS256) et téléversement des justificatifs légaux.
+servers:
+  - url: http://localhost:3001
+    description: Serveur de développement direct
+  - url: http://localhost/api
+    description: Passerelle Traefik (Production / Démo)
+
+paths:
+  /api/auth/register:
+    post:
+      summary: Inscription d'un nouvel utilisateur
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, fullName]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: hiba@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: MotDePasse123!
+                fullName:
+                  type: string
+                  example: Hambli Hiba
+                phone:
+                  type: string
+                  example: "+213550123456"
+                role:
+                  type: string
+                  enum: [CUSTOMER, MERCHANT]
+                  default: CUSTOMER
+      responses:
+        '201':
+          description: Inscription réussie et émission de l'événement user.registered
+        '400':
+          description: Données de formulaire invalides
+        '409':
+          description: Adresse email déjà existante
+
+  /api/auth/login:
+    post:
+      summary: Connexion et obtention de la paire de tokens (Access + Refresh)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Authentification réussie
+        '401':
+          description: Identifiants invalides
+        '403':
+          description: Compte suspendu
+
+  /api/auth/refresh:
+    post:
+      summary: Rafraîchissement sécurisé de l'access token avec rotation
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Nouveaux tokens émis
+        '401':
+          description: Refresh token invalide ou révoqué
+
+  /api/auth/public-key:
+    get:
+      summary: Clé publique RSA pour validation locale RS256 des tokens par les microservices
+      tags: [Auth]
+      responses:
+        '200':
+          description: Clé publique au format PEM
+
+  /api/users/me:
+    get:
+      summary: Récupération du profil de l'utilisateur connecté
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profil utilisateur et détails boutique si commerçant
+        '401':
+          description: Non authentifié
+
+  /api/users/verify-phone/request:
+    post:
+      summary: Demande d'envoi d'un code OTP à 4 chiffres (simulé)
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Code envoyé
+
+  /api/users/verify-phone/confirm:
+    post:
+      summary: Validation du code OTP à 4 chiffres
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  example: "1234"
+      responses:
+        '200':
+          description: Numéro validé
+
+  /api/shops:
+    post:
+      summary: Création d'une nouvelle boutique (Commerçant uniquement)
+      tags: [Shops]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, address, latitude, longitude, phone]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                address:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+                phone:
+                  type: string
+                openingHours:
+                  type: object
+      responses:
+        '201':
+          description: Boutique créée avec statut PENDING
+        '403':
+          description: Réservé aux comptes commerçants
+
+  /api/shops/my/documents:
+    post:
+      summary: Téléversement des 3 pièces justificatives privées
+      tags: [Shops]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                commercial_register:
+                  type: string
+                  format: binary
+                tax_id:
+                  type: string
+                  format: binary
+                storefront:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Pièces enregistrées et événement shop.documents_uploaded émis pour MS4
+
+  /api/shops/{id}:
+    get:
+      summary: Consultation publique des coordonnées d'un commerce
+      tags: [Shops]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Informations publiques du commerce
+        '404':
+          description: Commerce non trouvé
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
