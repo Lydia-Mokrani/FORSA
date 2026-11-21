@@ -1245,82 +1245,44 @@ export const ProfilePage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Tuile Téléphone (756:21275) */}
+                    {/* Tuile Téléphone (Figma 994:13623) */}
                     <div className="flex-1 bg-[#fffaf0] border border-[#e8ebdf] rounded-[16px] p-[16px] flex items-center gap-[14px]">
                       <div className="size-[44px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
                         <img src={figmaSmartPhone} alt="" className="size-[22px]" />
                       </div>
-                      <div className="flex flex-col gap-[4px] min-w-0 flex-1">
-                        {/* Ligne 1 : Titre + Badge d'état sobre */}
-                        <div className="flex items-center justify-between gap-[8px]">
-                          <p className="text-[11px] font-normal text-[#0b2c25]/70">Téléphone</p>
+                      <div className="flex flex-col gap-[3px] min-w-0 flex-1">
+                        {/* Libellé + Badge d'état (Figma 994:13627) */}
+                        <div className="flex items-center gap-[8px]">
+                          <span className="text-[11px] font-normal text-[#0b2c25]">Téléphone</span>
                           {isPhoneVerified ? (
-                            <div className="bg-[#dbf0dd] flex items-center gap-[3px] px-[8px] py-[2px] rounded-full">
+                            <div className="bg-[#dbf0dd] flex items-center gap-[4px] px-[8px] py-[2px] rounded-full">
                               <img src={figmaTickSmall} alt="" className="size-[11px]" />
                               <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
                             </div>
                           ) : hasPhone ? (
-                            <div className="bg-amber-50 border border-amber-200 flex items-center gap-[3px] px-[8px] py-[2px] rounded-full">
+                            <button
+                              type="button"
+                              onClick={handleStartPhoneVerification}
+                              className="bg-amber-100 hover:bg-amber-200 border border-amber-300 flex items-center gap-[4px] px-[8px] py-[2px] rounded-full cursor-pointer transition"
+                            >
+                              <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-amber-800" />
                               <span className="text-[10px] font-semibold text-amber-800">Non vérifié</span>
-                            </div>
+                            </button>
                           ) : (
-                            <div className="bg-[#ebeee1]/70 flex items-center gap-[3px] px-[8px] py-[2px] rounded-full">
+                            <div className="bg-[#ebeee1] flex items-center gap-[4px] px-[8px] py-[2px] rounded-full">
                               <span className="text-[10px] font-medium text-[#78847f]">Non renseigné</span>
                             </div>
                           )}
                         </div>
 
-                        {/* Ligne 2 : Numéro affiché + Bouton d'action épuré */}
-                        <div className="flex items-center justify-between gap-[8px]">
-                          <p className="text-[14px] font-semibold text-[#0b2c25] truncate">
-                            {hasPhone ? displayPhone : (
-                              <span className="text-[#0b2c25]/45 italic font-normal text-[13px]">
-                                Aucun numéro associé
-                              </span>
-                            )}
-                          </p>
-
-                          {isPhoneVerified ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setViewMode('edit');
-                              }}
-                              className="text-[11px] font-semibold text-[#0b2c25]/70 hover:text-[#0b2c25] hover:underline transition cursor-pointer"
-                            >
-                              Modifier
-                            </button>
-                          ) : hasPhone ? (
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={handleStartPhoneVerification}
-                                className="bg-[#0b2c25] hover:bg-[#17664e] text-white text-[11px] font-semibold px-2.5 py-1 rounded-[8px] transition cursor-pointer shadow-xs"
-                              >
-                                Vérifier
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setViewMode('edit');
-                                }}
-                                className="text-[11px] font-semibold text-[#0b2c25]/70 hover:text-[#0b2c25] hover:underline transition cursor-pointer"
-                              >
-                                Modifier
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setViewMode('edit');
-                              }}
-                              className="bg-[#0b2c25] hover:bg-[#17664e] text-white text-[11px] font-semibold px-3 py-1 rounded-[8px] transition cursor-pointer shadow-xs"
-                            >
-                              + Ajouter
-                            </button>
+                        {/* Numéro affiché (Figma 994:13632) */}
+                        <p className="text-[14px] font-semibold text-[#0b2c25] truncate">
+                          {hasPhone ? displayPhone : (
+                            <span className="text-[#0b2c25]/45 italic font-normal text-[13px]">
+                              Aucun numéro associé
+                            </span>
                           )}
-                        </div>
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1333,10 +1295,10 @@ export const ProfilePage: React.FC = () => {
                         <img src={figmaMail} alt="" className="size-[22px]" />
                       </div>
                       <div className="flex flex-col gap-[3px] min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-[8px]">
-                          <p className="text-[11px] font-normal text-[#0b2c25]">E-mail</p>
+                        <div className="flex items-center gap-[8px]">
+                          <span className="text-[11px] font-normal text-[#0b2c25]">E-mail</span>
                           {isEmailVerified ? (
-                            <div className="bg-[#dbf0dd] flex items-center gap-[3px] pl-[5px] pr-[7px] py-[2px] rounded-[100px]">
+                            <div className="bg-[#dbf0dd] flex items-center gap-[4px] px-[8px] py-[2px] rounded-full">
                               <img src={figmaTickSmall} alt="" className="size-[11px]" />
                               <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
                             </div>
@@ -1344,10 +1306,10 @@ export const ProfilePage: React.FC = () => {
                             <button
                               type="button"
                               onClick={handleResendEmail}
-                              className="bg-amber-100 hover:bg-amber-200 border border-amber-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
+                              className="bg-amber-100 hover:bg-amber-200 border border-amber-300 flex items-center gap-[4px] px-[8px] py-[2px] rounded-full cursor-pointer transition"
                             >
                               <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-amber-800" />
-                              <span className="text-[10px] font-semibold text-amber-800">Non vérifié · Valider</span>
+                              <span className="text-[10px] font-semibold text-amber-800">Non vérifié</span>
                             </button>
                           )}
                         </div>
