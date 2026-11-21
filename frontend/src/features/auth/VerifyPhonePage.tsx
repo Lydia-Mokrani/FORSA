@@ -11,7 +11,6 @@ export const VerifyPhonePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
   const [locked, setLocked] = useState(false);
 
@@ -38,7 +37,6 @@ export const VerifyPhonePage: React.FC = () => {
         throw new Error(data?.error?.message || 'Impossible d’envoyer le code.');
       }
       setTimer(data.resendInSeconds ?? 60);
-      setSimulatedCode(data.simulatedCode ?? null);
     } catch (e: any) {
       setErrorMessage(e.message || 'Impossible d’envoyer le code. Vérifiez votre connexion.');
     }
@@ -170,12 +168,6 @@ export const VerifyPhonePage: React.FC = () => {
             Saisissez le code à 6 chiffres envoyé par SMS sur votre téléphone.
           </p>
         </div>
-
-        {simulatedCode && (
-          <div className="bg-emerald-500/10 border border-emerald-600/30 text-[#0B2C25] text-xs sm:text-sm p-3 rounded-2xl">
-            💡 <strong>Code SMS de test :</strong> [ <span className="font-mono font-bold text-base text-[#17664E]">{simulatedCode}</span> ]
-          </div>
-        )}
 
         {errorMessage && (
           <div className="flex items-center gap-2 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-sm px-4 py-3 rounded-2xl">

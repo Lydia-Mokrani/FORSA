@@ -235,8 +235,6 @@ export class UserController {
         expiresInSeconds: OTP_TTL_MS / 1000,
         resendInSeconds: OTP_RESEND_MS / 1000,
         sentViaTwilio,
-        // Afficher en dev pour la soutenance si Twilio n'a pas été utilisé
-        ...((config.nodeEnv !== 'production' && !sentViaTwilio) ? { simulatedCode: code } : {}),
       });
     } catch (err) {
       next(err);
