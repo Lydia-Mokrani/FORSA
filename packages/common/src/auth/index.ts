@@ -8,10 +8,13 @@ export interface UserPayload {
   sub: string;             // userId
   email: string;
   role: UserRole;
+  fullName?: string;
   emailVerified: boolean;
   phoneVerified: boolean;
   shopId?: string | null;
+  merchantId?: string | null;
   shopStatus?: string | null;
+  merchantStatus?: string | null;
 }
 
 declare global {

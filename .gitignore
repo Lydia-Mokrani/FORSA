@@ -11,6 +11,8 @@ node_modules/
 .env.production.local
 *.pem
 *.key
+keys/
+**/keys/
 
 # Build outputs
 dist/

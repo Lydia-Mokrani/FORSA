@@ -27,6 +27,7 @@ shopRouter.post(
 // Route publique pour afficher les coordonnées d'une boutique
 shopRouter.get('/:id', ShopController.getPublicShopById);
 
-// Routes d'administration sécurisées (Visualisation des justificatifs légaux)
+// Routes d'administration sécurisées (Visualisation des justificatifs légaux et modération statut)
 shopRouter.get('/:id/documents', authenticate, requireRole('ADMIN'), ShopController.getShopDocumentsForAdmin);
 shopRouter.get('/:id/documents/:filename', authenticate, requireRole('ADMIN'), ShopController.downloadDocumentForAdmin);
+shopRouter.patch('/:id/status', authenticate, requireRole('ADMIN'), ShopController.updateShopStatus);

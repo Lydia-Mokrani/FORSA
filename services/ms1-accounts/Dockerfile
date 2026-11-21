@@ -19,7 +19,6 @@ COPY services/ms1-accounts/ ./services/ms1-accounts/
 WORKDIR /app/services/ms1-accounts
 RUN npx prisma generate
 RUN npm run build
-RUN node scripts/generate-keys.js
 
 # Stage final d'exécution
 FROM node:22-alpine AS runner
@@ -37,13 +36,12 @@ RUN npm install --omit=dev
 COPY --from=builder /app/packages/common/dist ./packages/common/dist
 COPY --from=builder /app/services/ms1-accounts/dist ./services/ms1-accounts/dist
 COPY --from=builder /app/services/ms1-accounts/node_modules/.prisma ./services/ms1-accounts/node_modules/.prisma
-COPY --from=builder /app/services/ms1-accounts/keys ./services/ms1-accounts/keys
 COPY --from=builder /app/services/ms1-accounts/prisma ./services/ms1-accounts/prisma
 COPY --from=builder /app/services/ms1-accounts/openapi.yaml ./services/ms1-accounts/openapi.yaml
 
 WORKDIR /app/services/ms1-accounts
 
-RUN mkdir -p uploads/documents
+RUN mkdir -p uploads/documents keys
 
 EXPOSE 3001
 

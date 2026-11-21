@@ -10,7 +10,7 @@ describe('JwtService - Unit Tests', () => {
     emailVerified: true,
     phoneVerified: true,
     shopId: 'shop_test_boulangerie_456',
-    merchantId: 'shop_test_boulangerie_456',
+    merchantId: 'usr_test_merchant_123', // ID utilisateur commerçant (= sub / shop.userId, aligné MS2)
     shopStatus: 'APPROVED',
     merchantStatus: 'APPROVED',
   };
@@ -57,7 +57,7 @@ describe('JwtService - Unit Tests', () => {
       expect(decoded.phoneVerified).toBe(true);
 
       // Vérification des claims d'intégration MS2
-      expect(decoded.merchantId).toBe(sampleMerchantPayload.shopId);
+      expect(decoded.merchantId).toBe(sampleMerchantPayload.sub);
       expect(decoded.shopId).toBe(sampleMerchantPayload.shopId);
       expect(decoded.merchantStatus).toBe('APPROVED');
       expect(decoded.shopStatus).toBe('APPROVED');

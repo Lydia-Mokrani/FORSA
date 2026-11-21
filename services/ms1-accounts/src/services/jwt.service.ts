@@ -11,9 +11,9 @@ export interface TokenPayload {
   emailVerified: boolean;
   phoneVerified?: boolean;
   
-  // Identifiant de la boutique (aligné avec MS2)
-  shopId?: string | null;
-  merchantId?: string | null;       // Alias direct attendu par MS2
+  // Identifiant de la boutique et du commerçant (aligné avec MS2)
+  shopId?: string | null;           // UUID de la boutique
+  merchantId?: string | null;       // ID utilisateur du commerçant (= sub / userId, attendu par MS2)
 
   // Statut d'approbation boutique / commerçant (aligné avec MS2)
   shopStatus?: string | null;

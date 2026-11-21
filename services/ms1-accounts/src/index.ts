@@ -7,7 +7,7 @@ import { initRabbitMQ, rabbitMQ } from './services/rabbitmq.service';
 const consul = new ConsulRegistry({
   consulUrl: `http://${config.consulHost}:${config.consulPort}`,
   serviceName: 'ms1-accounts',
-  serviceId: `ms1-accounts-${config.port}`,
+  serviceId: `ms1-accounts-${config.serviceHost.replace(/[^a-zA-Z0-9_-]/g, '-')}-${config.port}`,
   serviceHost: config.serviceHost,
   servicePort: config.port,
   healthPath: '/health',

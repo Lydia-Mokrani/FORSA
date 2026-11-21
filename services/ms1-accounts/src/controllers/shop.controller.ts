@@ -134,6 +134,19 @@ export class ShopController {
         data: parsed.data,
       });
 
+      // Émission de l'événement shop.updated sur RabbitMQ pour MS2 (ShopSnapshot)
+      await rabbitMQ.publish('shop.updated', {
+        shopId: updated.id,
+        merchantId: updated.userId,
+        userId: updated.userId,
+        name: updated.name,
+        address: updated.address,
+        latitude: updated.latitude,
+        longitude: updated.longitude,
+        phone: updated.phone,
+        status: updated.status,
+      }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.updated warning:', err.message));
+
       res.json({ shop: updated });
     } catch (err) {
       next(err);
@@ -268,6 +281,83 @@ export class ShopController {
       res.setHeader('Content-Type', doc.mimeType);
       res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
       fs.createReadStream(filePath).pipe(res);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static async updateShopStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { status, reason } = req.body;
+
+      if (!status || !['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'].includes(status)) {
+        throw new BadRequestError('Statut invalide. Valeurs autorisées : PENDING, APPROVED, REJECTED, SUSPENDED');
+      }
+
+      const existingShop = await prisma.shop.findUnique({ where: { id }, include: { user: true } });
+      if (!existingShop) {
+        throw new NotFoundError('Boutique non trouvée.');
+      }
+
+      const updated = await prisma.shop.update({
+        where: { id },
+        data: {
+          status: status as any,
+          suspensionReason: status === 'SUSPENDED' ? (reason || 'Suspendu par l\'administrateur') : null,
+        },
+        include: { user: true },
+      });
+
+      // Synchroniser le statut du compte utilisateur
+      if (status === 'SUSPENDED') {
+        await prisma.user.update({
+          where: { id: existingShop.userId },
+          data: { status: 'SUSPENDED' },
+        });
+      } else if (existingShop.user.status === 'SUSPENDED' && (status === 'APPROVED' || status === 'PENDING')) {
+        await prisma.user.update({
+          where: { id: existingShop.userId },
+          data: { status: 'ACTIVE' },
+        });
+      }
+
+      // 1. Émission de l'événement shop.status_changed pour MS2
+      await rabbitMQ.publish('shop.status_changed', {
+        shopId: updated.id,
+        merchantId: updated.userId,
+        userId: updated.userId,
+        status: updated.status,
+        reason: updated.suspensionReason || undefined,
+      }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.status_changed warning:', err.message));
+
+      // 2. Émission des événements explicites merchant.approved / merchant.suspended / merchant.reactivated
+      if (status === 'APPROVED') {
+        await rabbitMQ.publish('merchant.approved', {
+          merchantId: updated.userId,
+          shopId: updated.id,
+          userId: updated.userId,
+          decidedAt: new Date().toISOString(),
+        }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish merchant.approved warning:', err.message));
+
+        if (existingShop.status === 'SUSPENDED') {
+          await rabbitMQ.publish('merchant.reactivated', {
+            merchantId: updated.userId,
+            shopId: updated.id,
+            userId: updated.userId,
+          }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish merchant.reactivated warning:', err.message));
+        }
+      } else if (status === 'SUSPENDED') {
+        await rabbitMQ.publish('merchant.suspended', {
+          merchantId: updated.userId,
+          shopId: updated.id,
+          userId: updated.userId,
+          reason: updated.suspensionReason || 'Suspendu par l\'administrateur',
+          suspendedAt: new Date().toISOString(),
+        }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish merchant.suspended warning:', err.message));
+      }
+
+      res.json({ shop: updated });
     } catch (err) {
       next(err);
     }

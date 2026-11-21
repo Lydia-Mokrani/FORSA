@@ -11,7 +11,14 @@ export interface ConsulServiceConfig {
 }
 
 export class ConsulRegistry {
-  constructor(private config: ConsulServiceConfig) {}
+  private serviceInstanceId: string;
+
+  constructor(private config: ConsulServiceConfig) {
+    const sanitizedHost = (this.config.serviceHost || 'localhost').replace(/[^a-zA-Z0-9_-]/g, '-');
+    this.serviceInstanceId = this.config.serviceId && this.config.serviceId.includes(sanitizedHost)
+      ? this.config.serviceId
+      : `${this.config.serviceName}-${sanitizedHost}-${this.config.servicePort}`;
+  }
 
   /**
    * Enregistre le service dans Consul avec les tags Traefik pour le routage dynamique
@@ -19,11 +26,12 @@ export class ConsulRegistry {
   async register(): Promise<void> {
     const healthUrl = `http://${this.config.serviceHost}:${this.config.servicePort}${this.config.healthPath || '/health'}`;
     
-    // Construction des règles Traefik lues dynamiquement depuis Consul
-    const pathRule = `PathPrefix(${this.config.traefikPathPrefixes.map(p => `'${p}'`).join(',')})`;
+    // Construction des règles Traefik v3 lues dynamiquement depuis Consul (backticks obligatoires dans Traefik v3)
+    const formattedPrefixes = this.config.traefikPathPrefixes.map(p => `\`${p}\``).join(', ');
+    const pathRule = `PathPrefix(${formattedPrefixes})`;
     
     const registrationPayload = {
-      ID: this.config.serviceId,
+      ID: this.serviceInstanceId,
       Name: this.config.serviceName,
       Address: this.config.serviceHost,
       Port: this.config.servicePort,
@@ -45,7 +53,7 @@ export class ConsulRegistry {
         `${this.config.consulUrl}/v1/agent/service/register`,
         registrationPayload
       );
-      console.log(`✅ [Consul] Service "${this.config.serviceName}" enregistré avec succès (${healthUrl})`);
+      console.log(`✅ [Consul] Service "${this.config.serviceName}" (${this.serviceInstanceId}) enregistré avec succès (${healthUrl})`);
 
       // Gestion de la déconnexion propre (Graceful Shutdown)
       const cleanup = async () => {
@@ -63,9 +71,9 @@ export class ConsulRegistry {
   async deregister(): Promise<void> {
     try {
       await axios.put(
-        `${this.config.consulUrl}/v1/agent/service/deregister/${this.config.serviceId}`
+        `${this.config.consulUrl}/v1/agent/service/deregister/${this.serviceInstanceId}`
       );
-      console.log(`🔌 [Consul] Service "${this.config.serviceId}" désenregistré proprement.`);
+      console.log(`🔌 [Consul] Service "${this.serviceInstanceId}" désenregistré proprement.`);
     } catch (err: any) {
       console.error(`⚠️ [Consul] Erreur lors du désenregistrement :`, err?.message || err);
     }

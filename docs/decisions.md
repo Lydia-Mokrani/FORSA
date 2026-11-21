@@ -50,17 +50,16 @@
 ---
 
 ## 5. Stratégie de Déploiement Multi-Serveurs (6 Machines — 20% de la note)
-* **Règle retenue :** Réseau Mesh VPN privé via **Tailscale**.
-* **Architecture réseau :**
-  * Chaque membre installe le client Tailscale sur son PC.
-  * Toutes les machines reçoivent une IP fixe privée (ex: `100.x.y.z`) et peuvent dialoguer sans être bloquées par les pares-feux universitaires ou le Wi-Fi local.
-* **Topologie des 6 nœuds :**
-  * **S0 (Infra)** : Traefik v3 (port 80/443), Consul (port 8500), RabbitMQ (port 5672/15672), Build statique React.
-  * **S1 (Hiba)** : MS1 Accounts & Shops + PostgreSQL 1 (Docker).
-  * **S2** : MS2 Catalogue & Search + PostgreSQL 2 (Docker).
-  * **S3** : MS3 Reservations + PostgreSQL 3 (Docker).
-  * **S4** : MS4 Trust & Moderation (OCR) + PostgreSQL 4 (Docker).
-  * **S5** : MS5 Notifications + PostgreSQL 5 (Docker).
+* **Plan d'adressage IP unifié :** Plage réseau privée **`10.0.0.1x`** (alignée sur tous les fichiers Compose, READMEs et schémas d'architecture).
+* **Architecture réseau & Déploiement :**
+  * Chaque machine physique est adressée sur le schéma fixe suivant (soit en réseau local dédié / Wi-Fi partagé, soit mappée via le VPN Tailscale / `/etc/hosts`) :
+    * **S0 (Infra - Passerelle)** : `10.0.0.10` — Traefik v3 (`:80`, `:8080`), Consul (`:8500`), RabbitMQ (`:5672`, `:15672`), Build statique React.
+    * **S1 (Hambli Hiba)** : `10.0.0.11` — MS1 Accounts & Shops (`:3001`) + PostgreSQL 1 (Docker `:5432`).
+    * **S2 (Mokrani May Lydia)** : `10.0.0.12` — MS2 Catalogue & Search (`:3002`) + PostgreSQL 2 (Docker `:5432`).
+    * **S3 (Rebahi Doua)** : `10.0.0.13` — MS3 Reservations (`:3003`) + PostgreSQL 3 (Docker `:5432`).
+    * **S4 (Rafes Maroua)** : `10.0.0.14` — MS4 Trust & Moderation OCR (`:3004`) + PostgreSQL 4 (Docker `:5432`).
+    * **S5 (Khoumeri Asma)** : `10.0.0.15` — MS5 Notifications (`:3005`) + PostgreSQL 5 (Docker `:5432`).
+  * Les microservices interrogent le bus RabbitMQ et le registre Consul situés sur **S0 (`10.0.0.10`)** avec les identifiants unifiés `forsa_user:forsa_password`.
 
 ---
 

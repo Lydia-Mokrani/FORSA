@@ -41,6 +41,11 @@ export async function createSession(user: {
     });
   }
 
+  const shopId = user.shop?.id ?? null;
+  const shopStatus = user.shop?.status ?? null;
+  const merchantId = user.role === 'MERCHANT' ? user.id : (user.shop ? user.id : null);
+  const merchantStatus = shopStatus ?? (user.role === 'MERCHANT' ? 'PENDING' : null);
+
   const accessToken = jwtService.generateAccessToken({
     sub: user.id,
     email: user.email,
@@ -48,10 +53,10 @@ export async function createSession(user: {
     fullName: user.fullName,
     emailVerified: user.emailVerified,
     phoneVerified: user.phoneVerified,
-    shopId: user.shop?.id ?? null,
-    merchantId: user.shop?.id ?? null,
-    shopStatus: user.shop?.status ?? null,
-    merchantStatus: user.shop?.status ?? null,
+    shopId,
+    merchantId,
+    shopStatus,
+    merchantStatus,
   });
 
   return { accessToken, refreshToken };

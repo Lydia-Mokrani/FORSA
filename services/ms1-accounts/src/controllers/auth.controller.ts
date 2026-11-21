@@ -126,9 +126,9 @@ export class AuthController {
         emailVerified: user.emailVerified,
         phoneVerified: user.phoneVerified,
         shopId: null,
-        merchantId: null,
+        merchantId: user.role === 'MERCHANT' ? user.id : null,
         shopStatus: null,
-        merchantStatus: null,
+        merchantStatus: user.role === 'MERCHANT' ? 'PENDING' : null,
       });
 
       const { token: rawRefreshToken, hash: refreshHash } = jwtService.generateRefreshToken();
@@ -210,6 +210,8 @@ export class AuthController {
 
       const shopId = user.shop?.id || null;
       const shopStatus = user.shop?.status || null;
+      const merchantId = user.role === 'MERCHANT' ? user.id : (user.shop ? user.id : null);
+      const merchantStatus = shopStatus || (user.role === 'MERCHANT' ? 'PENDING' : null);
 
       const accessToken = jwtService.generateAccessToken({
         sub: user.id,
@@ -219,9 +221,9 @@ export class AuthController {
         emailVerified: user.emailVerified,
         phoneVerified: user.phoneVerified,
         shopId,
-        merchantId: shopId,
+        merchantId,
         shopStatus,
-        merchantStatus: shopStatus,
+        merchantStatus,
       });
 
       const { token: rawRefreshToken, hash: refreshHash } = jwtService.generateRefreshToken();
@@ -250,6 +252,8 @@ export class AuthController {
           status: user.status,
           phoneVerified: user.phoneVerified,
           emailVerified: user.emailVerified,
+          merchantId,
+          merchantStatus,
           shopId: user.shop?.id,
           shopStatus: user.shop?.status,
         },
@@ -288,6 +292,8 @@ export class AuthController {
       const { user } = savedToken;
       const shopId = user.shop?.id || null;
       const shopStatus = user.shop?.status || null;
+      const merchantId = user.role === 'MERCHANT' ? user.id : (user.shop ? user.id : null);
+      const merchantStatus = shopStatus || (user.role === 'MERCHANT' ? 'PENDING' : null);
 
       const newAccessToken = jwtService.generateAccessToken({
         sub: user.id,
@@ -297,9 +303,9 @@ export class AuthController {
         emailVerified: user.emailVerified,
         phoneVerified: user.phoneVerified,
         shopId,
-        merchantId: shopId,
+        merchantId,
         shopStatus,
-        merchantStatus: shopStatus,
+        merchantStatus,
       });
 
       const { token: newRawRefreshToken, hash: newRefreshHash } = jwtService.generateRefreshToken();
