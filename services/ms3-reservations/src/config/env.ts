@@ -4,6 +4,9 @@ import path from 'path';
 dotenv.config();
 
 export const config = {
+  // Existing fields ...
+  ms2Url: process.env.MS2_URL || 'http://localhost:3002', // internal MS2 base URL
+
   port: parseInt(process.env.PORT || '3003', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   databaseUrl:
