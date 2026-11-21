@@ -160,25 +160,25 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
-      {/* Fond photo bokeh feuille verte officiel Figma */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
-        <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[#FFFAF0]/28 backdrop-blur-[2px]" />
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white overflow-x-hidden">
+      {/* Fond photo officiel Figma (Image bokeh feuille verte + overlay #FFFAF0 à 28%) */}
+      <div aria-hidden className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <img src={loginBg} alt="" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-[#FFFAF0]/28" />
       </div>
 
       {/* En-tête officiel Figma */}
-      <header className="w-full max-w-6xl flex items-center justify-between mb-8 z-10">
+      <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-4">
         <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="text-[14px] font-medium text-[#0B2C25]/85">
+        <span className="hidden sm:inline text-[14px] font-medium text-[#0B2C25]/85">
           Donnez une autre vie à vos invendus
         </span>
       </header>
 
       {/* Carte Glassmorphism */}
-      <main className="w-full max-w-[560px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-5 sm:gap-6">
+      <main className="relative z-10 w-full max-w-[560px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-5 sm:gap-6 my-auto">
         
         {/* Toggle Client / Commerçant (sauf à l'étape finale) */}
         {merchantStep !== 4 && (
@@ -658,10 +658,8 @@ export const RegisterPage: React.FC = () => {
         )}
       </main>
 
-      {/* Footer copyright */}
-      <footer className="mt-8 sm:mt-12 text-center text-xs text-[#0B2C25]/60">
-        © 2026 FORSA (فرصة) · Plateforme anti-gaspillage alimentaire
-      </footer>
+      {/* Spacer pour alignement vertical exact */}
+      <div className="relative z-10 w-full max-w-6xl h-8" />
     </div>
   );
 };

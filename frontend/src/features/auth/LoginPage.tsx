@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, CheckCircle, ArrowRight } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
 import googleSvg from '../../assets/icons/google.svg';
 import appleSvg from '../../assets/icons/apple.svg';
@@ -32,7 +32,7 @@ export const LoginPage: React.FC = () => {
     if (searchParams.get('role') === 'client') setRole('CUSTOMER');
 
     if (initialState === 'error') {
-      setErrorMessage('Adresse e-mail ou mot de passe incorrect.');
+      setErrorMessage('Adresse e-mail ou mot de passe incorrect. Veuillez réessayer.');
       setIsSuspended(false);
       setIsSuccess(false);
     } else if (initialState === 'suspended') {
@@ -93,12 +93,12 @@ export const LoginPage: React.FC = () => {
           setIsSuspended(true);
           return;
         }
-        throw new Error(data?.error?.message || 'Identifiants invalides.');
+        throw new Error(data?.error?.message || 'Adresse e-mail ou mot de passe incorrect. Veuillez réessayer.');
       }
 
       handleLoginSuccess(data);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Adresse e-mail ou mot de passe incorrect.');
+      setErrorMessage(err.message || 'Adresse e-mail ou mot de passe incorrect. Veuillez réessayer.');
     } finally {
       setLoading(false);
     }
@@ -107,36 +107,36 @@ export const LoginPage: React.FC = () => {
   const handleSocialLogin = (provider: 'Google' | 'Apple') => {
     setErrorMessage(null);
     if (provider === 'Apple') {
-      setErrorMessage('La connexion avec Apple n\'est pas encore disponible.');
+      setErrorMessage('La connexion avec Apple n’est pas encore disponible.');
       return;
     }
     if (provider === 'Google') {
-      setErrorMessage('Connexion Google bientôt disponible. En attendant, utilisez votre e-mail et mot de passe.');
+      setErrorMessage('Connexion Google en cours de configuration. Utilisez votre e-mail et mot de passe.');
       return;
     }
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
-      {/* Fond photo bokeh feuille verte officiel Figma 1030:23480 */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
-        <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[#FFFAF0]/28 backdrop-blur-[2px]" />
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white overflow-x-hidden">
+      {/* Fond photo officiel Figma (Image bokeh feuille verte + overlay #FFFAF0 à 28%) */}
+      <div aria-hidden className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <img src={loginBg} alt="" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-[#FFFAF0]/28" />
       </div>
 
       {/* En-tête Figma 1030:23481 */}
-      <header className="w-full max-w-6xl flex items-center justify-between mb-8 z-10">
+      <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-4">
         <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="text-[14px] font-medium text-[#0B2C25]/85">
+        <span className="hidden sm:inline text-[14px] font-medium text-[#0B2C25]/85">
           Donnez une autre vie à vos invendus
         </span>
       </header>
 
       {/* 07 · Connexion réussie · Modal overlay */}
       {isSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white rounded-3xl p-8 flex flex-col items-center text-center gap-4 shadow-2xl border border-emerald-500/30">
             <div className="w-20 h-20 rounded-full bg-emerald-100 text-[#17664E] flex items-center justify-center">
               <CheckCircle className="w-12 h-12" />
@@ -150,7 +150,7 @@ export const LoginPage: React.FC = () => {
       )}
 
       {/* Carte Glassmorphism fidèle à 100% au design Figma 1030:23484 */}
-      <main className="backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full z-10">
+      <main className="relative z-10 backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full">
         
         {/* Pastille rôle : Espace client / Espace commerçant · Changer (Figma 1030:23486) */}
         <div className="flex items-center justify-center w-full">
@@ -170,36 +170,33 @@ export const LoginPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Titres et sous-titres (Figma 1030:23487) */}
+        {/* Titres et sous-titres (Figma 1030:23487 pour client / 1030:23508 pour commerçant) */}
         <div className="text-center flex flex-col gap-2 w-full">
           <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[34px] leading-tight">
-            Bon retour !
+            {role === 'CUSTOMER' ? 'Bon retour !' : 'Espace commerçant'}
           </h1>
           <p className="font-normal text-[15px] text-[#0B2C25]/65 leading-normal">
             {role === 'CUSTOMER'
               ? 'Connectez-vous pour retrouver les offres près de chez vous'
-              : 'Gérez vos offres et valorisez vos invendus'}
+              : 'Gérez vos offres et vos réservations'}
           </p>
         </div>
 
-        {/* 05 · Message d'erreur : Identifiants incorrects */}
+        {/* 05 · Message d'erreur : Identifiants incorrects (Figma 1030:23527) */}
         {errorMessage && (
-          <div className="flex items-start gap-3 bg-red-500/15 border border-red-500/40 text-red-900 text-xs sm:text-[13px] p-3.5 rounded-2xl">
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-            <div className="flex flex-col">
-              <span className="font-semibold">Identifiants incorrects</span>
-              <span>{errorMessage}</span>
-            </div>
+          <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3.5 rounded-2xl">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span>{errorMessage}</span>
           </div>
         )}
 
-        {/* 06 · Message d'alerte : Compte suspendu */}
+        {/* 06 · Message d'alerte : Compte suspendu (Figma 1030:23549) */}
         {isSuspended && (
-          <div className="flex items-start gap-3 bg-amber-500/20 border border-amber-600/40 text-amber-950 text-xs sm:text-[13px] p-3.5 rounded-2xl">
-            <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-            <div className="flex flex-col">
-              <span className="font-semibold">Compte temporairement suspendu</span>
-              <span>Ce compte est temporairement suspendu pour non-respect des règles. Contactez le support FORSA.</span>
+          <div className="flex items-start gap-3 bg-[#D96B43]/15 border border-[#D96B43]/30 text-[#8C3A1A] text-xs sm:text-[13px] p-3.5 rounded-2xl">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-[#D96B43]" />
+            <div className="flex flex-col gap-0.5">
+              <span className="font-semibold text-[#8C3A1A]">Compte suspendu</span>
+              <span>Votre compte a été suspendu suite à des signalements répétés. Contactez le support FORSA pour plus d’informations.</span>
             </div>
           </div>
         )}
@@ -233,7 +230,7 @@ export const LoginPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 text-[#0B2C25]/50 hover:text-[#0B2C25] transition"
+              className="absolute right-4 text-[#0B2C25]/50 hover:text-[#0B2C25] transition cursor-pointer"
               aria-label={showPassword ? 'Masquer' : 'Afficher'}
             >
               <img src={eyeSvg} alt="Toggle visibility" className="size-5 opacity-60" />
@@ -242,12 +239,12 @@ export const LoginPage: React.FC = () => {
 
           {/* Options : Se souvenir de moi & Mot de passe oublié (Figma 1030:23493) */}
           <div className="flex items-center justify-between w-full pt-1">
-            <label className="flex items-center gap-3 cursor-pointer text-[14px] text-[#0B2C25]/85 select-none">
+            <label className="flex items-center gap-2.5 cursor-pointer text-[14px] text-[#0B2C25]/85 select-none">
               <input
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="size-[22px] rounded-[6px] border-[1.2px] border-[#0B2C25]/50 bg-white/75 text-[#0B2C25] focus:ring-0 cursor-pointer"
+                className="size-[20px] rounded-[6px] border-[1.2px] border-[#0B2C25]/50 bg-white/75 text-[#0B2C25] focus:ring-0 cursor-pointer"
               />
               <span>Se souvenir de moi</span>
             </label>
@@ -264,7 +261,7 @@ export const LoginPage: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[17px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-md transition mt-2 cursor-pointer"
+            className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[17px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-md transition mt-2 cursor-pointer active:scale-[0.99]"
           >
             {loading ? (
               <span>Connexion en cours...</span>
@@ -277,41 +274,50 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        {/* Section Connexion Sociale Figma */}
-        <div className="flex items-center gap-3 my-0.5">
-          <div className="flex-1 h-px bg-[#0B2C25]/15" />
-          <span className="text-[11px] text-[#0B2C25]/50 uppercase tracking-wider font-semibold">
-            OU
-          </span>
-          <div className="flex-1 h-px bg-[#0B2C25]/15" />
-        </div>
+        {/* Section Sociale (Client uniquement - Figma 1030:23479) OU Information (Commerçant - Figma 1030:23505) */}
+        {role === 'CUSTOMER' ? (
+          <>
+            <div className="flex items-center gap-3 my-0.5">
+              <div className="flex-1 h-px bg-[#0B2C25]/15" />
+              <span className="text-[11px] text-[#0B2C25]/50 uppercase tracking-wider font-semibold">
+                OU
+              </span>
+              <div className="flex-1 h-px bg-[#0B2C25]/15" />
+            </div>
 
-        <div className="grid grid-cols-2 gap-3 w-full">
-          <button
-            type="button"
-            onClick={() => handleSocialLogin('Google')}
-            className="h-[52px] bg-white/60 hover:bg-white/85 border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-[14px] font-medium text-[#0B2C25] transition shadow-sm cursor-pointer"
-          >
-            <img src={googleSvg} alt="Google" className="size-5 shrink-0" />
-            <span>Google</span>
-          </button>
+            <div className="grid grid-cols-2 gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => handleSocialLogin('Google')}
+                className="h-[52px] bg-white/60 hover:bg-white/85 border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-[14px] font-medium text-[#0B2C25] transition shadow-sm cursor-pointer"
+              >
+                <img src={googleSvg} alt="Google" className="size-5 shrink-0" />
+                <span>Google</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => handleSocialLogin('Apple')}
-            className="h-[52px] bg-white/60 hover:bg-white/85 border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-[14px] font-medium text-[#0B2C25] transition shadow-sm cursor-pointer"
-          >
-            <img src={appleSvg} alt="Apple" className="size-5 shrink-0" />
-            <span>Apple</span>
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={() => handleSocialLogin('Apple')}
+                className="h-[52px] bg-white/60 hover:bg-white/85 border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-[14px] font-medium text-[#0B2C25] transition shadow-sm cursor-pointer"
+              >
+                <img src={appleSvg} alt="Apple" className="size-5 shrink-0" />
+                <span>Apple</span>
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-start gap-2.5 bg-white/40 border border-[#0B2C25]/15 rounded-[16px] p-3.5 text-xs text-[#0B2C25]/75">
+            <Info className="size-4 text-[#17664E] shrink-0 mt-0.5" />
+            <span>Votre compte doit être approuvé par l’équipe FORSA avant de publier des offres.</span>
+          </div>
+        )}
 
         {/* Lien de redirection vers l'inscription */}
         <p className="text-center text-[14px] text-[#0B2C25]/75 pt-1">
           {role === 'CUSTOMER' ? (
             <>
               Pas encore de compte ?{' '}
-              <Link to="/register" className="font-semibold text-[#17664E] hover:underline">
+              <Link to="/register?role=client" className="font-semibold text-[#17664E] hover:underline">
                 Créer un compte
               </Link>
             </>
@@ -319,17 +325,15 @@ export const LoginPage: React.FC = () => {
             <>
               Nouveau commerçant ?{' '}
               <Link to="/register?role=merchant" className="font-semibold text-[#17664E] hover:underline">
-                Créer un compte
+                Créer un compte professionnel
               </Link>
             </>
           )}
         </p>
       </main>
 
-      {/* Footer minimaliste */}
-      <footer className="w-full max-w-6xl text-center text-xs text-[#0B2C25]/60 mt-8 py-2 z-10">
-        © 2026 FORSA — Plateforme anti-gaspillage alimentaire DZ.
-      </footer>
+      {/* Spacer pour l'alignement vertical exact */}
+      <div className="relative z-10 w-full max-w-6xl h-8" />
     </div>
   );
 };

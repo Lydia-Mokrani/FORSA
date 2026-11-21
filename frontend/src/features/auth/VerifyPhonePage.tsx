@@ -13,7 +13,7 @@ export const VerifyPhonePage: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
-  const [locked, setLocked] = useState(false); // trop de tentatives / code expiré : il faut renvoyer un code
+  const [locked, setLocked] = useState(false);
 
   const authHeaders = () => ({
     'Content-Type': 'application/json',
@@ -69,7 +69,6 @@ export const VerifyPhonePage: React.FC = () => {
     }
   };
 
-  // Coller le code reçu par SMS remplit toutes les cases
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
     if (!pasted) return;
@@ -111,7 +110,6 @@ export const VerifyPhonePage: React.FC = () => {
         throw new Error(err?.message || 'Code de vérification incorrect ou expiré.');
       }
 
-      // Récupère un token qui porte phoneVerified: true
       const refreshToken = localStorage.getItem('forsa_refresh_token');
       if (refreshToken) {
         try {
@@ -126,12 +124,12 @@ export const VerifyPhonePage: React.FC = () => {
             localStorage.setItem('forsa_refresh_token', t.refreshToken);
           }
         } catch {
-          /* le prochain login rafraîchira le token */
+          /* refresh token if possible */
         }
       }
 
       setSuccess(true);
-      setTimeout(() => navigate('/'), 2000);
+      setTimeout(() => navigate('/'), 1800);
     } catch (err: any) {
       setErrorMessage(err.message || 'Code incorrect.');
     } finally {
@@ -140,47 +138,48 @@ export const VerifyPhonePage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
-      {/* Fond photo bokeh feuille verte officiel Figma */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
-        <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[#FFFAF0]/28 backdrop-blur-[2px]" />
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white overflow-x-hidden">
+      {/* Fond photo officiel Figma (Image bokeh feuille verte + overlay #FFFAF0 à 28%) */}
+      <div aria-hidden className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <img src={loginBg} alt="" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-[#FFFAF0]/28" />
       </div>
 
-      {/* En-tête Figma */}
-      <header className="w-full max-w-6xl flex items-center justify-between mb-8 z-10">
+      {/* En-tête Figma 1030:23892 */}
+      <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-4">
         <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="text-[14px] font-medium text-[#0B2C25]/85">
+        <span className="hidden sm:inline text-[14px] font-medium text-[#0B2C25]/85">
           Donnez une autre vie à vos invendus
         </span>
       </header>
 
-      <main className="w-full max-w-[480px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-6 text-center my-auto">
+      {/* 16 · Vérification du téléphone (Figma 1030:23892) */}
+      <main className="relative z-10 w-full max-w-[480px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-6 text-center my-auto">
         
-        <div className="w-16 h-16 mx-auto rounded-full bg-white/60 border border-[#0B2C25]/15 flex items-center justify-center text-[#17664E] shadow-sm">
-          <Phone className="w-8 h-8" />
+        <div className="size-16 mx-auto rounded-full bg-white/60 border border-[#0B2C25]/15 flex items-center justify-center text-[#17664E] shadow-sm">
+          <Phone className="size-7" />
         </div>
 
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl sm:text-[32px] font-semibold text-[#0B2C25]">
+          <h1 className="text-2xl sm:text-[32px] font-semibold text-[#0B2C25] leading-tight">
             Confirmez votre numéro
           </h1>
-          <p className="text-xs sm:text-[15px] text-[#0B2C25]/65">
-            Saisissez le code à 6 chiffres envoyé par SMS sur votre téléphone portable.
+          <p className="text-xs sm:text-[14px] text-[#0B2C25]/65 leading-relaxed">
+            Saisissez le code à 6 chiffres envoyé par SMS sur votre téléphone.
           </p>
         </div>
 
         {simulatedCode && (
           <div className="bg-emerald-500/10 border border-emerald-600/30 text-[#0B2C25] text-xs sm:text-sm p-3 rounded-2xl">
-            💡 <strong>Code de démonstration WAMS :</strong> [ <span className="font-mono font-bold text-base text-[#17664E]">{simulatedCode}</span> ]
+            💡 <strong>Code SMS de test :</strong> [ <span className="font-mono font-bold text-base text-[#17664E]">{simulatedCode}</span> ]
           </div>
         )}
 
         {errorMessage && (
-          <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-800 text-xs sm:text-sm px-4 py-3 rounded-xl">
-            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+          <div className="flex items-center gap-2 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-sm px-4 py-3 rounded-2xl">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
@@ -189,7 +188,7 @@ export const VerifyPhonePage: React.FC = () => {
           <div className="flex flex-col items-center gap-3 py-4 text-[#17664E]">
             <CheckCircle2 className="w-12 h-12" />
             <p className="font-semibold text-base sm:text-lg">Numéro validé avec succès !</p>
-            <p className="text-xs text-[#0B2C25]/60">Redirection vers l'accueil...</p>
+            <p className="text-xs text-[#0B2C25]/60">Redirection en cours...</p>
           </div>
         ) : (
           <form onSubmit={handleVerify} className="flex flex-col gap-6">
@@ -206,7 +205,7 @@ export const VerifyPhonePage: React.FC = () => {
                   onKeyDown={(e) => handleKeyDown(index, e)}
                   onPaste={handlePaste}
                   autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                  className="w-11 h-14 sm:w-12 sm:h-16 bg-white/70 border-[1.5px] border-white/95 focus:border-[#17664E] rounded-2xl text-center text-2xl font-bold text-[#0B2C25] focus:outline-none shadow-sm transition"
+                  className="w-10 h-14 sm:w-12 sm:h-16 bg-white/70 border-[1.5px] border-white/95 focus:border-[#17664E] rounded-2xl text-center text-xl sm:text-2xl font-bold text-[#0B2C25] focus:outline-none shadow-sm transition"
                 />
               ))}
             </div>
@@ -215,7 +214,7 @@ export const VerifyPhonePage: React.FC = () => {
               {timer > 0 ? (
                 <>Rien reçu ? Renvoyer le code (00:{timer < 10 ? `0${timer}` : timer})</>
               ) : (
-                <button type="button" onClick={requestOtp} className="font-semibold text-[#17664E] hover:underline">
+                <button type="button" onClick={requestOtp} className="font-semibold text-[#17664E] hover:underline cursor-pointer">
                   Renvoyer un nouveau code
                 </button>
               )}
@@ -224,7 +223,7 @@ export const VerifyPhonePage: React.FC = () => {
             <button
               type="submit"
               disabled={loading || locked}
-              className="w-full h-14 disabled:opacity-60 bg-[#0B2C25] hover:bg-[#0B2C25]/90 text-white font-medium text-base rounded-[16px] flex items-center justify-center gap-2 shadow-md transition"
+              className="w-full h-[56px] disabled:opacity-60 bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer active:scale-[0.99]"
             >
               {loading ? 'Validation...' : 'Valider'}
             </button>
@@ -236,13 +235,12 @@ export const VerifyPhonePage: React.FC = () => {
           className="inline-flex items-center justify-center gap-1.5 text-xs text-[#0B2C25]/60 hover:text-[#0B2C25] transition"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Passer pour l'instant</span>
+          <span>Passer pour l’instant</span>
         </Link>
       </main>
 
-      <footer className="mt-8 sm:mt-12 text-center text-xs text-[#0B2C25]/60">
-        © 2026 FORSA (فرصة) · Plateforme anti-gaspillage alimentaire
-      </footer>
+      {/* Spacer pour l'alignement vertical exact */}
+      <div className="relative z-10 w-full max-w-6xl h-8" />
     </div>
   );
 };
