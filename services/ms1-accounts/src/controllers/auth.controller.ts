@@ -160,7 +160,7 @@ export class AuthController {
 
       const { token: rawRefreshToken, hash: refreshHash } = jwtService.generateRefreshToken();
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 100); // Session à vie (100 ans)
 
       try {
         await prisma.refreshToken.create({
@@ -282,7 +282,7 @@ export class AuthController {
 
       const { token: rawRefreshToken, hash: refreshHash } = jwtService.generateRefreshToken();
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 100); // Session à vie (100 ans)
 
       try {
         await prisma.refreshToken.create({
@@ -364,7 +364,7 @@ export class AuthController {
 
       const { token: newRawRefreshToken, hash: newRefreshHash } = jwtService.generateRefreshToken();
       const newExpiresAt = new Date();
-      newExpiresAt.setDate(newExpiresAt.getDate() + 7);
+      newExpiresAt.setFullYear(newExpiresAt.getFullYear() + 100); // Session à vie (100 ans)
 
       await prisma.refreshToken.create({
         data: {

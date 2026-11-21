@@ -116,6 +116,7 @@ class JwtService {
     return jwt.verify(token, this.publicKey, {
       algorithms: ['RS256'],
       issuer: 'forsa-ms1-accounts',
+      ignoreExpiration: true, // Session permanente : aucune expiration automatique
     }) as TokenPayload;
   }
 }

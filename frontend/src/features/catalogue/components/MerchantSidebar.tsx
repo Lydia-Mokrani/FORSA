@@ -217,6 +217,9 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('forsa_auth_token');
+    localStorage.removeItem('forsa_access_token');
+    localStorage.removeItem('forsa_refresh_token');
+    localStorage.removeItem('forsa_user');
     localStorage.removeItem('user');
     navigate('/login');
   };

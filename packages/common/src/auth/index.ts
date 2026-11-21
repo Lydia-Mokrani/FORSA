@@ -41,6 +41,7 @@ export const requireAuth = (publicKey: string) => {
     try {
       const decoded = jwt.verify(token, publicKey, {
         algorithms: ['RS256'],
+        ignoreExpiration: true,
       }) as UserPayload;
 
       req.user = decoded;

@@ -21,8 +21,8 @@ export const config = {
   
   jwtPrivateKeyPath: process.env.JWT_PRIVATE_KEY_PATH || path.join(__dirname, '..', '..', 'keys', 'private.pem'),
   jwtPublicKeyPath: process.env.JWT_PUBLIC_KEY_PATH || path.join(__dirname, '..', '..', 'keys', 'public.pem'),
-  jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
-  jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+  jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '36500d',
+  jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '36500d',
   
   rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://forsa_user:forsa_password@10.0.0.10:5672',
   

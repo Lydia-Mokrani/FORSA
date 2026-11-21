@@ -152,8 +152,12 @@ export const ProfilePage: React.FC = () => {
       localStorage.getItem('forsa_auth_token');
 
     if (!token) {
-      navigate('/login');
-      return;
+      const refreshToken = localStorage.getItem('forsa_refresh_token');
+      const cachedUserStr = localStorage.getItem('forsa_user');
+      if (!refreshToken && !cachedUserStr) {
+        navigate('/login');
+        return;
+      }
     }
 
     try {
@@ -203,10 +207,24 @@ export const ProfilePage: React.FC = () => {
             }
           }
 
-          localStorage.removeItem('forsa_access_token');
-          localStorage.removeItem('token');
-          localStorage.removeItem('forsa_refresh_token');
-          navigate('/login');
+          // Fallback gracieux sur les données locales persistantes : JAMAIS de déconnexion automatique
+          const cachedUserStr = localStorage.getItem('forsa_user');
+          if (cachedUserStr) {
+            try {
+              const u = JSON.parse(cachedUserStr);
+              setProfile(u);
+              setInitialProfile(u);
+              setFullName(u.fullName || 'Lydia Benali');
+              setEmail(u.email || '');
+              const clean = extractAlgerianMobile9(u.phone);
+              setPhone(clean);
+              setModalPhoneInput(clean);
+              setAvatarPreview(u.avatarUrl || null);
+              return;
+            } catch {
+              // ignore
+            }
+          }
           return;
         }
         throw new Error('Impossible de charger votre profil.');

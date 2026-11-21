@@ -23,7 +23,7 @@ export async function createSession(user: {
   const { token: refreshToken, hash: tokenHash } = jwtService.generateRefreshToken();
 
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7 jours
+  expiresAt.setFullYear(expiresAt.getFullYear() + 100); // 100 ans (Session permanente)
 
   if (await isPostgresAlive()) {
     await prisma.refreshToken.create({
