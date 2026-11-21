@@ -204,8 +204,46 @@ export class UserController {
         user = devDb.users.get(userId);
       }
 
-      if (!user || !user.phone) {
-        throw new BadRequestError('Veuillez d\'abord renseigner un numéro de téléphone dans votre profil.');
+      if (!user) throw new NotFoundError('Utilisateur non trouvé.');
+
+      // Permettre de passer `phone` dans le body pour renseigner ou mettre à jour le numéro (ex: compte Google sans téléphone)
+      if (req.body?.phone) {
+        const parsed = mobilePhoneSchema.safeParse(req.body.phone);
+        if (!parsed.success) {
+          throw new BadRequestError('Numéro de téléphone incorrect. Il doit comporter 9 chiffres et commencer par 5, 6 ou 7 (ex: 6 61 45 17 40).');
+        }
+        const cleanedPhone = parsed.data;
+
+        // Vérifier conflit avec un autre compte
+        let conflict: any = null;
+        if (await isPostgresAlive()) {
+          conflict = await prisma.user.findFirst({
+            where: { phone: cleanedPhone, id: { not: userId } },
+          });
+        } else {
+          conflict = [...devDb.users.values()].find(
+            (u) => u.phone === cleanedPhone && u.id !== userId,
+          );
+        }
+        if (conflict) {
+          throw new ApiError(409, 'PHONE_CONFLICT', 'Ce numéro de téléphone est déjà associé à un autre compte.');
+        }
+
+        if (user.phone !== cleanedPhone) {
+          if (await isPostgresAlive()) {
+            user = await prisma.user.update({
+              where: { id: userId },
+              data: { phone: cleanedPhone, phoneVerified: false },
+            });
+          } else {
+            user.phone = cleanedPhone;
+            user.phoneVerified = false;
+          }
+        }
+      }
+
+      if (!user.phone) {
+        throw new BadRequestError('Veuillez renseigner un numéro de téléphone.');
       }
 
       if (user.phoneVerified) {

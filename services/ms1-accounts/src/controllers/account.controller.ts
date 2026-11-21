@@ -104,12 +104,15 @@ export class AccountController {
       }
 
       const { token: verificationToken } = await issueEmailToken(user.id, 'VERIFY_EMAIL');
+      const verificationLink = `http://localhost:5173/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
+      console.log(`[MS1-Accounts] ✉️ Lien de vérification envoyé à ${user.email} : ${verificationLink}`);
 
       await rabbitMQ.publish('user.registered', {
         userId: user.id,
         email: user.email,
         fullName: user.fullName,
         verificationToken,
+        verificationLink,
       });
 
       res.json(genericResponse);

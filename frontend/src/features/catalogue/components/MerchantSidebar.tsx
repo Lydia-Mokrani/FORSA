@@ -160,7 +160,7 @@ const NavProfileIcon: React.FC<{ className?: string }> = ({ className = 'h-[20px
   </svg>
 );
 
-const NavLeafIcon: React.FC<{ className?: string }> = ({ className = 'size-[24px]' }) => (
+const NavLeafIcon: React.FC<{ className?: string }> = ({ className = 'size-[22px]' }) => (
   <svg
     viewBox="0 0 24 24"
     fill="none"
@@ -221,113 +221,118 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
     navigate('/login');
   };
 
-  // ── CLIENT SIDEBAR (EXACT FIGMA COMPONENT SET 541:14424) ──
+  // ── CLIENT SIDEBAR (RESPONSIVE FLEX FIGMA 541:14424) ──
   if (variant === 'client') {
     return (
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[238px] rounded-br-[31px] rounded-tr-[31px] bg-[#0B2C25] font-poppins md:block">
-        {/* Logo FORSA */}
-        <Link
-          to="/"
-          className="absolute left-[75px] top-[68px] text-[18.5px] font-extrabold text-white tracking-wide"
-        >
-          FORSA
-        </Link>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[238px] flex-col justify-between rounded-br-[31px] rounded-tr-[31px] bg-[#0B2C25] font-poppins md:flex overflow-y-auto overflow-x-hidden select-none">
+        {/* TOP SECTION: Logo + Navigation */}
+        <div className="flex flex-col w-full">
+          {/* Logo FORSA */}
+          <div className="pt-[38px] pb-[28px] pl-[75px]">
+            <Link
+              to="/"
+              className="text-[18.5px] font-extrabold text-white tracking-wide hover:opacity-90 transition"
+            >
+              FORSA
+            </Link>
+          </div>
 
-        {/* Navigation Items */}
-        <nav className="absolute left-0 top-[186px] flex flex-col gap-[10px] pl-[20px] w-full">
-          {/* Accueil */}
-          <NavLink
-            to="/"
-            end
-            className={({ isActive }) =>
-              `flex h-[56px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
-                isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
-              }`
-            }
-          >
-            <div className="flex size-[22px] items-center justify-center shrink-0">
-              <NavHomeIcon />
-            </div>
-            <span className="text-[14px] font-semibold">Accueil</span>
-          </NavLink>
-
-          {/* Carte */}
-          <NavLink
-            to="/map"
-            className={({ isActive }) =>
-              `flex h-[56px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
-                isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
-              }`
-            }
-          >
-            <div className="flex size-[22px] items-center justify-center shrink-0">
-              <NavMapIcon />
-            </div>
-            <span className="text-[14px] font-semibold">Carte</span>
-          </NavLink>
-
-          {/* Mes réservations */}
-          <NavLink
-            to="/reservations"
-            className={({ isActive }) =>
-              `flex h-[56px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
-                isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
-              }`
-            }
-          >
-            <div className="flex size-[22px] items-center justify-center shrink-0">
-              <NavReservationsIcon />
-            </div>
-            <span className="text-[14px] font-semibold whitespace-nowrap">Mes réservations</span>
-            {typeof reservationsCount === 'number' && reservationsCount > 0 && (
-              <div className="ml-auto mr-4 flex h-[19px] min-w-[19px] items-center justify-center rounded-[10px] bg-[#EDBD4D] px-[6px] text-[10px] font-semibold text-[#0B2C25]">
-                {reservationsCount}
+          {/* Navigation Items */}
+          <nav className="flex flex-col gap-[8px] pl-[20px] w-full">
+            {/* Accueil */}
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                `flex h-[52px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
+                  isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
+                }`
+              }
+            >
+              <div className="flex size-[22px] items-center justify-center shrink-0">
+                <NavHomeIcon />
               </div>
-            )}
-          </NavLink>
+              <span className="text-[14px] font-semibold">Accueil</span>
+            </NavLink>
 
-          {/* Notifications */}
-          <NavLink
-            to="/notifications"
-            className={({ isActive }) =>
-              `flex h-[56px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
-                isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
-              }`
-            }
-          >
-            <div className="flex size-[22px] items-center justify-center shrink-0">
-              <NavNotificationsIcon />
-            </div>
-            <span className="text-[14px] font-semibold">Notifications</span>
-            {typeof notificationsCount === 'number' && notificationsCount > 0 && (
-              <div className="ml-auto mr-4 flex h-[19px] min-w-[19px] items-center justify-center rounded-[10px] bg-[#EDBD4D] px-[6px] text-[10px] font-semibold text-[#0B2C25]">
-                {notificationsCount}
+            {/* Carte */}
+            <NavLink
+              to="/map"
+              className={({ isActive }) =>
+                `flex h-[52px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
+                  isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
+                }`
+              }
+            >
+              <div className="flex size-[22px] items-center justify-center shrink-0">
+                <NavMapIcon />
               </div>
-            )}
-          </NavLink>
+              <span className="text-[14px] font-semibold">Carte</span>
+            </NavLink>
 
-          {/* Profil */}
-          <NavLink
-            to="/profile"
-            className={({ isActive }) =>
-              `flex h-[56px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
-                isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
-              }`
-            }
-          >
-            <div className="flex size-[22px] items-center justify-center shrink-0">
-              <NavProfileIcon />
-            </div>
-            <span className="text-[14px] font-semibold">Profil</span>
-          </NavLink>
-        </nav>
+            {/* Mes réservations */}
+            <NavLink
+              to="/reservations"
+              className={({ isActive }) =>
+                `flex h-[52px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
+                  isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
+                }`
+              }
+            >
+              <div className="flex size-[22px] items-center justify-center shrink-0">
+                <NavReservationsIcon />
+              </div>
+              <span className="text-[14px] font-semibold whitespace-nowrap">Mes réservations</span>
+              {typeof reservationsCount === 'number' && reservationsCount > 0 && (
+                <div className="ml-auto mr-4 flex h-[19px] min-w-[19px] items-center justify-center rounded-[10px] bg-[#EDBD4D] px-[6px] text-[10px] font-semibold text-[#0B2C25]">
+                  {reservationsCount}
+                </div>
+              )}
+            </NavLink>
 
-        {/* Bottom Section */}
-        <div className="absolute bottom-[54px] left-[36px] flex w-[166px] flex-col gap-[65px]">
+            {/* Notifications */}
+            <NavLink
+              to="/notifications"
+              className={({ isActive }) =>
+                `flex h-[52px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
+                  isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
+                }`
+              }
+            >
+              <div className="flex size-[22px] items-center justify-center shrink-0">
+                <NavNotificationsIcon />
+              </div>
+              <span className="text-[14px] font-semibold">Notifications</span>
+              {typeof notificationsCount === 'number' && notificationsCount > 0 && (
+                <div className="ml-auto mr-4 flex h-[19px] min-w-[19px] items-center justify-center rounded-[10px] bg-[#EDBD4D] px-[6px] text-[10px] font-semibold text-[#0B2C25]">
+                  {notificationsCount}
+                </div>
+              )}
+            </NavLink>
+
+            {/* Profil */}
+            <NavLink
+              to="/profile"
+              className={({ isActive }) =>
+                `flex h-[52px] w-[218px] items-center gap-[14px] pl-[34px] rounded-bl-[29px] rounded-tl-[29px] transition ${
+                  isActive ? 'bg-[#FFFAF0] text-[#0B2C25]' : 'text-white hover:bg-white/10'
+                }`
+              }
+            >
+              <div className="flex size-[22px] items-center justify-center shrink-0">
+                <NavProfileIcon />
+              </div>
+              <span className="text-[14px] font-semibold">Profil</span>
+            </NavLink>
+          </nav>
+        </div>
+
+        {/* BOTTOM SECTION: Impact note + Déconnexion */}
+        <div className="flex w-[166px] flex-col gap-[18px] pl-[36px] pb-[32px] pt-4">
           {/* Impact note */}
           <div className="flex gap-[10px] items-start">
-            <NavLeafIcon />
-            <p className="text-[12px] font-normal leading-[1.5] text-[#DBF0DD]">
+            <NavLeafIcon className="size-[22px] shrink-0" />
+            <p className="text-[12px] font-normal leading-[1.4] text-[#DBF0DD]">
               Moins de gaspillage, plus de bonnes choses.
             </p>
           </div>
@@ -336,7 +341,7 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
           <button
             type="button"
             onClick={handleLogout}
-            className="flex h-[46px] w-full items-center justify-center gap-[10px] rounded-[11px] bg-white px-[18px] text-[13px] font-semibold text-[#0B2C25] shadow-sm hover:bg-[#EEF7EC] transition"
+            className="flex h-[46px] w-full items-center justify-center gap-[10px] rounded-[11px] bg-white px-[18px] text-[13px] font-semibold text-[#0B2C25] shadow-sm hover:bg-[#EEF7EC] transition cursor-pointer"
           >
             <NavLogoutIcon />
             Déconnexion

@@ -102,9 +102,12 @@ export class AuthController {
 
       // Émission de l'événement user.registered sur RabbitMQ avec verificationToken
       let verificationToken: string | undefined;
+      let verificationLink: string | undefined;
       try {
         const result = await issueEmailToken(user.id, 'VERIFY_EMAIL');
         verificationToken = result.token;
+        verificationLink = `http://localhost:5173/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
+        console.log(`[MS1-Accounts] ✉️ Lien de vérification pour ${user.email} : ${verificationLink}`);
       } catch {
         // Non bloquant : le token sera régénéré au prochain renvoi
       }
@@ -115,6 +118,7 @@ export class AuthController {
         role: user.role,
         fullName: user.fullName,
         verificationToken,
+        verificationLink,
       }).catch((err) => console.warn('[MS1-Auth] RabbitMQ publish user.registered warning:', err.message));
 
       // Génération des tokens

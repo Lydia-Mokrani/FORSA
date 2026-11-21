@@ -111,8 +111,8 @@ export const RegisterPage: React.FC = () => {
         localStorage.setItem('forsa_user', JSON.stringify(data.user));
       }
 
-      // Rediriger vers la vérification du numéro ou l'accueil
-      navigate('/verify-phone');
+      // Rediriger vers la vérification de l'e-mail
+      navigate(`/verify-email?email=${encodeURIComponent(clientData.email)}`);
     } catch (err: any) {
       setErrorMessage(err.message || 'Erreur réseau lors de la création du compte.');
     } finally {
