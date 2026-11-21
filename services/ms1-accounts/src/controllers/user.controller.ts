@@ -231,19 +231,21 @@ export class UserController {
         }
         const cleanedPhone = parsed.data;
 
-        // Vérifier conflit avec un autre compte
-        let conflict: any = null;
-        if (await isPostgresAlive()) {
-          conflict = await prisma.user.findFirst({
-            where: { phone: cleanedPhone, id: { not: userId } },
-          });
-        } else {
-          conflict = [...devDb.users.values()].find(
-            (u) => u.phone === cleanedPhone && u.id !== userId,
-          );
-        }
-        if (conflict) {
-          throw new ApiError(409, 'PHONE_CONFLICT', 'Ce numéro de téléphone est déjà associé à un autre compte.');
+        // Vérifier conflit avec un autre compte (sauf numéro de démo autorisé)
+        if (!isDemoPhone(cleanedPhone)) {
+          let conflict: any = null;
+          if (await isPostgresAlive()) {
+            conflict = await prisma.user.findFirst({
+              where: { phone: cleanedPhone, id: { not: userId } },
+            });
+          } else {
+            conflict = [...devDb.users.values()].find(
+              (u) => u.phone === cleanedPhone && u.id !== userId,
+            );
+          }
+          if (conflict) {
+            throw new ApiError(409, 'PHONE_CONFLICT', 'Ce numéro de téléphone est déjà associé à un autre compte.');
+          }
         }
 
         if (user.phone !== cleanedPhone) {

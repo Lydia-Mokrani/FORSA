@@ -58,6 +58,24 @@ import {
   figmaRefresh,
 } from './figmaAssets';
 
+export const extractAlgerianMobile9 = (raw: string | null | undefined): string => {
+  if (!raw) return '';
+  let d = raw.replace(/\D/g, '');
+  if (d.startsWith('213') && d.length >= 11) d = d.slice(3);
+  if (d.startsWith('0') && d.length === 10) d = d.slice(1);
+  return d.slice(0, 9);
+};
+
+export const formatAlgerianMobileDisplay = (raw: string | null | undefined): string => {
+  const d = extractAlgerianMobile9(raw);
+  if (!d) return '';
+  if (d.length <= 1) return d;
+  if (d.length <= 3) return `${d.slice(0, 1)} ${d.slice(1)}`;
+  if (d.length <= 5) return `${d.slice(0, 1)} ${d.slice(1, 3)} ${d.slice(3)}`;
+  if (d.length <= 7) return `${d.slice(0, 1)} ${d.slice(1, 3)} ${d.slice(3, 5)} ${d.slice(5)}`;
+  return `${d.slice(0, 1)} ${d.slice(1, 3)} ${d.slice(3, 5)} ${d.slice(5, 7)} ${d.slice(7, 9)}`;
+};
+
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const { location, setLocation, requestCurrentPosition } = useLocation();
@@ -159,8 +177,9 @@ export const ProfilePage: React.FC = () => {
       setFullName(user.fullName || 'Lydia Benali');
       setEmail(user.email || '');
       // S'il n'a pas de téléphone (ex: compte Google), la case reste vide
-      setPhone(user.phone || '');
-      setModalPhoneInput(user.phone || '');
+      const cleanPhone = extractAlgerianMobile9(user.phone);
+      setPhone(cleanPhone);
+      setModalPhoneInput(cleanPhone);
       setAvatarPreview(user.avatarUrl || null);
     } catch (err: any) {
       setGeneralError(err.message || 'Erreur réseau lors du chargement.');
@@ -242,11 +261,11 @@ export const ProfilePage: React.FC = () => {
 
   // Strict Phone Validation (Algerian 9 digits starting with 5, 6, 7)
   const validatePhone = (raw: string): boolean => {
-    const cleaned = raw.replace(/\D/g, '');
+    const cleaned = extractAlgerianMobile9(raw);
     if (!cleaned) return true;
     const isValid = cleaned.length === 9 && /^[567]/.test(cleaned);
     if (!isValid) {
-      setPhoneError('Numéro de téléphone incorrect. Il doit comporter 9 chiffres et commencer par 5, 6 ou 7 (ex: 6 61 45 17 40).');
+      setPhoneError('Numéro de téléphone incorrect. Il doit comporter 9 chiffres et commencer par 5, 6 ou 7 (ex: 6 97 93 76 37).');
       return false;
     }
     setPhoneError(null);
@@ -286,7 +305,7 @@ export const ProfilePage: React.FC = () => {
         body: JSON.stringify({
           fullName: fullName.trim(),
           email: email.trim().toLowerCase(),
-          phone: phone ? phone.replace(/\D/g, '') : undefined,
+          phone: phone ? extractAlgerianMobile9(phone) : undefined,
         }),
       });
 
@@ -430,7 +449,7 @@ export const ProfilePage: React.FC = () => {
 
   // Lancement du flux de vérification Téléphone (Telegram Bot + SMS)
   const handleStartPhoneVerification = async () => {
-    const targetPhone = modalPhoneInput || phone || profile?.phone;
+    const targetPhone = extractAlgerianMobile9(modalPhoneInput || phone || profile?.phone);
     if (!targetPhone) {
       // Ouvrir la modal en mode saisie de numéro
       setShowPhoneOtpModal(true);
@@ -462,7 +481,7 @@ export const ProfilePage: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ phone: targetPhone.replace(/\D/g, '') }),
+        body: JSON.stringify({ phone: targetPhone }),
       });
 
       const data = await res.json();
@@ -508,6 +527,20 @@ export const ProfilePage: React.FC = () => {
     if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
       otpInputRefs.current[index - 1]?.focus();
     }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (otpError) setOtpError(null);
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+    const nextDigits = ['', '', '', '', '', ''];
+    pasted.split('').forEach((d, i) => {
+      if (i < 6) nextDigits[i] = d;
+    });
+    setOtpDigits(nextDigits);
+    const targetIdx = Math.min(pasted.length, 5);
+    otpInputRefs.current[targetIdx]?.focus();
   };
 
   const handleConfirmOtp = async () => {
@@ -706,7 +739,7 @@ export const ProfilePage: React.FC = () => {
 
   const displayName = profile?.fullName || 'Lydia Benali';
   const displayEmail = profile?.email || '';
-  const displayPhone = hasPhone ? `+213 ${profile!.phone}` : '';
+  const displayPhone = hasPhone ? `+213 ${formatAlgerianMobileDisplay(profile!.phone)}` : '';
   const currentAvatar = avatarPreview || profile?.avatarUrl || defaultAvatar;
 
   return (
@@ -1021,31 +1054,66 @@ export const ProfilePage: React.FC = () => {
                         <div className="flex items-center justify-between gap-[8px]">
                           <p className="text-[11px] font-normal text-[#0b2c25]">Téléphone</p>
                           {isPhoneVerified ? (
-                            <div className="bg-[#dbf0dd] flex items-center gap-[3px] pl-[5px] pr-[7px] py-[2px] rounded-[100px]">
-                              <img src={figmaTickSmall} alt="" className="size-[11px]" />
-                              <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
+                            <div className="flex items-center gap-[6px]">
+                              <div className="bg-[#dbf0dd] flex items-center gap-[3px] pl-[5px] pr-[7px] py-[2px] rounded-[100px]">
+                                <img src={figmaTickSmall} alt="" className="size-[11px]" />
+                                <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setModalPhoneInput(extractAlgerianMobile9(profile?.phone));
+                                  setShowPhoneOtpModal(true);
+                                  setOtpSent(false);
+                                }}
+                                className="border border-[#78847f]/40 hover:bg-[#ebeee1] text-[10px] font-semibold text-[#0b2c25] px-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
+                              >
+                                Modifier
+                              </button>
                             </div>
                           ) : hasPhone ? (
-                            <button
-                              type="button"
-                              onClick={handleStartPhoneVerification}
-                              className="bg-red-100 hover:bg-red-200 border border-red-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
-                            >
-                              <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
-                              <span className="text-[10px] font-semibold text-[#b22222]">Vérifier</span>
-                            </button>
+                            <div className="flex items-center gap-[6px]">
+                              <div className="bg-red-100 border border-red-200 flex items-center gap-[3px] pl-[5px] pr-[7px] py-[2px] rounded-[100px]">
+                                <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
+                                <span className="text-[10px] font-semibold text-[#b22222]">Non vérifié</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleStartPhoneVerification}
+                                className="bg-[#0b2c25] hover:bg-[#17664e] text-white text-[10px] font-semibold px-[8px] py-[2px] rounded-[100px] cursor-pointer transition shadow-xs"
+                              >
+                                Vérifier
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setModalPhoneInput(extractAlgerianMobile9(profile?.phone));
+                                  setShowPhoneOtpModal(true);
+                                  setOtpSent(false);
+                                }}
+                                className="border border-[#78847f]/40 hover:bg-[#ebeee1] text-[10px] font-semibold text-[#0b2c25] px-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
+                              >
+                                Modifier
+                              </button>
+                            </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowPhoneOtpModal(true);
-                                setOtpSent(false);
-                              }}
-                              className="bg-red-100 hover:bg-red-200 border border-red-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
-                            >
-                              <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
-                              <span className="text-[10px] font-semibold text-[#b22222]">+ Ajouter</span>
-                            </button>
+                            <div className="flex items-center gap-[6px]">
+                              <div className="bg-red-100 border border-red-200 flex items-center gap-[3px] pl-[5px] pr-[7px] py-[2px] rounded-[100px]">
+                                <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
+                                <span className="text-[10px] font-semibold text-[#b22222]">Non renseigné</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setModalPhoneInput('');
+                                  setShowPhoneOtpModal(true);
+                                  setOtpSent(false);
+                                }}
+                                className="bg-[#0b2c25] hover:bg-[#17664e] text-white text-[10px] font-semibold px-[8px] py-[2px] rounded-[100px] cursor-pointer transition shadow-xs"
+                              >
+                                + Ajouter / Vérifier
+                              </button>
+                            </div>
                           )}
                         </div>
                         <p className="text-[14px] font-semibold text-[#0b2c25] truncate">
@@ -1484,19 +1552,19 @@ export const ProfilePage: React.FC = () => {
                     <span className="text-xs font-semibold text-[#0b2c25]/80 select-none">🇩🇿 +213</span>
                     <input
                       type="tel"
-                      value={phone}
+                      value={formatAlgerianMobileDisplay(phone)}
                       onChange={(e) => {
-                        const raw = e.target.value.replace(/\D/g, '').slice(0, 9);
+                        const raw = extractAlgerianMobile9(e.target.value);
                         setPhone(raw);
                         setModalPhoneInput(raw);
                         if (phoneError) setPhoneError(null);
                       }}
-                      placeholder="6 61 45 17 40"
+                      placeholder="6 97 93 76 37"
                       className="flex-1 h-full text-[14px] font-medium text-[#0b2c25] focus:outline-none bg-transparent"
                     />
 
                     {/* Badge vérifié ou badge X non vérifié */}
-                    {isPhoneVerified && phone === profile?.phone ? (
+                    {isPhoneVerified && phone === extractAlgerianMobile9(profile?.phone) ? (
                       <div className="bg-[#dbf0dd] flex items-center gap-[3px] pl-[6px] pr-[8px] py-[3px] rounded-[100px] shrink-0">
                         <img src={figmaTickVerified} alt="" className="size-[12px]" />
                         <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
@@ -1730,14 +1798,14 @@ export const ProfilePage: React.FC = () => {
                     <span className="text-xs font-semibold text-gray-700 mr-2 select-none">🇩🇿 +213</span>
                     <input
                       type="tel"
-                      value={modalPhoneInput}
+                      value={formatAlgerianMobileDisplay(modalPhoneInput)}
                       onChange={(e) => {
-                        const raw = e.target.value.replace(/\D/g, '').slice(0, 9);
+                        const raw = extractAlgerianMobile9(e.target.value);
                         setModalPhoneInput(raw);
                         setPhone(raw);
                         if (otpError) setOtpError(null);
                       }}
-                      placeholder="6 61 45 17 40"
+                      placeholder="6 97 93 76 37"
                       className="flex-1 h-full text-sm font-medium focus:outline-none bg-transparent"
                     />
                   </div>
@@ -1817,6 +1885,7 @@ export const ProfilePage: React.FC = () => {
                           disabled={otpSecondsLeft === 0}
                           onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                           onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                          onPaste={handleOtpPaste}
                           className={`w-11 h-14 text-center text-xl font-bold rounded-[12px] border transition focus:outline-none ${
                             otpError
                               ? 'border-[#B22222] bg-[#B22222]/5 text-[#B22222]'

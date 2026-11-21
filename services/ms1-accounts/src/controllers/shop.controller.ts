@@ -233,12 +233,18 @@ export class ShopController {
         }
       }
 
-      // Émission de l'événement shop.documents_uploaded sur RabbitMQ pour MS4
-      await rabbitMQ.publish('shop.documents_uploaded', {
+      // Émission de l'événement merchant.submitted et shop.documents_uploaded sur RabbitMQ pour MS4
+      const submitPayload = {
         shopId: shop.id,
+        merchantId: shop.userId,
         userId: shop.userId,
+        name: shop.name,
         documentsCount: createdDocs.length,
-      }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.documents_uploaded warning:', err.message));
+      };
+      await rabbitMQ.publish('merchant.submitted', submitPayload)
+        .catch((err) => console.warn('[MS1-Shop] RabbitMQ publish merchant.submitted warning:', err.message));
+      await rabbitMQ.publish('shop.documents_uploaded', submitPayload)
+        .catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.documents_uploaded warning:', err.message));
 
       res.status(201).json({
         message: 'Pièces justificatives enregistrées avec succès.',
