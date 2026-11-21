@@ -10,8 +10,10 @@ export const VerifyPhonePage: React.FC = () => {
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState(false);
   const [success, setSuccess] = useState(false);
   const [timer, setTimer] = useState(0);
+  const [expireTimer, setExpireTimer] = useState(300);
   const [locked, setLocked] = useState(false);
   const [telegramLink, setTelegramLink] = useState('https://t.me/forsa_auth_bot');
   const [userPhone, setUserPhone] = useState<string>('');
@@ -25,6 +27,7 @@ export const VerifyPhonePage: React.FC = () => {
 
   const requestOtp = async () => {
     setErrorMessage(null);
+    setCodeError(false);
     setLocked(false);
     setDigits(Array(OTP_LENGTH).fill(''));
     try {
@@ -41,6 +44,7 @@ export const VerifyPhonePage: React.FC = () => {
         throw new Error(data?.error?.message || 'Impossible d’envoyer le code.');
       }
       setTimer(data.resendInSeconds ?? 60);
+      setExpireTimer(data.expiresInSeconds ?? 300);
       if (data.telegramLink) setTelegramLink(data.telegramLink);
       if (data.phone) setUserPhone(data.phone);
     } catch (e: any) {
@@ -53,7 +57,16 @@ export const VerifyPhonePage: React.FC = () => {
     if (token) {
       requestOtp();
     }
-    const interval = setInterval(() => setTimer((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
+    const interval = setInterval(() => {
+      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      setExpireTimer((prev) => {
+        if (prev <= 1) {
+          setLocked(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -90,6 +103,10 @@ export const VerifyPhonePage: React.FC = () => {
   }, [success, navigate]);
 
   const handleDigitChange = (index: number, raw: string) => {
+    if (codeError) {
+      setCodeError(false);
+      setErrorMessage(null);
+    }
     const value = raw.replace(/\D/g, '').slice(-1);
     const next = [...digits];
     next[index] = value;
@@ -104,6 +121,10 @@ export const VerifyPhonePage: React.FC = () => {
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    if (codeError) {
+      setCodeError(false);
+      setErrorMessage(null);
+    }
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
     if (!pasted) return;
     e.preventDefault();
@@ -136,6 +157,7 @@ export const VerifyPhonePage: React.FC = () => {
         const err = data?.error;
         if (err?.code === 'OTP_INVALID') {
           const left = err?.details?.[0]?.attemptsLeft;
+          setCodeError(true);
           setDigits(Array(OTP_LENGTH).fill(''));
           document.getElementById('otp-input-0')?.focus();
           throw new Error(`Code incorrect.${left !== undefined ? ` Il vous reste ${left} essai${left > 1 ? 's' : ''}.` : ''}`);
@@ -313,21 +335,38 @@ export const VerifyPhonePage: React.FC = () => {
                     onKeyDown={(e) => handleKeyDown(index, e)}
                     onPaste={handlePaste}
                     autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                    className="w-10 h-13 sm:w-11 sm:h-14 bg-white/70 border-[1.5px] border-white/95 focus:border-[#229ED9] rounded-xl text-center text-xl font-bold text-[#0B2C25] focus:outline-none shadow-sm transition"
+                    className={`w-10 h-13 sm:w-11 sm:h-14 rounded-xl text-center text-xl font-bold focus:outline-none shadow-sm transition ${
+                      codeError
+                        ? 'border-[1.5px] border-[#B22222] bg-[#B22222]/5 text-[#B22222] focus:border-[#B22222]'
+                        : 'bg-white/70 border-[1.5px] border-white/95 focus:border-[#229ED9] text-[#0B2C25]'
+                    }`}
                   />
                 ))}
               </div>
             </div>
 
-            <p className="text-xs text-[#0B2C25]/70">
-              {timer > 0 ? (
-                <>Rien reçu ? Renvoyer le code (00:{timer < 10 ? `0${timer}` : timer})</>
-              ) : (
-                <button type="button" onClick={requestOtp} className="font-semibold text-[#17664E] hover:underline cursor-pointer">
-                  Renvoyer un nouveau code
-                </button>
-              )}
-            </p>
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-xs text-[#0B2C25]/75">
+                {expireTimer > 0 ? (
+                  <span>
+                    Validité du code : <strong className="font-semibold text-[#0B2C25]">{Math.floor(expireTimer / 60)}:{(expireTimer % 60).toString().padStart(2, '0')}</strong>
+                  </span>
+                ) : (
+                  <span className="text-[#B22222] font-semibold">
+                    Code expiré (délai de 5 minutes écoulé).
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-[#0B2C25]/70">
+                {timer > 0 ? (
+                  <>Rien reçu ? Renvoyer le code (00:{timer < 10 ? `0${timer}` : timer})</>
+                ) : (
+                  <button type="button" onClick={requestOtp} className="font-semibold text-[#17664E] hover:underline cursor-pointer">
+                    Renvoyer un nouveau code
+                  </button>
+                )}
+              </p>
+            </div>
 
             <button
               type="submit"

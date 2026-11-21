@@ -44,6 +44,8 @@ export const RegisterPage: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [clientPhoneError, setClientPhoneError] = useState<string | null>(null);
+  const [merchantPhoneError, setMerchantPhoneError] = useState<string | null>(null);
 
   // Soumission de l'inscription Client (Figma Frame 08)
   const handleClientSubmit = async (e: React.FormEvent) => {
@@ -52,12 +54,21 @@ export const RegisterPage: React.FC = () => {
       setErrorMessage('Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité.');
       return;
     }
+
+    const rawPhone = clientData.phone.replace(/[\s.\-()]/g, '');
+    const phoneDigits = rawPhone.replace(/^(\+213|00213|213|0)/, '');
+    const isValidAlgerianPhone = /^[567]\d{8}$/.test(phoneDigits);
+
+    if (!isValidAlgerianPhone) {
+      setClientPhoneError('Numéro de téléphone incorrect. Il doit comporter 9 chiffres et commencer par 5, 6 ou 7 (ex: 6 61 45 17 40).');
+      return;
+    }
+
+    setClientPhoneError(null);
     setErrorMessage(null);
     setLoading(true);
 
     try {
-      const rawPhone = clientData.phone.replace(/[\s.\-()]/g, '');
-      const phoneDigits = rawPhone.replace(/^(\+213|00213|213|0)/, '');
       const phoneToSend = `+213${phoneDigits}`;
 
       const response = await fetch('/api/auth/register', {
@@ -255,22 +266,37 @@ export const RegisterPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4 focus-within:border-[#17664E] transition">
-                <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-2.5 shrink-0" />
-                <span className="text-[#0B2C25] font-semibold text-sm sm:text-[15px] select-none mr-2.5 pr-2.5 border-r border-[#0B2C25]/20">
-                  +213
-                </span>
-                <input
-                  type="tel"
-                  placeholder="6 61 45 17 40"
-                  value={clientData.phone}
-                  onChange={(e) => {
-                    let val = e.target.value.replace(/[^\d\s]/g, '');
-                    if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
-                    setClientData({ ...clientData, phone: val });
-                  }}
-                  className="w-full bg-transparent text-[#0B2C25] text-sm sm:text-[15px] focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
-                />
+              <div className="flex flex-col gap-1">
+                <div
+                  className={`flex items-center bg-white/65 border-[1.2px] rounded-[14px] h-14 px-4 transition ${
+                    clientPhoneError
+                      ? 'border-[#B22222] bg-[#B22222]/5'
+                      : 'border-white/95 focus-within:border-[#17664E]'
+                  }`}
+                >
+                  <Phone className={`w-5 h-5 mr-2.5 shrink-0 ${clientPhoneError ? 'text-[#B22222]' : 'text-[#0B2C25]/50'}`} />
+                  <span className="text-[#0B2C25] font-semibold text-sm sm:text-[15px] select-none mr-2">
+                    +213
+                  </span>
+                  <input
+                    type="tel"
+                    placeholder="6 61 45 17 40"
+                    value={clientData.phone}
+                    onChange={(e) => {
+                      if (clientPhoneError) setClientPhoneError(null);
+                      let val = e.target.value.replace(/[^\d\s]/g, '');
+                      if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
+                      setClientData({ ...clientData, phone: val });
+                    }}
+                    className="w-full bg-transparent text-[#0B2C25] text-sm sm:text-[15px] focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
+                  />
+                </div>
+                {clientPhoneError && (
+                  <span className="text-xs text-[#B22222] font-medium px-2 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    {clientPhoneError}
+                  </span>
+                )}
               </div>
 
               <div className="flex flex-col gap-1">
@@ -356,6 +382,16 @@ export const RegisterPage: React.FC = () => {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  const rawPhone = merchantData.phone.replace(/[\s.\-()]/g, '');
+                  const phoneDigits = rawPhone.replace(/^(\+213|00213|213|0)/, '');
+                  const isValidAlgerianPhone = /^[567]\d{8}$/.test(phoneDigits);
+
+                  if (!isValidAlgerianPhone) {
+                    setMerchantPhoneError('Numéro de téléphone incorrect. Il doit comporter 9 chiffres et commencer par 5, 6 ou 7 (ex: 6 61 45 17 40).');
+                    return;
+                  }
+
+                  setMerchantPhoneError(null);
                   setMerchantStep(2);
                 }}
                 className="flex flex-col gap-4"
@@ -393,23 +429,38 @@ export const RegisterPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4 focus-within:border-[#17664E] transition">
-                  <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-2.5 shrink-0" />
-                  <span className="text-[#0B2C25] font-semibold text-sm select-none mr-2.5 pr-2.5 border-r border-[#0B2C25]/20">
-                    +213
-                  </span>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="6 61 45 17 40"
-                    value={merchantData.phone}
-                    onChange={(e) => {
-                      let val = e.target.value.replace(/[^\d\s]/g, '');
-                      if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
-                      setMerchantData({ ...merchantData, phone: val });
-                    }}
-                    className="w-full bg-transparent text-[#0B2C25] text-sm focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
-                  />
+                <div className="flex flex-col gap-1">
+                  <div
+                    className={`flex items-center bg-white/65 border-[1.2px] rounded-[14px] h-14 px-4 transition ${
+                      merchantPhoneError
+                        ? 'border-[#B22222] bg-[#B22222]/5'
+                        : 'border-white/95 focus-within:border-[#17664E]'
+                    }`}
+                  >
+                    <Phone className={`w-5 h-5 mr-2.5 shrink-0 ${merchantPhoneError ? 'text-[#B22222]' : 'text-[#0B2C25]/50'}`} />
+                    <span className="text-[#0B2C25] font-semibold text-sm select-none mr-2">
+                      +213
+                    </span>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="6 61 45 17 40"
+                      value={merchantData.phone}
+                      onChange={(e) => {
+                        if (merchantPhoneError) setMerchantPhoneError(null);
+                        let val = e.target.value.replace(/[^\d\s]/g, '');
+                        if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
+                        setMerchantData({ ...merchantData, phone: val });
+                      }}
+                      className="w-full bg-transparent text-[#0B2C25] text-sm focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
+                    />
+                  </div>
+                  {merchantPhoneError && (
+                    <span className="text-xs text-[#B22222] font-medium px-2 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {merchantPhoneError}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4">
