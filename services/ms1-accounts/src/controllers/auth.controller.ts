@@ -93,7 +93,8 @@ export class AuthController {
               role,
             },
           });
-        } catch {
+        } catch (err: any) {
+          console.error('[PrismaUserCreateError]:', err);
           user = await devDb.createUser({
             id: `usr_dev_${Date.now()}`,
             email: email.toLowerCase(),

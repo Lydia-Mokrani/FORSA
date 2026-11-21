@@ -83,7 +83,12 @@ const profileSelect = {
 
 async function findUserWithProfile(userId: string): Promise<any> {
   if (await isPostgresAlive()) {
-    return prisma.user.findUnique({ where: { id: userId }, select: profileSelect });
+    try {
+      const pUser = await prisma.user.findUnique({ where: { id: userId }, select: profileSelect });
+      if (pUser) return pUser;
+    } catch {
+      // fallback
+    }
   }
   const u = devDb.users.get(userId);
   if (!u) return null;
@@ -230,8 +235,13 @@ export class UserController {
 
       let user: any;
       if (await isPostgresAlive()) {
-        user = await prisma.user.findUnique({ where: { id: userId } });
-      } else {
+        try {
+          user = await prisma.user.findUnique({ where: { id: userId } });
+        } catch {
+          // fallback
+        }
+      }
+      if (!user) {
         user = devDb.users.get(userId);
       }
 
@@ -245,19 +255,21 @@ export class UserController {
         }
         const cleanedPhone = parsed.data;
 
-        // Vérifier conflit avec un autre compte (dans PostgreSQL la contrainte d'unicité est absolue)
-        let conflict: any = null;
-        if (await isPostgresAlive()) {
-          conflict = await prisma.user.findFirst({
-            where: { phone: cleanedPhone, id: { not: userId } },
-          });
-        } else {
-          conflict = [...devDb.users.values()].find(
-            (u) => u.phone === cleanedPhone && u.id !== userId,
-          );
-        }
-        if (conflict) {
-          throw new ApiError(409, 'PHONE_CONFLICT', 'Ce numéro de téléphone est déjà associé à un autre compte.');
+        // Vérifier conflit avec un autre compte (sauf numéro démo autorisé)
+        if (!isDemoPhone(cleanedPhone)) {
+          let conflict: any = null;
+          if (await isPostgresAlive()) {
+            conflict = await prisma.user.findFirst({
+              where: { phone: cleanedPhone, id: { not: userId } },
+            });
+          } else {
+            conflict = [...devDb.users.values()].find(
+              (u) => u.phone === cleanedPhone && u.id !== userId,
+            );
+          }
+          if (conflict) {
+            throw new ApiError(409, 'PHONE_CONFLICT', 'Ce numéro de téléphone est déjà associé à un autre compte.');
+          }
         }
 
         const currentNormalized = user.phone ? normalizePhone(user.phone) : null;
@@ -572,8 +584,13 @@ export class UserController {
 
       let user: any;
       if (await isPostgresAlive()) {
-        user = await prisma.user.findUnique({ where: { id: userId } });
-      } else {
+        try {
+          user = await prisma.user.findUnique({ where: { id: userId } });
+        } catch {
+          // fallback
+        }
+      }
+      if (!user) {
         user = devDb.users.get(userId);
       }
 
