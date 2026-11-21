@@ -135,6 +135,7 @@ export class ShopController {
       });
 
       // Émission de l'événement shop.updated sur RabbitMQ pour MS2 (ShopSnapshot)
+      const mappedStatus = updated.status === 'APPROVED' ? 'ACTIVE' : (updated.status === 'PENDING' ? 'CLOSED' : updated.status);
       await rabbitMQ.publish('shop.updated', {
         shopId: updated.id,
         merchantId: updated.userId,
@@ -144,7 +145,8 @@ export class ShopController {
         latitude: updated.latitude,
         longitude: updated.longitude,
         phone: updated.phone,
-        status: updated.status,
+        status: mappedStatus,
+        shopStatus: updated.status,
       }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.updated warning:', err.message));
 
       res.json({ shop: updated });
@@ -322,12 +324,14 @@ export class ShopController {
         });
       }
 
-      // 1. Émission de l'événement shop.status_changed pour MS2
+      // 1. Émission de l'événement shop.status_changed pour MS2 (mappé en ACTIVE / SUSPENDED / CLOSED pour l'enum ShopStatus de MS2)
+      const mappedStatus = updated.status === 'APPROVED' ? 'ACTIVE' : (updated.status === 'PENDING' ? 'CLOSED' : updated.status);
       await rabbitMQ.publish('shop.status_changed', {
         shopId: updated.id,
         merchantId: updated.userId,
         userId: updated.userId,
-        status: updated.status,
+        status: mappedStatus,
+        shopStatus: updated.status,
         reason: updated.suspensionReason || undefined,
       }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.status_changed warning:', err.message));
 

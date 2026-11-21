@@ -88,12 +88,13 @@ export async function initRabbitMQ(): Promise<void> {
 
         console.log(`[MS1-RabbitMQ] Boutique ${shop.id} et commerçant passés en statut APPROVED`);
 
-        // Émission de shop.status_changed pour MS2
+        // Émission de shop.status_changed pour MS2 (statut ACTIVE attendu par MS2)
         await rabbitMQ.publish('shop.status_changed', {
           shopId: shop.id,
           merchantId: shop.userId,
           userId: shop.userId,
-          status: 'APPROVED',
+          status: 'ACTIVE',
+          shopStatus: 'APPROVED',
         }).catch((err) => console.warn('[MS1-RabbitMQ] Publish shop.status_changed warning:', err.message));
       } catch (dbErr) {
         console.error(`[MS1-RabbitMQ] Erreur lors de l'approbation de la boutique:`, dbErr);
