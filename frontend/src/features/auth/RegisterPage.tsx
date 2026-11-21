@@ -57,11 +57,8 @@ export const RegisterPage: React.FC = () => {
 
     try {
       const rawPhone = clientData.phone.replace(/[\s.\-()]/g, '');
-      const phoneToSend = rawPhone.startsWith('+213')
-        ? rawPhone
-        : rawPhone.startsWith('0')
-        ? `+213${rawPhone.slice(1)}`
-        : `+213${rawPhone}`;
+      const phoneDigits = rawPhone.replace(/^(\+213|00213|213|0)/, '');
+      const phoneToSend = `+213${phoneDigits}`;
 
       const response = await fetch('/api/auth/register', {
         method: 'POST',
@@ -107,11 +104,8 @@ export const RegisterPage: React.FC = () => {
 
     try {
       const rawPhone = merchantData.phone.replace(/[\s.\-()]/g, '');
-      const phoneToSend = rawPhone.startsWith('+213')
-        ? rawPhone
-        : rawPhone.startsWith('0')
-        ? `+213${rawPhone.slice(1)}`
-        : `+213${rawPhone}`;
+      const phoneDigits = rawPhone.replace(/^(\+213|00213|213|0)/, '');
+      const phoneToSend = `+213${phoneDigits}`;
 
       // 1. Inscription du compte utilisateur Commerçant
       const authRes = await fetch('/api/auth/register', {
@@ -268,9 +262,13 @@ export const RegisterPage: React.FC = () => {
                 </span>
                 <input
                   type="tel"
-                  placeholder="06 97 93 76 37"
+                  placeholder="6 61 45 17 40"
                   value={clientData.phone}
-                  onChange={(e) => setClientData({ ...clientData, phone: e.target.value.replace(/[^\d\s]/g, '') })}
+                  onChange={(e) => {
+                    let val = e.target.value.replace(/[^\d\s]/g, '');
+                    if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
+                    setClientData({ ...clientData, phone: val });
+                  }}
                   className="w-full bg-transparent text-[#0B2C25] text-sm sm:text-[15px] focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
                 />
               </div>
@@ -403,9 +401,13 @@ export const RegisterPage: React.FC = () => {
                   <input
                     type="tel"
                     required
-                    placeholder="06 97 93 76 37"
+                    placeholder="6 61 45 17 40"
                     value={merchantData.phone}
-                    onChange={(e) => setMerchantData({ ...merchantData, phone: e.target.value.replace(/[^\d\s]/g, '') })}
+                    onChange={(e) => {
+                      let val = e.target.value.replace(/[^\d\s]/g, '');
+                      if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
+                      setMerchantData({ ...merchantData, phone: val });
+                    }}
                     className="w-full bg-transparent text-[#0B2C25] text-sm focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
                   />
                 </div>
