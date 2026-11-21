@@ -12,7 +12,7 @@ import {
 import { prisma } from '../config/prisma';
 import { devDb, isPostgresAlive } from '../services/dev-db.service';
 import { jwtService } from '../services/jwt.service';
-import { sendSms, sendTwilioVerification, checkTwilioVerification } from '../services/sms.service';
+import { sendSms, sendTwilioVerification, checkTwilioVerification, sendTelegramOtp } from '../services/sms.service';
 import { mobilePhoneSchema } from '../utils/phone';
 import { avatarFilePath, hasImageSignature } from '../middleware/avatar-upload.middleware';
 import { config } from '../config/env';
@@ -202,17 +202,19 @@ export class UserController {
         }
       }
 
-      // Tenter d'envoyer un vrai SMS via Twilio Verify
-      const sentViaTwilio = await sendTwilioVerification(user.phone);
-
-      // Générer code 6 chiffres (local ou secours)
+      // Générer code aléatoire secret 6 chiffres
       const code = String(Math.floor(Math.random() * 10 ** OTP_LENGTH)).padStart(OTP_LENGTH, '0');
       const codeHash = hashOtp(userId, code);
       const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-      if (!sentViaTwilio) {
-        await sendSms(user.phone, `Votre code FORSA : ${code}\nValable 5 minutes.`);
-      }
+      // 1. Envoi instantané du code sur Telegram
+      await sendTelegramOtp(user.phone, code);
+
+      // 2. Envoi par SMS Twilio si numéro vérifié
+      const sentViaTwilio = await sendTwilioVerification(user.phone);
+
+      // 3. Log serveur
+      await sendSms(user.phone, `Votre code FORSA : ${code}\nValable 5 minutes.`);
 
       if (await isPostgresAlive()) {
         await prisma.phoneOtp.create({
@@ -283,17 +285,15 @@ export class UserController {
       const user = await findUserWithProfile(userId);
       const isTwilioApproved = user?.phone ? await checkTwilioVerification(user.phone, code) : false;
 
-      // 2. Vérification locale du code
+      // 2. Vérification locale cryptographique stricte du code exact
       const expectedHash = hashOtp(userId, code);
       const isLocalHashValid = crypto.timingSafeEqual(
         Buffer.from(expectedHash, 'hex'),
         Buffer.from(otpRecord.codeHash, 'hex'),
       );
 
-      // 3. Passe-partout pour que n'importe quel numéro essayé puisse valider (soutenance / démo)
-      const isDevOrMasterCode = config.nodeEnv !== 'production' || code === '123456' || code === '000000';
-
-      const isValid = isTwilioApproved || isLocalHashValid || isDevOrMasterCode;
+      // Sécurité 100% stricte : seul le code exact généré et envoyé est accepté
+      const isValid = isTwilioApproved || isLocalHashValid;
 
       if (!isValid) {
         // Incrémenter les tentatives

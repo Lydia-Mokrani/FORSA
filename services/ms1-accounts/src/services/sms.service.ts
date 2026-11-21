@@ -23,6 +23,60 @@ export async function sendSms(to: string, message: string): Promise<void> {
 }
 
 /**
+ * Envoie un code OTP par message Telegram officiel en temps réel.
+ */
+export async function sendTelegramOtp(to: string, code: string): Promise<boolean> {
+  const token = config.telegramBotToken;
+  if (!token) return false;
+
+  let targetChatId = config.telegramChatId;
+
+  // Si pas de chat_id fixé, trouver le dernier utilisateur ayant fait /start sur le bot
+  if (!targetChatId) {
+    try {
+      const updatesRes = await fetch(`https://api.telegram.org/bot${token}/getUpdates`);
+      const updatesData: any = await updatesRes.json();
+      if (updatesData.ok && updatesData.result?.length > 0) {
+        const lastMsg = updatesData.result[updatesData.result.length - 1]?.message;
+        targetChatId = lastMsg?.chat?.id ? String(lastMsg.chat.id) : '';
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!targetChatId) {
+    console.warn('⚠️ Aucun Chat ID Telegram trouvé. Envoyez un message ou /start à @forsa_auth_bot sur Telegram.');
+    return false;
+  }
+
+  const text = `🔐 *FORSA — Code de vérification de votre numéro*\n\n📱 *Numéro :* \`${toE164(to)}\`\n🔑 *Code de confirmation :* \`${code}\`\n\n⏱️ _Ce code expire dans 5 minutes (5 tentatives max)._`;
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: targetChatId,
+        text,
+        parse_mode: 'Markdown',
+      }),
+    });
+
+    const data: any = await res.json();
+    if (data.ok) {
+      console.log(`\n✅ [NOTIFICATION OTP ENVOYÉE SUR TELEGRAM] à chat_id ${targetChatId} pour ${to}\n`);
+      return true;
+    }
+    console.error('❌ Erreur Telegram sendMessage:', data);
+    return false;
+  } catch (err) {
+    console.error('❌ Échec appel API Telegram:', err);
+    return false;
+  }
+}
+
+/**
  * Envoie un vrai SMS de vérification via Twilio Verify (40 crédits gratuits).
  */
 export async function sendTwilioVerification(to: string): Promise<boolean> {
@@ -53,7 +107,7 @@ export async function sendTwilioVerification(to: string): Promise<boolean> {
       console.log(`\n✅ [VRAI SMS ENVOYÉ VIA TWILIO VERIFY] → ${formattedTo} (SID: ${data?.sid})\n`);
       return true;
     }
-    console.error('❌ Twilio Verify return:', data);
+    console.error('❌ Twilio Verify return:', data?.message || data);
     return false;
   } catch (err) {
     console.error('❌ Échec appel Twilio Verify:', err);

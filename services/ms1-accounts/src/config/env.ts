@@ -44,6 +44,10 @@ export const config = {
   twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
   twilioVerifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID || '',
 
+  // Telegram OTP Bot
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
+
   // Répertoire de stockage des avatars
   avatarDir: process.env.AVATAR_DIR || path.join(__dirname, '..', '..', 'uploads', 'avatars'),
 };
