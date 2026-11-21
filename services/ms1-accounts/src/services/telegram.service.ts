@@ -23,12 +23,6 @@ const chatPendingSession = new Map<number | string, PendingOtpInfo>();
 const phoneToChatIdMap = new Map<string, number | string>();
 const chatIdToPhoneMap = new Map<number | string, string>();
 
-// Pré-enregistrement du compte vérifié de l'administratrice/testeuse
-if (config.telegramChatId) {
-  chatIdToPhoneMap.set(config.telegramChatId, '+213697937637');
-  phoneToChatIdMap.set('+213697937637', config.telegramChatId);
-}
-
 // Dernier token en attente
 let lastPendingToken: string | null = null;
 

@@ -12,7 +12,7 @@ import {
 import { prisma } from '../config/prisma';
 import { devDb, isPostgresAlive } from '../services/dev-db.service';
 import { jwtService } from '../services/jwt.service';
-import { sendSms, sendTwilioVerification, checkTwilioVerification, sendTelegramOtp } from '../services/sms.service';
+import { sendSms, sendTwilioVerification, checkTwilioVerification } from '../services/sms.service';
 import { registerPendingTelegramOtp, getTelegramDeepLink } from '../services/telegram.service';
 import { mobilePhoneSchema } from '../utils/phone';
 import { avatarFilePath, hasImageSignature } from '../middleware/avatar-upload.middleware';
@@ -208,17 +208,14 @@ export class UserController {
       const codeHash = hashOtp(userId, code);
       const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-      // Enregistrer pour deep link Telegram bot
+      // Enregistrer pour deep link Telegram bot (envoi automatique UNIQUEMENT si ce numéro précis est lié)
       const telegramToken = registerPendingTelegramOtp(userId, code, user.phone, user.fullName);
       const telegramLink = getTelegramDeepLink(telegramToken);
 
-      // 1. Envoi instantané du code sur Telegram si chat_id déjà associé
-      await sendTelegramOtp(user.phone, code);
-
-      // 2. Envoi par SMS Twilio si numéro vérifié
+      // 1. Envoi par SMS Twilio si numéro vérifié
       const sentViaTwilio = await sendTwilioVerification(user.phone);
 
-      // 3. Log serveur
+      // 2. Log serveur
       await sendSms(user.phone, `Votre code FORSA : ${code}\nValable 5 minutes.`);
 
       if (await isPostgresAlive()) {
