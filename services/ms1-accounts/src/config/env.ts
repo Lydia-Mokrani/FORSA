@@ -28,6 +28,9 @@ export const config = {
 
   // SMS Provider : 'log' (dev) | 'twilio' (prod)
   smsProvider: process.env.SMS_PROVIDER || 'log',
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || '',
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
+  twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
 
   // Répertoire de stockage des avatars
   avatarDir: process.env.AVATAR_DIR || path.join(__dirname, '..', '..', 'uploads', 'avatars'),
