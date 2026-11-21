@@ -12,6 +12,7 @@ import { jwtService } from '../services/jwt.service';
 import { rabbitMQ } from '../services/rabbitmq.service';
 import { devDb, isPostgresAlive } from '../services/dev-db.service';
 import { issueEmailToken } from '../services/email-token.service';
+import { isDemoPhone, normalizePhone } from '../utils/phone';
 
 const registerSchema = z.object({
   email: z.string().email('Format email invalide'),
@@ -57,6 +58,27 @@ export class AuthController {
         throw new ConflictError('Un compte existe déjà avec cette adresse email.');
       }
 
+      let normalizedPhone: string | null = null;
+      if (phone && phone.trim()) {
+        normalizedPhone = normalizePhone(phone);
+        // Exception exclusive pour le numéro de démo : autorisé à créer plusieurs comptes pour tests
+        if (!isDemoPhone(normalizedPhone)) {
+          let existingPhoneUser: any = null;
+          if (usePrisma) {
+            try {
+              existingPhoneUser = await prisma.user.findFirst({ where: { phone: normalizedPhone } });
+            } catch {
+              existingPhoneUser = [...devDb.users.values()].find((u) => u.phone === normalizedPhone);
+            }
+          } else {
+            existingPhoneUser = [...devDb.users.values()].find((u) => u.phone === normalizedPhone);
+          }
+          if (existingPhoneUser) {
+            throw new ConflictError('Ce numéro de téléphone est déjà associé à un autre compte.');
+          }
+        }
+      }
+
       const passwordHash = await bcrypt.hash(password, 10);
       let user: any = null;
 
@@ -67,7 +89,7 @@ export class AuthController {
               email: email.toLowerCase(),
               passwordHash,
               fullName,
-              phone,
+              phone: normalizedPhone,
               role,
             },
           });
@@ -77,7 +99,7 @@ export class AuthController {
             email: email.toLowerCase(),
             passwordHash,
             fullName,
-            phone,
+            phone: normalizedPhone,
             role,
             status: 'ACTIVE',
             emailVerified: false,
@@ -91,7 +113,7 @@ export class AuthController {
           email: email.toLowerCase(),
           passwordHash,
           fullName,
-          phone,
+          phone: normalizedPhone,
           role,
           status: 'ACTIVE',
           emailVerified: false,
@@ -353,7 +375,17 @@ export class AuthController {
     }
   }
 
-  public static getPublicKey(_req: Request, res: Response): void {
+  public static getPublicKey(req: Request, res: Response): void {
+    if (
+      req.query.format === 'pem' ||
+      req.query.format === 'raw' ||
+      req.headers.accept?.includes('text/plain')
+    ) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.send(jwtService.getPublicKey());
+      return;
+    }
+
     res.json({
       algorithm: 'RS256',
       issuer: 'forsa-ms1-accounts',

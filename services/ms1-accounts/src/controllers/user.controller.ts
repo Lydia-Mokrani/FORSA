@@ -18,7 +18,7 @@ import { issueEmailToken } from '../services/email-token.service';
 import { rabbitMQ } from '../services/rabbitmq.service';
 import { sendSms, sendTwilioVerification, checkTwilioVerification } from '../services/sms.service';
 import { registerPendingTelegramOtp, getTelegramDeepLink, getPendingOtpByUserId } from '../services/telegram.service';
-import { mobilePhoneSchema } from '../utils/phone';
+import { mobilePhoneSchema, isDemoPhone, normalizePhone } from '../utils/phone';
 import { avatarFilePath, hasImageSignature } from '../middleware/avatar-upload.middleware';
 import { config } from '../config/env';
 
@@ -35,7 +35,7 @@ const OTP_MAX_PER_HOUR = 5;               // Envois max par heure
 const updateProfileSchema = z.object({
   fullName: z.string().min(2, 'Le nom doit comporter au moins 2 caractères').optional(),
   email: z.string().email('Format email invalide').optional(),
-  phone: mobilePhoneSchema.optional(),
+  phone: z.union([mobilePhoneSchema, z.literal(''), z.null()]).optional(),
 });
 
 const changePasswordSchema = z.object({
@@ -133,6 +133,23 @@ export class UserController {
       // Si le téléphone change, repasser en "non vérifié"
       if (data.phone !== undefined) {
         data.phoneVerified = false;
+        if (data.phone === '' || data.phone === null) {
+          data.phone = null;
+        } else if (!isDemoPhone(data.phone)) {
+          let conflict: any = null;
+          if (await isPostgresAlive()) {
+            conflict = await prisma.user.findFirst({
+              where: { phone: data.phone, id: { not: userId } },
+            });
+          } else {
+            conflict = [...devDb.users.values()].find(
+              (u) => u.phone === data.phone && u.id !== userId,
+            );
+          }
+          if (conflict) {
+            throw new ApiError(409, 'PHONE_CONFLICT', 'Ce numéro de téléphone est déjà associé à un autre compte.');
+          }
+        }
       }
 
       // Si l'e-mail change, vérifier unicité et repasser en "non vérifié"

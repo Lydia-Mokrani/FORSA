@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/env';
@@ -21,22 +22,71 @@ export interface TokenPayload {
 }
 
 class JwtService {
-  private privateKey: string;
-  private publicKey: string;
+  private privateKey: string = '';
+  private publicKey: string = '';
 
   constructor() {
+    this.initKeys();
+  }
+
+  private initKeys(): void {
+    // 1. Recherche des fichiers de clés PEM existants sur le disque
+    const candidatePrivatePaths = [
+      path.resolve(config.jwtPrivateKeyPath),
+      path.resolve(process.cwd(), config.jwtPrivateKeyPath),
+      path.resolve(__dirname, '..', '..', 'keys', 'private.pem'),
+      path.resolve(process.cwd(), 'services', 'ms1-accounts', 'keys', 'private.pem'),
+      path.resolve(process.cwd(), 'keys', 'private.pem'),
+    ];
+
+    const candidatePublicPaths = [
+      path.resolve(config.jwtPublicKeyPath),
+      path.resolve(process.cwd(), config.jwtPublicKeyPath),
+      path.resolve(__dirname, '..', '..', 'keys', 'public.pem'),
+      path.resolve(process.cwd(), 'services', 'ms1-accounts', 'keys', 'public.pem'),
+      path.resolve(process.cwd(), 'keys', 'public.pem'),
+    ];
+
+    for (let i = 0; i < candidatePrivatePaths.length; i++) {
+      const privPath = candidatePrivatePaths[i];
+      const pubPath = candidatePublicPaths[i];
+      if (fs.existsSync(privPath) && fs.existsSync(pubPath)) {
+        try {
+          this.privateKey = fs.readFileSync(privPath, 'utf8');
+          this.publicKey = fs.readFileSync(pubPath, 'utf8');
+          console.log(`[MS1-JWT] 🔑 Clés RSA 2048 chargées depuis le disque (${pubPath})`);
+          return;
+        } catch (err: any) {
+          console.warn(`[MS1-JWT] Échec de lecture des clés à ${privPath}: ${err.message}`);
+        }
+      }
+    }
+
+    // 2. Si aucune paire n'est trouvée, générer une paire RSA 2048 persistante et l'enregistrer sur le disque
+    console.warn('[MS1-JWT] ⚠️ Clés PEM absentes sur le disque. Génération d\'une paire RSA 2048 persistante...');
+    const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+
+    this.privateKey = privateKey;
+    this.publicKey = publicKey;
+
+    // Déterminer le dossier cible pour persister les clés
+    const targetDir = path.resolve(__dirname, '..', '..', 'keys');
     try {
-      this.privateKey = fs.readFileSync(config.jwtPrivateKeyPath, 'utf8');
-      this.publicKey = fs.readFileSync(config.jwtPublicKeyPath, 'utf8');
-    } catch (err) {
-      console.warn('[MS1-JWT] Clés non trouvées sur le disque. Génération à la volée...');
-      const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
-        modulusLength: 2048,
-        publicKeyEncoding: { type: 'spki', format: 'pem' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-      });
-      this.privateKey = privateKey;
-      this.publicKey = publicKey;
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const targetPrivate = path.join(targetDir, 'private.pem');
+      const targetPublic = path.join(targetDir, 'public.pem');
+
+      fs.writeFileSync(targetPrivate, privateKey, { mode: 0o600 });
+      fs.writeFileSync(targetPublic, publicKey, { mode: 0o644 });
+      console.log(`[MS1-JWT] 💾 Clés RSA persistantes enregistrées avec succès dans : ${targetDir}`);
+    } catch (writeErr: any) {
+      console.warn(`[MS1-JWT] Impossible de persister les clés sur le disque (${writeErr.message}), clés conservées en mémoire.`);
     }
   }
 
