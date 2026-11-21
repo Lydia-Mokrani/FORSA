@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, AlertTriangle, CheckCircle, ArrowRight } from 'lucide-react';
+import loginBg from '../../assets/login-bg.png';
 import googleSvg from '../../assets/icons/google.svg';
 import appleSvg from '../../assets/icons/apple.svg';
 import emailSvg from '../../assets/icons/email.svg';
@@ -117,8 +118,14 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
-      {/* En-tête Figma 1023:37982 */}
-      <header className="w-full max-w-6xl flex items-center justify-between mb-8">
+      {/* Fond photo bokeh feuille verte officiel Figma 1030:23480 */}
+      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
+        <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-[#FFFAF0]/28 backdrop-blur-[2px]" />
+      </div>
+
+      {/* En-tête Figma 1030:23481 */}
+      <header className="w-full max-w-6xl flex items-center justify-between mb-8 z-10">
         <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
@@ -142,10 +149,10 @@ export const LoginPage: React.FC = () => {
         </div>
       )}
 
-      {/* Carte Glassmorphism fidèle à 100% au design Figma 1023:37985 */}
-      <main className="backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full">
+      {/* Carte Glassmorphism fidèle à 100% au design Figma 1030:23484 */}
+      <main className="backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full z-10">
         
-        {/* Pastille rôle : Espace client / Espace commerçant · Changer (Figma 1023:37987) */}
+        {/* Pastille rôle : Espace client / Espace commerçant · Changer (Figma 1030:23486) */}
         <div className="flex items-center justify-center w-full">
           <button
             type="button"
@@ -163,7 +170,7 @@ export const LoginPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Titres et sous-titres (Figma 1023:37988) */}
+        {/* Titres et sous-titres (Figma 1030:23487) */}
         <div className="text-center flex flex-col gap-2 w-full">
           <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[34px] leading-tight">
             Bon retour !
@@ -197,7 +204,7 @@ export const LoginPage: React.FC = () => {
           </div>
         )}
 
-        {/* Formulaire de connexion Figma 1023:37991 */}
+        {/* Formulaire de connexion Figma 1030:23490 */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-[14px] w-full">
           {/* Champ Email avec icône Figma */}
           <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
@@ -233,7 +240,7 @@ export const LoginPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Options : Se souvenir de moi & Mot de passe oublié (Figma 1023:37994) */}
+          {/* Options : Se souvenir de moi & Mot de passe oublié (Figma 1030:23493) */}
           <div className="flex items-center justify-between w-full pt-1">
             <label className="flex items-center gap-3 cursor-pointer text-[14px] text-[#0B2C25]/85 select-none">
               <input
@@ -253,7 +260,7 @@ export const LoginPage: React.FC = () => {
             </Link>
           </div>
 
-          {/* Bouton CTA Principal Figma 1023:37997 */}
+          {/* Bouton CTA Principal Figma 1030:23496 */}
           <button
             type="submit"
             disabled={loading}
@@ -320,7 +327,7 @@ export const LoginPage: React.FC = () => {
       </main>
 
       {/* Footer minimaliste */}
-      <footer className="w-full max-w-6xl text-center text-xs text-[#0B2C25]/60 mt-8 py-2">
+      <footer className="w-full max-w-6xl text-center text-xs text-[#0B2C25]/60 mt-8 py-2 z-10">
         © 2026 FORSA — Plateforme anti-gaspillage alimentaire DZ.
       </footer>
     </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Mail, CheckCircle2, AlertCircle, ArrowLeft, Lock, Eye, EyeOff, Check } from 'lucide-react';
+import loginBg from '../../assets/login-bg.png';
 
 export const ForgotPasswordPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -74,8 +75,14 @@ export const ForgotPasswordPage: React.FC = () => {
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
+      {/* Fond photo bokeh feuille verte officiel Figma */}
+      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
+        <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-[#FFFAF0]/28 backdrop-blur-[2px]" />
+      </div>
+
       {/* En-tête Figma */}
-      <header className="w-full max-w-6xl flex items-center justify-between mb-8">
+      <header className="w-full max-w-6xl flex items-center justify-between mb-8 z-10">
         <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
