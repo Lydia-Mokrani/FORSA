@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Phone, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
-import loginBg from '../../assets/login-bg.png';
-import { FigmaGalleryBar } from './FigmaGalleryBar';
 
 const OTP_LENGTH = 6;
 
@@ -141,25 +139,18 @@ export const VerifyPhonePage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-center px-4 py-8 sm:px-8 font-poppins selection:bg-forsa-leaf selection:text-white overflow-x-hidden">
-      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
-        <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[#FFFAF0]/25 backdrop-blur-[2px]" />
-      </div>
-
-      {/* Galerie de sélection Figma (19 Écrans) */}
-      <FigmaGalleryBar />
-
-      <header className="w-full max-w-6xl flex items-center justify-between mb-8 sm:mb-12 px-2 sm:px-6">
-        <Link to="/" className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
+      {/* En-tête Figma */}
+      <header className="w-full max-w-6xl flex items-center justify-between mb-8">
+        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="hidden sm:inline text-xs sm:text-sm font-medium text-[#0B2C25]/85">
+        <span className="text-[14px] font-medium text-[#0B2C25]/85">
           Donnez une autre vie à vos invendus
         </span>
       </header>
 
-      <main className="w-full max-w-[480px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-6 text-center">
+      <main className="w-full max-w-[480px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-6 text-center my-auto">
         
         <div className="w-16 h-16 mx-auto rounded-full bg-white/60 border border-[#0B2C25]/15 flex items-center justify-center text-[#17664E] shadow-sm">
           <Phone className="w-8 h-8" />

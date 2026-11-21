@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Store, AlertCircle, AlertTriangle, CheckCircle, ArrowRight } from 'lucide-react';
-import loginBg from '../../assets/login-bg.png';
+import { AlertCircle, AlertTriangle, CheckCircle, ArrowRight } from 'lucide-react';
 import googleSvg from '../../assets/icons/google.svg';
 import appleSvg from '../../assets/icons/apple.svg';
 import emailSvg from '../../assets/icons/email.svg';
@@ -9,7 +8,6 @@ import lockSvg from '../../assets/icons/lock.svg';
 import eyeSvg from '../../assets/icons/eye.svg';
 import arrowRightSvg from '../../assets/icons/arrow-right.svg';
 import userSvg from '../../assets/icons/user.svg';
-import { FigmaGalleryBar } from './FigmaGalleryBar';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,7 +31,7 @@ export const LoginPage: React.FC = () => {
     if (searchParams.get('role') === 'client') setRole('CUSTOMER');
 
     if (initialState === 'error') {
-      setErrorMessage('Adresse e-mail ou mot de passe incorrect. Veuillez vérifier vos identifiants.');
+      setErrorMessage('Adresse e-mail ou mot de passe incorrect.');
       setIsSuspended(false);
       setIsSuccess(false);
     } else if (initialState === 'suspended') {
@@ -46,7 +44,8 @@ export const LoginPage: React.FC = () => {
   }, [searchParams, initialState]);
 
   const toggleRole = () => {
-    setRole((prev) => (prev === 'CUSTOMER' ? 'MERCHANT' : 'CUSTOMER'));
+    const nextRole = role === 'CUSTOMER' ? 'MERCHANT' : 'CUSTOMER';
+    setRole(nextRole);
     setErrorMessage(null);
     setIsSuspended(false);
   };
@@ -83,17 +82,17 @@ export const LoginPage: React.FC = () => {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 403 || data?.error?.message?.includes('suspendu')) {
+        if (response.status === 403 || data?.error?.code === 'FORBIDDEN') {
           setIsSuspended(true);
           return;
         }
-        throw new Error(data?.error?.message || 'Identifiants invalides');
+        throw new Error(data?.error?.message || 'Identifiants invalides.');
       }
 
       handleLoginSuccess(data);
@@ -117,26 +116,13 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-4 py-6 sm:px-8 font-poppins selection:bg-forsa-leaf selection:text-white overflow-x-hidden">
-      {/* Fond photo bokeh feuille verte officiel Figma */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
-        <img
-          src={loginBg}
-          alt="Lush green leaf background"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-[#FFFAF0]/25 backdrop-blur-[2px]" />
-      </div>
-
-      {/* Galerie de sélection Figma (19 Écrans) */}
-      <FigmaGalleryBar />
-
-      {/* En-tête officiel Desktop / Mobile */}
-      <header className="w-full max-w-6xl flex items-center justify-between mb-4 px-2 sm:px-6">
-        <Link to="/" className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
+      {/* En-tête Figma 1023:37982 */}
+      <header className="w-full max-w-6xl flex items-center justify-between mb-8">
+        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="hidden sm:inline text-xs sm:text-sm font-medium text-[#0B2C25]/85">
+        <span className="text-[14px] font-medium text-[#0B2C25]/85">
           Donnez une autre vie à vos invendus
         </span>
       </header>
@@ -150,48 +136,48 @@ export const LoginPage: React.FC = () => {
             </div>
             <h2 className="text-2xl font-bold text-[#0B2C25]">Connexion réussie !</h2>
             <p className="text-sm text-[#0B2C25]/75">
-              Ravi de vous revoir sur FORSA. Redirection vers votre espace en cours...
+              Ravi de vous revoir sur FORSA. Redirection en cours...
             </p>
           </div>
         </div>
       )}
 
-      {/* Carte Glassmorphism fidèle au design Figma (Frames 03, 04, 05, 06) */}
-      <main className="w-full max-w-[520px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-5 my-auto">
+      {/* Carte Glassmorphism fidèle à 100% au design Figma 1023:37985 */}
+      <main className="backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full">
         
-        {/* Pastille rôle : Espace client / Espace commerçant · Changer */}
+        {/* Pastille rôle : Espace client / Espace commerçant · Changer (Figma 1023:37987) */}
         <div className="flex items-center justify-center w-full">
           <button
             type="button"
             onClick={toggleRole}
-            className="group inline-flex items-center gap-2 bg-white/65 hover:bg-white/85 border border-[#0B2C25]/20 px-4 py-2 rounded-full transition-all duration-150 shadow-sm"
+            className="group inline-flex items-center gap-2 bg-white/60 hover:bg-white/85 border border-[#0B2C25]/20 px-[14px] py-[8px] rounded-[24px] transition shadow-sm cursor-pointer"
           >
-            <img src={userSvg} alt="User" className="w-4 h-4" />
-            <span className="text-xs sm:text-[13px] font-medium text-[#0B2C25]">
+            <img src={userSvg} alt="User" className="size-4 shrink-0" />
+            <span className="text-[13px] font-medium text-[#0B2C25]">
               {role === 'CUSTOMER' ? 'Espace client' : 'Espace commerçant'}
             </span>
-            <span className="text-[#0B2C25]/40 text-xs">·</span>
-            <span className="text-xs sm:text-[13px] font-semibold text-[#17664E] group-hover:underline">
+            <span className="text-[#0B2C25]/40 text-[13px]">·</span>
+            <span className="text-[13px] font-medium text-[#17664E] group-hover:underline">
               Changer
             </span>
           </button>
         </div>
 
-        {/* Titres et sous-titres */}
-        <div className="text-center flex flex-col gap-1.5">
-          <h1 className="text-2xl sm:text-[32px] font-semibold text-[#0B2C25] tracking-tight">
+        {/* Titres et sous-titres (Figma 1023:37988) */}
+        <div className="text-center flex flex-col gap-2 w-full">
+          <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[34px] leading-tight">
             Bon retour !
           </h1>
-          <p className="text-xs sm:text-[15px] text-[#0B2C25]/65">
+          <p className="font-normal text-[15px] text-[#0B2C25]/65 leading-normal">
             {role === 'CUSTOMER'
               ? 'Connectez-vous pour retrouver les offres près de chez vous'
-              : 'Gérez vos paniers invendus et vos réservations quotidiennes'}
+              : 'Gérez vos offres et valorisez vos invendus'}
           </p>
         </div>
 
         {/* 05 · Message d'erreur : Identifiants incorrects */}
         {errorMessage && (
-          <div className="flex items-start gap-3 bg-red-500/15 border border-red-500/40 text-red-900 text-xs sm:text-[13px] p-3.5 rounded-2xl animate-shake">
+          <div className="flex items-start gap-3 bg-red-500/15 border border-red-500/40 text-red-900 text-xs sm:text-[13px] p-3.5 rounded-2xl">
             <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
             <div className="flex flex-col">
               <span className="font-semibold">Identifiants incorrects</span>
@@ -206,85 +192,85 @@ export const LoginPage: React.FC = () => {
             <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
             <div className="flex flex-col">
               <span className="font-semibold">Compte temporairement suspendu</span>
-              <span>Ce compte commerçant est temporairement suspendu pour non-conformité. Contactez l'administration FORSA.</span>
+              <span>Ce compte est temporairement suspendu pour non-respect des règles. Contactez le support FORSA.</span>
             </div>
           </div>
         )}
 
-        {/* Formulaire de connexion avec icônes Figma */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-          {/* Champ Email avec icône Figma email.svg */}
-          <div className="flex items-center bg-white/65 hover:bg-white/80 focus-within:bg-white/90 border-[1.2px] border-white/95 focus-within:border-[#17664E] rounded-[16px] h-13 px-4 transition-all duration-150 shadow-inner">
-            <img src={emailSvg} alt="Email" className="w-5 h-5 mr-3 opacity-70" />
+        {/* Formulaire de connexion Figma 1023:37991 */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-[14px] w-full">
+          {/* Champ Email avec icône Figma */}
+          <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
+            <img src={emailSvg} alt="Email" className="size-5 shrink-0 opacity-70" />
             <input
               type="email"
               required
               placeholder="Adresse e-mail"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-transparent text-[#0B2C25] text-sm placeholder:text-[#0B2C25]/45 focus:outline-none"
+              className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"
             />
           </div>
 
-          {/* Champ Mot de passe avec icône Figma lock.svg et eye.svg */}
-          <div className="relative flex items-center bg-white/65 hover:bg-white/80 focus-within:bg-white/90 border-[1.2px] border-white/95 focus-within:border-[#17664E] rounded-[16px] h-13 px-4 transition-all duration-150 shadow-inner">
-            <img src={lockSvg} alt="Lock" className="w-5 h-5 mr-3 opacity-70" />
+          {/* Champ Mot de passe avec icône Figma */}
+          <div className="relative bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
+            <img src={lockSvg} alt="Lock" className="size-5 shrink-0 opacity-70" />
             <input
               type={showPassword ? 'text' : 'password'}
               required
               placeholder="Mot de passe"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-transparent text-[#0B2C25] text-sm placeholder:text-[#0B2C25]/45 focus:outline-none pr-10"
+              className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none pr-8"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 text-[#0B2C25]/45 hover:text-[#0B2C25] transition"
+              className="absolute right-4 text-[#0B2C25]/50 hover:text-[#0B2C25] transition"
               aria-label={showPassword ? 'Masquer' : 'Afficher'}
             >
-              <img src={eyeSvg} alt="Toggle visibility" className="w-5 h-5 opacity-70" />
+              <img src={eyeSvg} alt="Toggle visibility" className="size-5 opacity-60" />
             </button>
           </div>
 
-          {/* Options : Se souvenir de moi & Mot de passe oublié */}
-          <div className="flex items-center justify-between text-xs sm:text-[13px] pt-1">
-            <label className="flex items-center gap-2 cursor-pointer text-[#0B2C25]/80 select-none">
+          {/* Options : Se souvenir de moi & Mot de passe oublié (Figma 1023:37994) */}
+          <div className="flex items-center justify-between w-full pt-1">
+            <label className="flex items-center gap-3 cursor-pointer text-[14px] text-[#0B2C25]/85 select-none">
               <input
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded border-[#0B2C25]/30 text-[#17664E] focus:ring-[#17664E]"
+                className="size-[22px] rounded-[6px] border-[1.2px] border-[#0B2C25]/50 bg-white/75 text-[#0B2C25] focus:ring-0 cursor-pointer"
               />
               <span>Se souvenir de moi</span>
             </label>
 
             <Link
               to="/forgot-password"
-              className="text-[#17664E] font-medium hover:underline"
+              className="text-[#17664E] font-medium text-[13px] hover:underline"
             >
               Mot de passe oublié ?
             </Link>
           </div>
 
-          {/* Bouton CTA Principal avec flèche Figma */}
+          {/* Bouton CTA Principal Figma 1023:37997 */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-13 bg-[#0B2C25] hover:bg-[#17664E] active:scale-[0.99] text-white font-medium text-sm sm:text-base rounded-[16px] flex items-center justify-center gap-2 shadow-[0px_10px_20px_0px_rgba(11,44,37,0.30)] transition-all duration-200 mt-2"
+            className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[17px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-md transition mt-2 cursor-pointer"
           >
             {loading ? (
               <span>Connexion en cours...</span>
             ) : (
               <>
                 <span>Se connecter</span>
-                <img src={arrowRightSvg} alt="Arrow" className="w-4 h-4 invert brightness-0" />
+                <img src={arrowRightSvg} alt="Arrow" className="w-5 h-5 invert brightness-0" />
               </>
             )}
           </button>
         </form>
 
-        {/* Section Connexion Sociale avec vrais logos Google et Apple */}
+        {/* Section Connexion Sociale Figma */}
         <div className="flex items-center gap-3 my-0.5">
           <div className="flex-1 h-px bg-[#0B2C25]/15" />
           <span className="text-[11px] text-[#0B2C25]/50 uppercase tracking-wider font-semibold">
@@ -293,28 +279,28 @@ export const LoginPage: React.FC = () => {
           <div className="flex-1 h-px bg-[#0B2C25]/15" />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 w-full">
           <button
             type="button"
             onClick={() => handleSocialLogin('Google')}
-            className="h-12 bg-white/60 hover:bg-white/85 active:scale-[0.99] border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-xs sm:text-sm font-medium text-[#0B2C25] transition shadow-sm"
+            className="h-[52px] bg-white/60 hover:bg-white/85 border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-[14px] font-medium text-[#0B2C25] transition shadow-sm cursor-pointer"
           >
-            <img src={googleSvg} alt="Google" className="w-5 h-5 shrink-0" />
+            <img src={googleSvg} alt="Google" className="size-5 shrink-0" />
             <span>Google</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleSocialLogin('Apple')}
-            className="h-12 bg-white/60 hover:bg-white/85 active:scale-[0.99] border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-xs sm:text-sm font-medium text-[#0B2C25] transition shadow-sm"
+            className="h-[52px] bg-white/60 hover:bg-white/85 border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-[14px] font-medium text-[#0B2C25] transition shadow-sm cursor-pointer"
           >
-            <img src={appleSvg} alt="Apple" className="w-5 h-5 shrink-0" />
+            <img src={appleSvg} alt="Apple" className="size-5 shrink-0" />
             <span>Apple</span>
           </button>
         </div>
 
         {/* Lien de redirection vers l'inscription */}
-        <p className="text-center text-xs sm:text-[14px] text-[#0B2C25]/75 pt-1">
+        <p className="text-center text-[14px] text-[#0B2C25]/75 pt-1">
           {role === 'CUSTOMER' ? (
             <>
               Pas encore de compte ?{' '}
@@ -326,55 +312,16 @@ export const LoginPage: React.FC = () => {
             <>
               Nouveau commerçant ?{' '}
               <Link to="/register?role=merchant" className="font-semibold text-[#17664E] hover:underline">
-                Créer un compte professionnel
+                Créer un compte
               </Link>
             </>
           )}
         </p>
-
-        {/* Comptes de test en 1 clic pour soutenance */}
-        <div className="p-3 bg-white/30 rounded-xl border border-white/60 text-[11px] text-[#0B2C25]/70 flex flex-col gap-1">
-          <span className="font-semibold text-[#0B2C25]">Comptes de test (cliquez pour remplir) :</span>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('client@forsa.dz');
-                setPassword('Password123!');
-                setRole('CUSTOMER');
-              }}
-              className="px-2 py-0.5 bg-white/70 hover:bg-white rounded text-[#17664E] font-medium"
-            >
-              Client (client@forsa.dz)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('merchant@forsa.dz');
-                setPassword('Password123!');
-                setRole('MERCHANT');
-              }}
-              className="px-2 py-0.5 bg-white/70 hover:bg-white rounded text-[#17664E] font-medium"
-            >
-              Commerçant (merchant@forsa.dz)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('suspendu@forsa.dz');
-                setPassword('Password123!');
-                setRole('MERCHANT');
-              }}
-              className="px-2 py-0.5 bg-white/70 hover:bg-white rounded text-amber-800 font-medium"
-            >
-              Suspendu (Frame 06)
-            </button>
-          </div>
-        </div>
       </main>
 
-      <footer className="w-full max-w-6xl text-center text-xs text-[#0B2C25]/60 mt-4">
-        © 2026 FORSA (فرصة) · Plateforme anti-gaspillage alimentaire
+      {/* Footer minimaliste */}
+      <footer className="w-full max-w-6xl text-center text-xs text-[#0B2C25]/60 mt-8 py-2">
+        © 2026 FORSA — Plateforme anti-gaspillage alimentaire DZ.
       </footer>
     </div>
   );

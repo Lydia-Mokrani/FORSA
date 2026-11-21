@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Store, Mail, Lock, Phone, Upload, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, ShieldCheck, FileText, Camera } from 'lucide-react';
-import loginBg from '../../assets/login-bg.png';
-
-import { FigmaGalleryBar } from './FigmaGalleryBar';
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -162,22 +159,13 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-center px-4 py-8 sm:px-8 font-poppins selection:bg-forsa-leaf selection:text-white overflow-x-hidden">
-      {/* Fond photo bokeh feuille verte officiel Figma */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
-        <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[#FFFAF0]/25 backdrop-blur-[2px]" />
-      </div>
-
-      {/* Galerie de sélection Figma (19 Écrans) */}
-      <FigmaGalleryBar />
-
-      {/* En-tête officiel */}
-      <header className="w-full max-w-6xl flex items-center justify-between mb-6 sm:mb-8 px-2 sm:px-6">
-        <Link to="/" className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
+      {/* En-tête officiel Figma */}
+      <header className="w-full max-w-6xl flex items-center justify-between mb-8">
+        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="hidden sm:inline text-xs sm:text-sm font-medium text-[#0B2C25]/85">
+        <span className="text-[14px] font-medium text-[#0B2C25]/85">
           Donnez une autre vie à vos invendus
         </span>
       </header>

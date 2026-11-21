@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import loginBg from '../../assets/login-bg.png';
-import { FigmaGalleryBar } from './FigmaGalleryBar';
 import { Mail, CheckCircle, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
 
 export const EmailVerificationPage: React.FC = () => {
@@ -78,27 +76,19 @@ export const EmailVerificationPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-4 py-8 sm:px-8 font-poppins selection:bg-forsa-leaf selection:text-white">
-      {/* Fond photo bokeh feuille verte */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
-        <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[#FFFAF0]/25 backdrop-blur-[2px]" />
-      </div>
-
-      {/* Galerie de sélection Figma (19 Écrans) */}
-      <FigmaGalleryBar />
-
-      <header className="w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-6">
-        <Link to="/" className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
+      {/* En-tête Figma */}
+      <header className="w-full max-w-6xl flex items-center justify-between mb-8">
+        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="hidden sm:inline text-xs sm:text-sm font-medium text-[#0B2C25]/85">
+        <span className="text-[14px] font-medium text-[#0B2C25]/85">
           Donnez une autre vie à vos invendus
         </span>
       </header>
 
       {/* Carte centrale multi-états (Frames 13, 14, 15) */}
-      <main className="w-full max-w-[500px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col items-center text-center gap-6 my-auto">
+      <main className="w-full max-w-[520px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col items-center text-center gap-6 my-auto">
         
         {checking && <p className="text-sm text-[#0B2C25]/75">Vérification de votre e-mail…</p>}
 
@@ -135,29 +125,11 @@ export const EmailVerificationPage: React.FC = () => {
                 type="button"
                 onClick={handleResend}
                 disabled={resending}
-                className="w-full h-12 bg-white/70 hover:bg-white/90 border border-[#0B2C25]/20 text-[#0B2C25] font-semibold rounded-2xl flex items-center justify-center gap-2 transition"
+                className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 transition shadow-md cursor-pointer"
               >
                 <RefreshCw className={`w-4 h-4 ${resending ? 'animate-spin' : ''}`} />
                 <span>{resending ? 'Renvoi en cours...' : "Renvoyer l'e-mail"}</span>
               </button>
-
-              <div className="flex justify-center gap-4 text-xs text-[#0B2C25]/60 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setStatus('verified')}
-                  className="underline hover:text-[#17664E]"
-                >
-                  (Simuler : E-mail vérifié · Frame 14)
-                </button>
-                <span>·</span>
-                <button
-                  type="button"
-                  onClick={() => setStatus('expired')}
-                  className="underline hover:text-amber-700"
-                >
-                  (Simuler : Lien expiré · Frame 15)
-                </button>
-              </div>
             </div>
           </>
         )}

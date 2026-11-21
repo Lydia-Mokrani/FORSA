@@ -1,77 +1,64 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import loginBg from '../../assets/login-bg.png';
-import { User, Store, Check, ArrowRight } from 'lucide-react';
-import { FigmaGalleryBar } from './FigmaGalleryBar';
+import { User, Store, ArrowRight } from 'lucide-react';
 
 export const RoleChoicePage: React.FC = () => {
   const navigate = useNavigate();
   const [selectedRole, setSelectedRole] = useState<'CUSTOMER' | 'MERCHANT'>('CUSTOMER');
 
-  const handleContinue = () => {
-    if (selectedRole === 'MERCHANT') {
-      navigate('/register?role=merchant');
-    } else {
-      navigate('/register');
-    }
+  const handleLogin = () => {
+    navigate(`/login?role=${selectedRole === 'MERCHANT' ? 'merchant' : 'client'}`);
+  };
+
+  const handleRegister = () => {
+    navigate(`/register?role=${selectedRole === 'MERCHANT' ? 'merchant' : 'client'}`);
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-4 py-8 sm:px-8 font-poppins selection:bg-forsa-leaf selection:text-white">
-      {/* Fond photo bokeh feuille verte */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none -z-10">
-        <img src={loginBg} alt="Background" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[#FFFAF0]/25 backdrop-blur-[2px]" />
-      </div>
-
-      {/* Galerie de sélection Figma (19 Écrans) */}
-      <FigmaGalleryBar />
-
-      <header className="w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-6">
-        <Link to="/" className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-6 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white bg-[#fffaf0] overflow-x-hidden">
+      {/* En-tête Figma 1023:37967 */}
+      <header className="w-full max-w-6xl flex items-center justify-between mb-8">
+        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="hidden sm:inline text-xs sm:text-sm font-medium text-[#0B2C25]/85">
+        <span className="text-[14px] font-medium text-[#0B2C25]/85">
           Donnez une autre vie à vos invendus
         </span>
       </header>
 
-      {/* 02 · Choix du profil · Carte centrale */}
-      <main className="w-full max-w-[540px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-6 my-auto">
-        <div className="text-center">
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#0B2C25] mb-2">
-            Bienvenue sur FORSA !
+      {/* 02 · Choix du profil · Carte Figma 1023:37970 */}
+      <main className="backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full">
+        <div className="flex flex-col gap-2 text-center w-full">
+          <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[34px] leading-tight">
+            Bienvenue sur FORSA
           </h1>
-          <p className="text-xs sm:text-sm text-[#0B2C25]/75">
-            Choisissez votre type de profil pour continuer
+          <p className="font-normal text-[#0B2C25]/65 text-sm sm:text-[15px]">
+            Pour commencer, dites-nous qui vous êtes
           </p>
         </div>
 
-        {/* Grille de sélection des rôles */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Choix du profil Figma 1023:37974 */}
+        <div className="flex gap-3 sm:gap-[14px] w-full">
           {/* Carte Client */}
           <button
             type="button"
             onClick={() => setSelectedRole('CUSTOMER')}
-            className={`relative p-5 rounded-2xl flex flex-col items-start text-left transition-all duration-200 border ${
+            className={`flex-1 h-[170px] rounded-[22px] px-3 sm:px-4 py-5 flex flex-col items-center justify-center gap-2.5 transition-all text-center cursor-pointer ${
               selectedRole === 'CUSTOMER'
-                ? 'bg-white/85 border-[#17664E] shadow-md ring-2 ring-[#17664E]/30'
-                : 'bg-white/45 border-white/80 hover:bg-white/60'
+                ? 'bg-white/85 border-2 border-[#0B2C25] shadow-sm'
+                : 'bg-white/50 border border-[#0B2C25]/20 hover:bg-white/70'
             }`}
           >
-            <div className="w-10 h-10 rounded-xl bg-[#17664E]/10 flex items-center justify-center text-[#17664E] mb-3">
-              <User className="w-5 h-5" />
+            <div
+              className={`size-12 sm:size-[56px] rounded-full flex items-center justify-center transition-colors ${
+                selectedRole === 'CUSTOMER' ? 'bg-[#0B2C25] text-white' : 'bg-[#fffaf0] text-[#0B2C25]'
+              }`}
+            >
+              <User className="size-6 shrink-0" />
             </div>
-            <div className="font-bold text-[#0B2C25] text-base mb-1 flex items-center justify-between w-full">
-              <span>Client</span>
-              {selectedRole === 'CUSTOMER' && (
-                <div className="w-5 h-5 rounded-full bg-[#17664E] text-white flex items-center justify-center">
-                  <Check className="w-3.5 h-3.5" />
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-[#0B2C25]/70 leading-relaxed">
-              Achetez des paniers invendus auprès des commerçants à prix réduits.
+            <p className="font-medium text-[#0B2C25] text-base sm:text-[18px]">Client</p>
+            <p className="font-normal text-[11px] sm:text-[12px] text-[#0B2C25]/55 leading-tight">
+              Je cherche des produits à prix réduit
             </p>
           </button>
 
@@ -79,48 +66,54 @@ export const RoleChoicePage: React.FC = () => {
           <button
             type="button"
             onClick={() => setSelectedRole('MERCHANT')}
-            className={`relative p-5 rounded-2xl flex flex-col items-start text-left transition-all duration-200 border ${
+            className={`flex-1 h-[170px] rounded-[22px] px-3 sm:px-4 py-5 flex flex-col items-center justify-center gap-2.5 transition-all text-center cursor-pointer ${
               selectedRole === 'MERCHANT'
-                ? 'bg-white/85 border-[#17664E] shadow-md ring-2 ring-[#17664E]/30'
-                : 'bg-white/45 border-white/80 hover:bg-white/60'
+                ? 'bg-white/85 border-2 border-[#0B2C25] shadow-sm'
+                : 'bg-white/50 border border-[#0B2C25]/20 hover:bg-white/70'
             }`}
           >
-            <div className="w-10 h-10 rounded-xl bg-[#17664E]/10 flex items-center justify-center text-[#17664E] mb-3">
-              <Store className="w-5 h-5" />
+            <div
+              className={`size-12 sm:size-[56px] rounded-full flex items-center justify-center transition-colors ${
+                selectedRole === 'MERCHANT' ? 'bg-[#0B2C25] text-white' : 'bg-[#fffaf0] text-[#0B2C25]'
+              }`}
+            >
+              <Store className="size-6 shrink-0" />
             </div>
-            <div className="font-bold text-[#0B2C25] text-base mb-1 flex items-center justify-between w-full">
-              <span>Commerçant</span>
-              {selectedRole === 'MERCHANT' && (
-                <div className="w-5 h-5 rounded-full bg-[#17664E] text-white flex items-center justify-center">
-                  <Check className="w-3.5 h-3.5" />
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-[#0B2C25]/70 leading-relaxed">
-              Vendez vos surplus, réduisez le gaspillage et attirez de nouveaux clients.
+            <p className="font-medium text-[#0B2C25] text-base sm:text-[18px]">Commerçant</p>
+            <p className="font-normal text-[11px] sm:text-[12px] text-[#0B2C25]/55 leading-tight">
+              Je valorise mes invendus
             </p>
           </button>
         </div>
 
+        {/* Bouton Se connecter Figma 1023:37977 */}
         <button
           type="button"
-          onClick={handleContinue}
-          className="w-full h-12 bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium rounded-2xl flex items-center justify-center gap-2 transition shadow-md"
+          onClick={handleLogin}
+          className="bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[17px] rounded-[16px] h-[56px] w-full flex items-center justify-center gap-2.5 transition shadow-md cursor-pointer"
         >
-          <span>Continuer</span>
-          <ArrowRight className="w-4 h-4" />
+          <span>Se connecter</span>
+          <ArrowRight className="w-5 h-5 shrink-0" />
         </button>
 
-        <p className="text-center text-xs text-[#0B2C25]/75">
-          Vous avez déjà un compte ?{' '}
-          <Link to={`/login?role=${selectedRole === 'MERCHANT' ? 'merchant' : 'client'}`} className="font-semibold text-[#17664E] hover:underline">
-            Se connecter
-          </Link>
+        {/* Bouton Créer un compte Figma 1023:37978 */}
+        <button
+          type="button"
+          onClick={handleRegister}
+          className="bg-white/30 hover:bg-white/55 border-[1.2px] border-[#0B2C25]/50 text-[#0B2C25] font-medium text-[17px] rounded-[16px] h-[56px] w-full flex items-center justify-center transition shadow-sm cursor-pointer"
+        >
+          Créer un compte
+        </button>
+
+        {/* Sous-titre Figma 1023:37979 */}
+        <p className="font-normal text-[14px] text-[#0B2C25]/65 text-center w-full">
+          Vous pourrez changer de profil avant de continuer.
         </p>
       </main>
 
-      <footer className="w-full max-w-6xl text-center text-xs text-[#0B2C25]/60 mt-8">
-        © 2026 FORSA (فرصة) · Frame 02 Choix du profil (Figma)
+      {/* Footer minimaliste */}
+      <footer className="w-full max-w-6xl text-center text-xs text-[#0B2C25]/60 mt-8 py-2">
+        © 2026 FORSA — Plateforme anti-gaspillage alimentaire DZ.
       </footer>
     </div>
   );
