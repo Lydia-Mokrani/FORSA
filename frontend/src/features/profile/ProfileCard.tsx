@@ -1,29 +1,34 @@
 // frontend/src/features/profile/ProfileCard.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { User, CheckCircle2, AlertCircle, ShieldCheck, ArrowRight, Store } from 'lucide-react';
+import { Camera, MapPin, Check, AlertCircle, ShieldCheck, Edit3 } from 'lucide-react';
 import { UserProfile } from './types';
 
 interface ProfileCardProps {
   user: UserProfile;
   className?: string;
+  onEditClick?: () => void;
 }
 
-export const ProfileCard: React.FC<ProfileCardProps> = ({ user, className = '' }) => {
-  const isMerchant = user.role === 'MERCHANT';
-
+/**
+ * Composant « Carte profil » isolé (Frame Figma 903:34764)
+ * Dimensions exactes : 388 × 185 px
+ */
+export const ProfileCard: React.FC<ProfileCardProps> = ({
+  user,
+  className = '',
+  onEditClick,
+}) => {
   return (
     <div
       style={{ width: '388px', height: '185px' }}
-      className={`relative overflow-hidden rounded-[24px] bg-gradient-to-br from-[#0B2C25] via-[#103D33] to-[#17664E] p-4 text-white shadow-xl shadow-[#0B2C25]/20 flex flex-col justify-between border border-emerald-500/20 ${className}`}
+      className={`relative overflow-hidden rounded-[20px] bg-gradient-to-r from-white to-[#EEF7EC] p-5 border border-[#DBF0DD] shadow-[0px_4px_16px_rgba(11,44,37,0.06)] flex flex-col justify-between font-poppins text-[#0B2C25] ${className}`}
     >
-      {/* Decorative background glow */}
-      <div className="pointer-events-none absolute -right-10 -bottom-10 h-32 w-32 rounded-full bg-emerald-400/10 blur-2xl" />
-
-      {/* Header: Avatar, Name, Role badge */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="relative h-14 w-14 shrink-0 rounded-2xl overflow-hidden bg-emerald-950/60 border-2 border-emerald-400/30 flex items-center justify-center text-emerald-200 font-bold text-xl shadow-inner">
+      {/* Top section: Avatar + Identité */}
+      <div className="flex items-start gap-4">
+        {/* Photo de profil (65x66) avec bouton caméra */}
+        <div className="relative shrink-0 size-[65px]">
+          <div className="size-full rounded-full overflow-hidden bg-emerald-900 border-2 border-[#DBF0DD] shadow-sm flex items-center justify-center text-white text-xl font-bold">
             {user.avatarUrl ? (
               <img
                 src={user.avatarUrl}
@@ -38,87 +43,96 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user, className = '' }
             )}
           </div>
 
-          <div className="min-w-0">
-            <h4 className="text-base font-bold text-white tracking-tight truncate leading-tight">
-              {user.fullName || 'Utilisateur FORSA'}
-            </h4>
-            <p className="text-xs text-emerald-200/80 truncate mt-0.5">
-              {user.email}
-            </p>
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide uppercase ${
-                isMerchant 
-                  ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' 
-                  : 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30'
-              }`}>
-                {isMerchant ? <Store size={10} /> : <User size={10} />}
-                {isMerchant ? 'Commerçant' : 'Client Solidaire'}
-              </span>
-            </div>
+          <div
+            className="absolute bottom-0 right-0 size-[24px] rounded-full bg-[#0B2C25] border-2 border-white flex items-center justify-center text-white shadow-sm"
+            title="Photo de profil"
+          >
+            <Camera size={11} />
           </div>
         </div>
 
-        {/* Global Security / Status icon */}
-        <div title={user.status === 'SUSPENDED' ? 'Compte Suspendu' : 'Compte Actif'}>
-          {user.status === 'SUSPENDED' ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#B22222]/80 text-white border border-[#B22222]">
-              Suspendu
-            </span>
-          ) : (
-            <div className="h-7 w-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-300">
-              <ShieldCheck size={16} />
+        {/* Identité */}
+        <div className="min-w-0 flex-1">
+          {/* Nom + Badge certifié */}
+          <div className="flex items-center gap-1.5">
+            <h4 className="text-[17px] font-bold text-[#0B2C25] truncate leading-tight">
+              {user.fullName || 'Lydia Benali'}
+            </h4>
+            <div
+              className="size-[18px] rounded-full bg-[#17664E] text-white flex items-center justify-center shrink-0"
+              title="Compte Vérifié"
+            >
+              <Check size={11} strokeWidth={3} />
             </div>
-          )}
+          </div>
+
+          {/* Localisation */}
+          <div className="flex items-center gap-1 text-xs text-[#0B2C25]/75 mt-1 truncate">
+            <MapPin size={12} className="text-[#17664E] shrink-0" />
+            <span className="truncate">Bab Ezzouar, Alger</span>
+          </div>
+
+          {/* Pastilles de vérification */}
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                user.emailVerified
+                  ? 'bg-[#DBF0DD] text-[#0B2C25]'
+                  : 'bg-amber-100 text-amber-900'
+              }`}
+            >
+              {user.emailVerified ? (
+                <Check size={10} className="text-[#17664E]" strokeWidth={2.5} />
+              ) : (
+                <AlertCircle size={10} className="text-amber-700" />
+              )}
+              {user.emailVerified ? 'E-mail vérifié' : 'E-mail non vérifié'}
+            </span>
+
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                user.phoneVerified
+                  ? 'bg-[#DBF0DD] text-[#0B2C25]'
+                  : 'bg-amber-100 text-amber-900'
+              }`}
+            >
+              {user.phoneVerified ? (
+                <Check size={10} className="text-[#17664E]" strokeWidth={2.5} />
+              ) : (
+                <AlertCircle size={10} className="text-amber-700" />
+              )}
+              {user.phoneVerified ? 'Tél. vérifié' : 'Tél. non vérifié'}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Middle row: Badges verification */}
-      <div className="flex items-center gap-2 pt-1">
-        <span
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
-            user.emailVerified
-              ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/20'
-              : 'bg-amber-500/15 text-amber-200 border border-amber-400/30'
-          }`}
-        >
-          {user.emailVerified ? (
-            <CheckCircle2 size={12} className="text-emerald-400" />
-          ) : (
-            <AlertCircle size={12} className="text-amber-400" />
-          )}
-          {user.emailVerified ? 'Email vérifié' : 'Email non vérifié'}
+      {/* Footer bar: Statut & Action */}
+      <div className="pt-2 border-t border-[#0B2C25]/8 flex items-center justify-between text-xs">
+        <span className="text-[11px] text-[#0B2C25]/60">
+          {user.phone ? `+213 ${user.phone}` : user.email}
         </span>
 
-        <span
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
-            user.phoneVerified
-              ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/20'
-              : 'bg-amber-500/15 text-amber-200 border border-amber-400/30'
-          }`}
-        >
-          {user.phoneVerified ? (
-            <CheckCircle2 size={12} className="text-emerald-400" />
-          ) : (
-            <AlertCircle size={12} className="text-amber-400" />
-          )}
-          {user.phoneVerified ? 'Téléphone vérifié' : 'Téléphone non vérifié'}
-        </span>
-      </div>
-
-      {/* Footer: Quick Action Link */}
-      <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-        <span className="text-[11px] text-emerald-200/70 truncate">
-          {user.phone ? `Tél: +213 ${user.phone}` : 'Tél: Non renseigné'}
-        </span>
-
-        <Link
-          to="/profile"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-300 hover:text-white transition group"
-        >
-          <span>Gérer</span>
-          <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
-        </Link>
+        {onEditClick ? (
+          <button
+            onClick={onEditClick}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[#17664E] hover:text-[#0B2C25] transition"
+          >
+            <Edit3 size={12} />
+            <span>Modifier</span>
+          </button>
+        ) : (
+          <Link
+            to="/profile"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[#17664E] hover:text-[#0B2C25] transition"
+          >
+            <Edit3 size={12} />
+            <span>Modifier</span>
+          </Link>
+        )}
       </div>
     </div>
   );
 };
+
+export default ProfileCard;
