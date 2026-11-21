@@ -1,6 +1,6 @@
 // frontend/src/features/profile/ProfilePage.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserProfile } from './types';
 import { useLocation } from '../catalogue/context/LocationContext';
 import {
@@ -56,6 +56,8 @@ import {
   figmaMultiplicationSign,
   figmaAlertCircle,
   figmaRefresh,
+  figmaClock,
+  figmaSmartPhone01,
 } from './figmaAssets';
 
 export const extractAlgerianMobile9 = (raw: string | null | undefined): string => {
@@ -78,7 +80,14 @@ export const formatAlgerianMobileDisplay = (raw: string | null | undefined): str
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { location, setLocation, requestCurrentPosition } = useLocation();
+
+  useEffect(() => {
+    if (searchParams.get('changePhone') === '1' || searchParams.get('action') === 'change-phone') {
+      handleOpenChangePhoneModal();
+    }
+  }, [searchParams]);
 
   // Mode View: 'view' (Desktop · Profil — Mon profil) ou 'edit' (Desktop · Profil — Modifier le profil)
   const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
@@ -92,7 +101,22 @@ export const ProfilePage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [preferredLocation, setPreferredLocation] = useState('Bab Ezzouar, Alger');
+  const [preferredLocation, setPreferredLocation] = useState<string>(() => {
+    try {
+      const cached = localStorage.getItem('forsa_user');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const u = parsed.user || parsed;
+        if (u.preferredLocation) return u.preferredLocation;
+      }
+      const locSaved = localStorage.getItem('forsa_user_location');
+      if (locSaved) {
+        const parsed = JSON.parse(locSaved);
+        if (parsed.label) return parsed.label;
+      }
+    } catch {}
+    return 'Bab Ezzouar, Alger';
+  });
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -192,12 +216,13 @@ export const ProfilePage: React.FC = () => {
                     const u = retryData.user;
                     setProfile(u);
                     setInitialProfile(u);
-                    setFullName(u.fullName || 'Lydia Benali');
+                    setFullName(u.fullName || 'Mon Compte');
                     setEmail(u.email || '');
                     const clean = extractAlgerianMobile9(u.phone);
                     setPhone(clean);
-                    setModalPhoneInput(clean);
+                    setModalPhoneInput('');
                     setAvatarPreview(u.avatarUrl || null);
+                    if (u.preferredLocation) setPreferredLocation(u.preferredLocation);
                     return;
                   }
                 }
@@ -214,12 +239,14 @@ export const ProfilePage: React.FC = () => {
               const u = JSON.parse(cachedUserStr);
               setProfile(u);
               setInitialProfile(u);
-              setFullName(u.fullName || 'Lydia Benali');
+              setFullName(u.fullName || 'Mon Compte');
               setEmail(u.email || '');
               const clean = extractAlgerianMobile9(u.phone);
               setPhone(clean);
+              setModalPhoneInput('');
               setModalPhoneInput(clean);
               setAvatarPreview(u.avatarUrl || null);
+              if (u.preferredLocation) setPreferredLocation(u.preferredLocation);
               return;
             } catch {
               // ignore
@@ -234,13 +261,24 @@ export const ProfilePage: React.FC = () => {
       const user: UserProfile = data.user;
       setProfile(user);
       setInitialProfile(user);
-      setFullName(user.fullName || 'Lydia Benali');
+      setFullName(user.fullName || (user.phone ? user.phone : 'Mon Compte'));
       setEmail(user.email || '');
       // S'il n'a pas de téléphone (ex: compte Google), la case reste vide
       const cleanPhone = extractAlgerianMobile9(user.phone);
       setPhone(cleanPhone);
       setModalPhoneInput(cleanPhone);
       setAvatarPreview(user.avatarUrl || null);
+      if (user.preferredLocation) {
+        setPreferredLocation(user.preferredLocation);
+      } else {
+        const locSaved = localStorage.getItem('forsa_user_location');
+        if (locSaved) {
+          try {
+            const parsed = JSON.parse(locSaved);
+            if (parsed.label) setPreferredLocation(parsed.label);
+          } catch {}
+        }
+      }
     } catch (err: any) {
       setGeneralError(err.message || 'Erreur réseau lors du chargement.');
     } finally {
@@ -271,7 +309,7 @@ export const ProfilePage: React.FC = () => {
   const [telegramCodeSent, setTelegramCodeSent] = useState(false);
 
   useEffect(() => {
-    if (!showPhoneOtpModal) return;
+    if (!showPhoneOtpModal || !otpSent) return;
     const token =
       localStorage.getItem('forsa_access_token') ||
       localStorage.getItem('token') ||
@@ -285,7 +323,7 @@ export const ProfilePage: React.FC = () => {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.phoneVerified) {
+          if (data.telegramVerified || (data.phoneVerified && otpSent)) {
             setTelegramSuccess(true);
             const verifiedPhone = data.phone || modalPhoneInput || profile?.phone || null;
             if (profile) {
@@ -316,7 +354,7 @@ export const ProfilePage: React.FC = () => {
     }, 2000);
 
     return () => clearInterval(poll);
-  }, [showPhoneOtpModal]);
+  }, [showPhoneOtpModal, otpSent]);
 
   const formatOtpTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -378,6 +416,7 @@ export const ProfilePage: React.FC = () => {
           fullName: fullName.trim(),
           email: email.trim().toLowerCase(),
           phone: phone ? extractAlgerianMobile9(phone) : undefined,
+          preferredLocation: preferredLocation,
         }),
       });
 
@@ -397,9 +436,10 @@ export const ProfilePage: React.FC = () => {
         throw new Error(data?.error?.message || data?.message || 'Erreur lors de la sauvegarde.');
       }
 
-      setProfile(data.user);
-      setInitialProfile(data.user);
-      localStorage.setItem('forsa_user', JSON.stringify(data.user));
+      const updatedUser = { ...data.user, preferredLocation };
+      setProfile(updatedUser);
+      setInitialProfile(updatedUser);
+      localStorage.setItem('forsa_user', JSON.stringify(updatedUser));
       setSaveSuccess('Modifications enregistrées avec succès !');
 
       // Return to view mode
@@ -519,18 +559,37 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
+  // Ouvrir la modale en mode saisie de NOUVEAU numéro
+  const handleOpenChangePhoneModal = () => {
+    setModalPhoneInput('');
+    setOtpSent(false);
+    setOtpError(null);
+    setTelegramMismatch(false);
+    setTelegramSuccess(false);
+    setShowPhoneOtpModal(true);
+  };
+
   // Lancement du flux de vérification Téléphone (Telegram Bot + SMS)
   const handleStartPhoneVerification = async () => {
-    const targetPhone = extractAlgerianMobile9(modalPhoneInput || phone || profile?.phone);
+    const rawTarget = modalPhoneInput.trim() || phone.trim();
+    const targetPhone = extractAlgerianMobile9(rawTarget);
     if (!targetPhone) {
-      // Ouvrir la modal en mode saisie de numéro
       setShowPhoneOtpModal(true);
       setOtpSent(false);
+      setOtpError('Veuillez renseigner votre numéro de mobile algérien à 9 chiffres.');
       return;
     }
 
     if (!validatePhone(targetPhone)) {
       setShowPhoneOtpModal(true);
+      setOtpSent(false);
+      setOtpError('Numéro invalide. Il doit commencer par 5, 6 ou 7 et comporter 9 chiffres.');
+      return;
+    }
+
+    if (profile?.phoneVerified && targetPhone === extractAlgerianMobile9(profile?.phone)) {
+      setShowPhoneOtpModal(true);
+      setOtpError('Ce numéro est déjà votre numéro de mobile vérifié.');
       setOtpSent(false);
       return;
     }
@@ -560,6 +619,11 @@ export const ProfilePage: React.FC = () => {
       if (!res.ok) {
         const errCode = data?.error?.code || data?.code;
         if (errCode === 'PHONE_ALREADY_VERIFIED') {
+          if (extractAlgerianMobile9(modalPhoneInput) === extractAlgerianMobile9(profile?.phone)) {
+            setOtpError('Ce numéro est déjà votre numéro vérifié.');
+            setOtpSent(false);
+            return;
+          }
           if (profile) {
             const updated = { ...profile, phoneVerified: true };
             setProfile(updated);
@@ -623,7 +687,7 @@ export const ProfilePage: React.FC = () => {
       }
 
       setTelegramSuccess(true);
-      const verifiedPhone = modalPhoneInput || profile?.phone || null;
+      const verifiedPhone = extractAlgerianMobile9(modalPhoneInput) || profile?.phone || null;
       if (profile) {
         const updated = {
           ...profile,
@@ -631,6 +695,7 @@ export const ProfilePage: React.FC = () => {
           phoneVerified: true,
         };
         setProfile(updated);
+        if (verifiedPhone) setPhone(verifiedPhone);
         localStorage.setItem('forsa_user', JSON.stringify(updated));
       }
 
@@ -761,16 +826,28 @@ export const ProfilePage: React.FC = () => {
   const handleSaveNewEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setEmailModalError(null);
+
+    const currentEmail = (profile?.email || email || '').trim().toLowerCase();
+    const candidateEmail = newEmailInput.trim().toLowerCase();
+
+    if (!candidateEmail || !candidateEmail.includes('@')) {
+      setEmailModalError('Veuillez saisir une adresse e-mail valide.');
+      return;
+    }
+
+    // Si l'e-mail est identique à l'e-mail actuel, ne rien changer et ne pas demander de vérification inutile
+    if (candidateEmail === currentEmail) {
+      setShowEmailModal(false);
+      setSaveSuccess("L'adresse e-mail saisie est identique à votre e-mail actuel.");
+      setTimeout(() => setSaveSuccess(null), 4000);
+      return;
+    }
+
     const token =
       localStorage.getItem('forsa_access_token') ||
       localStorage.getItem('token') ||
       localStorage.getItem('forsa_auth_token');
     if (!token) return;
-
-    if (!newEmailInput.trim() || !newEmailInput.includes('@')) {
-      setEmailModalError('Veuillez saisir une adresse e-mail valide.');
-      return;
-    }
 
     setIsUpdatingEmail(true);
     try {
@@ -780,7 +857,7 @@ export const ProfilePage: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ email: newEmailInput.trim().toLowerCase() }),
+        body: JSON.stringify({ email: candidateEmail }),
       });
 
       const data = await res.json();
@@ -835,10 +912,17 @@ export const ProfilePage: React.FC = () => {
   const isEmailVerified = Boolean(profile?.emailVerified);
   const isProfileIncomplete = !profile?.fullName || !hasPhone;
 
-  const displayName = profile?.fullName || 'Lydia Benali';
+  const displayName = profile?.fullName || (profile?.phone ? profile.phone : 'Mon Compte');
   const displayEmail = profile?.email || '';
   const displayPhone = hasPhone ? `+213 ${formatAlgerianMobileDisplay(profile!.phone)}` : '';
-  const currentAvatar = avatarPreview || profile?.avatarUrl || defaultAvatar;
+  const currentAvatar = avatarPreview || profile?.avatarUrl || null;
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'MC';
 
   return (
     <div className="min-h-screen bg-[#fffaf0] font-poppins text-[#0b2c25] pb-24">
@@ -866,7 +950,7 @@ export const ProfilePage: React.FC = () => {
             {/* Bouton Paramètres (793:23356) */}
             <button
               type="button"
-              onClick={() => setShowPasswordModal(true)}
+              onClick={() => navigate('/settings')}
               className="h-[42px] px-[16px] rounded-[12px] border border-[#78847f] text-[#0b2c25] text-[13px] font-semibold flex items-center gap-[8px] hover:bg-white transition cursor-pointer bg-transparent"
             >
               <img src={figmaHeaderGear} alt="" className="size-[16px] shrink-0" />
@@ -892,15 +976,16 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             {/* Circular User Avatar Photo (732:15087) */}
-            <div className="relative size-[48px] rounded-full overflow-hidden shrink-0 border border-black/5 shadow-xs bg-[#ebeee1]">
-              <img
-                src={currentAvatar}
-                alt={displayName}
-                className="size-full object-cover rounded-full"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = defaultAvatar;
-                }}
-              />
+            <div className="relative size-[48px] rounded-full overflow-hidden shrink-0 border border-black/5 shadow-xs bg-[#0B2C25] text-white flex items-center justify-center font-bold text-sm">
+              {currentAvatar ? (
+                <img
+                  src={currentAvatar}
+                  alt={displayName}
+                  className="size-full object-cover rounded-full"
+                />
+              ) : (
+                <span>{initials}</span>
+              )}
             </div>
           </div>
         </div>
@@ -1025,15 +1110,16 @@ export const ProfilePage: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-center sm:items-start gap-[28px] text-center sm:text-left flex-1 min-w-0">
                   {/* Photo de profil (128x128) + bouton caméra */}
                   <div className="relative size-[128px] shrink-0">
-                    <div className="size-[120px] rounded-full overflow-hidden bg-[#ebeee1] border-3 border-white shadow-md">
-                      <img
-                        src={currentAvatar}
-                        alt={displayName}
-                        className="size-full object-cover rounded-full"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = defaultAvatar;
-                        }}
-                      />
+                    <div className="size-[120px] rounded-full overflow-hidden bg-[#0B2C25] text-white flex items-center justify-center font-bold text-3xl border-3 border-white shadow-md">
+                      {currentAvatar ? (
+                        <img
+                          src={currentAvatar}
+                          alt={displayName}
+                          className="size-full object-cover rounded-full"
+                        />
+                      ) : (
+                        <span>{initials}</span>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -1301,8 +1387,7 @@ export const ProfilePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setNewLocationInput(preferredLocation);
-                      setShowLocationModal(true);
+                      navigate('/settings?tab=location');
                     }}
                     className="border border-[#0b2c25] hover:bg-[#ebeee1] flex items-center justify-center gap-[8px] pl-[14px] pr-[16px] py-[8px] rounded-[100px] text-[12px] font-semibold text-[#0b2c25] transition cursor-pointer"
                   >
@@ -1455,7 +1540,7 @@ export const ProfilePage: React.FC = () => {
               <div className="w-full bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[24px] shadow-sm flex flex-col gap-[8px]">
                 {/* En-tête de carte */}
                 <div
-                  onClick={() => setShowPasswordModal(true)}
+                  onClick={() => navigate('/settings')}
                   className="flex items-center gap-[12px] w-full cursor-pointer hover:opacity-80 transition"
                 >
                   <div className="size-[44px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0">
@@ -1469,7 +1554,7 @@ export const ProfilePage: React.FC = () => {
 
                 {/* Ligne Sécurité du compte */}
                 <div
-                  onClick={() => setShowPasswordModal(true)}
+                  onClick={() => navigate('/settings?tab=security')}
                   className="flex items-center gap-[12px] py-[12px] w-full cursor-pointer hover:bg-gray-50/60 rounded-[12px] px-1 transition"
                 >
                   <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
@@ -1486,13 +1571,16 @@ export const ProfilePage: React.FC = () => {
                 <div className="w-full h-px bg-[#ebeee1]" />
 
                 {/* Ligne Notifications */}
-                <div className="flex items-center gap-[12px] py-[12px] w-full cursor-pointer hover:bg-gray-50/60 rounded-[12px] px-1 transition">
+                <div
+                  onClick={() => navigate('/notifications')}
+                  className="flex items-center gap-[12px] py-[12px] w-full cursor-pointer hover:bg-gray-50/60 rounded-[12px] px-1 transition"
+                >
                   <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
                     <img src={figmaCardBell} alt="" className="size-[20px]" />
                   </div>
                   <div className="flex flex-col gap-px flex-1 min-w-0">
                     <p className="text-[14px] font-semibold text-[#0b2c25]">Notifications</p>
-                    <p className="text-[11px] font-normal text-[#0b2c25]/70">3 actives</p>
+                    <p className="text-[11px] font-normal text-[#0b2c25]/70">In-app et e-mail</p>
                   </div>
                   <img src={figmaChevronRight} alt="" className="size-[16px] shrink-0" />
                 </div>
@@ -1502,7 +1590,7 @@ export const ProfilePage: React.FC = () => {
 
                 {/* Ligne Localisation */}
                 <div
-                  onClick={() => setShowLocationModal(true)}
+                  onClick={() => navigate('/settings?tab=location')}
                   className="flex items-center gap-[12px] py-[12px] w-full cursor-pointer hover:bg-gray-50/60 rounded-[12px] px-1 transition"
                 >
                   <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
@@ -1510,7 +1598,7 @@ export const ProfilePage: React.FC = () => {
                   </div>
                   <div className="flex flex-col gap-px flex-1 min-w-0">
                     <p className="text-[14px] font-semibold text-[#0b2c25]">Localisation</p>
-                    <p className="text-[11px] font-normal text-[#0b2c25]/70">Rayon de recherche : 10 km</p>
+                    <p className="text-[11px] font-normal text-[#0b2c25]/70">Rayon de recherche et GPS</p>
                   </div>
                   <img src={figmaChevronRight} alt="" className="size-[16px] shrink-0" />
                 </div>
@@ -1518,7 +1606,7 @@ export const ProfilePage: React.FC = () => {
                 {/* Bouton Tous les paramètres */}
                 <button
                   type="button"
-                  onClick={() => setShowPasswordModal(true)}
+                  onClick={() => navigate('/settings')}
                   className="mt-2 w-full h-[40px] rounded-[12px] bg-[#0b2c25] hover:bg-[#17664e] flex items-center justify-center gap-[8px] text-white text-[13px] font-semibold transition cursor-pointer"
                 >
                   <span>Tous les paramètres</span>
@@ -1536,15 +1624,16 @@ export const ProfilePage: React.FC = () => {
                 {/* Ligne Photo (797:29368) */}
                 <div className="flex items-center gap-[20px] w-full pb-[16px]">
                   {/* Photo de profil (99px) */}
-                  <div className="relative size-[99px] shrink-0 rounded-full overflow-hidden bg-[#ebeee1] border-3 border-white shadow-sm">
-                    <img
-                      src={currentAvatar}
-                      alt={displayName}
-                      className="size-full object-cover rounded-full"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = defaultAvatar;
-                      }}
-                    />
+                  <div className="relative size-[99px] shrink-0 rounded-full overflow-hidden bg-[#0B2C25] text-white flex items-center justify-center font-bold text-2xl border-3 border-white shadow-sm">
+                    {currentAvatar ? (
+                      <img
+                        src={currentAvatar}
+                        alt={displayName}
+                        className="size-full object-cover rounded-full"
+                      />
+                    ) : (
+                      <span>{initials}</span>
+                    )}
                   </div>
 
                   {/* Texte et actions photo */}
@@ -1677,9 +1766,18 @@ export const ProfilePage: React.FC = () => {
 
                     {/* Badge vérifié ou badge non vérifié si un numéro est saisi */}
                     {isPhoneVerified && phone === extractAlgerianMobile9(profile?.phone) ? (
-                      <div className="bg-[#dbf0dd] flex items-center gap-[3px] pl-[6px] pr-[8px] py-[3px] rounded-[100px] shrink-0">
-                        <img src={figmaTickVerified} alt="" className="size-[12px]" />
-                        <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="bg-[#dbf0dd] flex items-center gap-[3px] pl-[6px] pr-[8px] py-[3px] rounded-[100px]">
+                          <img src={figmaTickVerified} alt="" className="size-[12px]" />
+                          <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleOpenChangePhoneModal}
+                          className="text-[12px] font-semibold text-[#17664e] hover:underline cursor-pointer"
+                        >
+                          Changer
+                        </button>
                       </div>
                     ) : phone ? (
                       <div className="flex items-center gap-2 shrink-0">
@@ -1688,7 +1786,10 @@ export const ProfilePage: React.FC = () => {
                         </div>
                         <button
                           type="button"
-                          onClick={handleStartPhoneVerification}
+                          onClick={() => {
+                            setModalPhoneInput(phone);
+                            handleStartPhoneVerification();
+                          }}
                           className="text-[12px] font-semibold text-[#17664e] hover:underline cursor-pointer"
                         >
                           Vérifier
@@ -1715,10 +1816,7 @@ export const ProfilePage: React.FC = () => {
                     </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setNewLocationInput(preferredLocation);
-                        setShowLocationModal(true);
-                      }}
+                      onClick={() => navigate('/settings?tab=location')}
                       className="text-[12px] font-semibold text-[#17664e] hover:underline shrink-0 cursor-pointer"
                     >
                       Modifier
@@ -1804,7 +1902,7 @@ export const ProfilePage: React.FC = () => {
 
                 {/* Changer le téléphone */}
                 <div
-                  onClick={handleStartPhoneVerification}
+                  onClick={handleOpenChangePhoneModal}
                   className="flex items-center gap-[12px] py-[12px] w-full cursor-pointer hover:bg-gray-50/60 rounded-[12px] px-1 transition"
                 >
                   <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
@@ -1875,10 +1973,10 @@ export const ProfilePage: React.FC = () => {
         )}
       </div>
 
-      {/* ── MODALE VALIDATION TÉLÉPHONE (TELEGRAM BOT & SMS) (FRAME 786:23506) ── */}
+      {/* ── MODALE VALIDATION TÉLÉPHONE (CARTE CODE FIGMA 994:58330) ───────── */}
       {showPhoneOtpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="w-full max-w-[440px] rounded-[28px] bg-white border-[1.5px] border-[#dbf0dd] p-7 sm:p-8 shadow-2xl relative font-poppins">
+          <div className="w-full max-w-[500px] rounded-[24px] bg-white border border-[#e6ece7] p-8 sm:p-10 shadow-[0px_16px_40px_rgba(0,0,0,0.12)] relative font-poppins flex flex-col items-center gap-[16px]">
             {/* Bouton Fermer Figma */}
             <button
               type="button"
@@ -1895,16 +1993,16 @@ export const ProfilePage: React.FC = () => {
 
             {/* ÉTAT 1 : SUCCÈS VÉRIFIÉ (Auto-synchronisation Telegram ou validation code) */}
             {telegramSuccess ? (
-              <div className="flex flex-col items-center justify-center text-center py-6 space-y-4">
-                <div className="size-20 rounded-full bg-[#dbf0dd] border-4 border-[#17664e]/20 flex items-center justify-center shadow-md animate-bounce">
-                  <img src={figmaTickVerified} alt="" className="size-10" />
+              <div className="flex flex-col items-center justify-center text-center py-4 space-y-3">
+                <div className="size-[80px] rounded-[22px] bg-[#dbf0dd] border border-[#17664e]/20 flex items-center justify-center shadow-xs">
+                  <img src={figmaTickVerified} alt="" className="size-9" />
                 </div>
-                <div className="space-y-1.5">
-                  <h3 className="text-2xl font-bold text-[#0b2c25]">Numéro vérifié !</h3>
-                  <p className="text-sm font-semibold text-[#17664e]">
+                <div className="space-y-1">
+                  <h3 className="text-[20px] font-semibold text-[#0b2c25]">Numéro vérifié !</h3>
+                  <p className="text-[13px] font-semibold text-[#17664e]">
                     ✓ Votre compte est désormais certifié et sécurisé.
                   </p>
-                  <p className="text-xs text-[#0b2c25]/70 max-w-xs mt-1">
+                  <p className="text-[12px] text-[#0b2c25]/70 max-w-xs mt-1">
                     Numéro validé : <strong>+213 {formatAlgerianMobileDisplay(modalPhoneInput || phone || profile?.phone)}</strong>
                   </p>
                 </div>
@@ -1915,7 +2013,7 @@ export const ProfilePage: React.FC = () => {
                       setShowPhoneOtpModal(false);
                       setTelegramSuccess(false);
                     }}
-                    className="px-6 py-2.5 rounded-[12px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-xs font-semibold shadow-sm transition cursor-pointer"
+                    className="bg-[#0b2c25] hover:bg-[#17664e] h-[44px] px-[28px] rounded-[10px] text-[13px] font-semibold text-white transition cursor-pointer shadow-sm"
                   >
                     Continuer
                   </button>
@@ -1923,28 +2021,32 @@ export const ProfilePage: React.FC = () => {
               </div>
             ) : (
               <>
-                {/* En-tête officiel de la modale */}
-                <div className="flex flex-col items-center text-center mb-6">
-                  <div className="size-14 rounded-full bg-[#eef7ec] border border-[#dbf0dd] flex items-center justify-center mb-3 shadow-xs">
-                    <img src={figmaSmartPhone} alt="" className="size-7" />
-                  </div>
-                  <h3 className="text-[22px] font-bold text-[#0B2C25] leading-tight">
-                    Vérification du numéro
+                {/* Icône Smartphone Figma 994:58331 */}
+                <div className="bg-[#ebeee1] rounded-[22px] size-[80px] flex items-center justify-center shrink-0">
+                  <img src={figmaSmartPhone01} alt="" className="size-[28px]" />
+                </div>
+
+                {/* Titre & Description Figma 994:58333 & 994:58334 */}
+                <div className="flex flex-col items-center text-center gap-1">
+                  <h3 className="text-[20px] font-semibold text-[#0b2c25] leading-tight">
+                    {otpSent ? 'Entrez le code reçu' : 'Vérifiez votre numéro'}
                   </h3>
-                  <p className="text-xs text-[#0b2c25]/70 mt-1 max-w-xs leading-relaxed">
-                    Validez votre numéro algérien via Telegram en 1 clic ou par code SMS.
+                  <p className="text-[13px] text-[#0b2c25]/70 text-center max-w-[380px] leading-relaxed">
+                    {otpSent
+                      ? `Nous avons envoyé un code à 6 chiffres au +213 ${formatAlgerianMobileDisplay(modalPhoneInput || phone || profile?.phone)}.`
+                      : 'Renseignez votre numéro de mobile algérien pour recevoir le code de sécurité.'}
                   </p>
                 </div>
 
                 {/* Étape 1 : Saisir le numéro si pas encore envoyé */}
                 {!otpSent ? (
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-[#0B2C25]">
+                  <div className="w-full flex flex-col items-center gap-4">
+                    <div className="w-full max-w-[380px] space-y-1.5">
+                      <label className="block text-[12px] font-semibold text-[#0b2c25]">
                         Numéro de téléphone algérien
                       </label>
-                      <div className={`flex items-center h-12 rounded-[14px] border-[1.5px] ${phoneError ? 'border-[#b22222] bg-[#fff5f5]' : 'border-[#dbf0dd] bg-[#fffaf0]'} px-3.5 transition focus-within:border-[#17664e] focus-within:bg-white`}>
-                        <img src={figmaPhoneInput} alt="" className="size-4 mr-2 opacity-80" />
+                      <div className={`flex items-center h-12 rounded-[12px] border ${phoneError ? 'border-[#b22222] bg-[#fff5f5]' : 'border-[#dbf0dd] bg-white focus-within:border-[#0b2c25]'} px-3.5 transition`}>
+                        <img src={figmaPhoneInput} alt="" className="size-4 mr-2.5 opacity-80" />
                         <span className="text-xs font-bold text-[#0b2c25] mr-2 select-none">🇩🇿 +213</span>
                         <input
                           type="tel"
@@ -1966,33 +2068,42 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     {otpError && (
-                      <div className="p-2.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-[#b22222] font-semibold text-center">
+                      <p className="text-xs text-[#b22222] font-semibold text-center">
                         {otpError}
-                      </div>
+                      </p>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={handleStartPhoneVerification}
-                      disabled={isSendingOtp}
-                      className="w-full h-12 rounded-[14px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-semibold text-sm transition cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isSendingOtp ? (
-                        <>
-                          <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Connexion en cours...</span>
-                        </>
-                      ) : (
-                        <span>Recevoir le code de vérification</span>
-                      )}
-                    </button>
+                    <div className="flex items-center justify-center gap-[12px] pt-1 w-full">
+                      <button
+                        type="button"
+                        onClick={() => setShowPhoneOtpModal(false)}
+                        className="border border-black/30 hover:bg-black/5 h-[44px] px-[20px] rounded-[10px] text-[13px] font-semibold text-[#0b2c25]/75 transition cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleStartPhoneVerification}
+                        disabled={isSendingOtp}
+                        className="bg-[#0b2c25] hover:bg-[#17664e] h-[44px] px-[24px] rounded-[10px] text-[13px] font-semibold text-white transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isSendingOtp ? (
+                          <>
+                            <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Envoi...</span>
+                          </>
+                        ) : (
+                          <span>Recevoir le code</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  /* Étape 2 : Vérification via Bot Telegram ou saisie du code */
-                  <div className="space-y-4">
+                  /* Étape 2 : Saisie du code à 6 chiffres (Figma 994:58335) */
+                  <div className="w-full flex flex-col items-center gap-3">
                     {/* Alerte Numéro Discordant (Telegram Mismatch) */}
                     {telegramMismatch && (
-                      <div className="p-3.5 rounded-[16px] bg-[#fff5f5] border border-[#b22222]/30 text-center space-y-2">
+                      <div className="w-full p-3.5 rounded-[16px] bg-[#fff5f5] border border-[#b22222]/30 text-center space-y-2">
                         <div className="flex items-center justify-center gap-1.5 text-[#b22222] font-bold text-xs">
                           <img src={figmaAlertCircle} alt="" className="size-4 shrink-0 text-[#b22222]" />
                           <span>Numéro Telegram non concordant</span>
@@ -2014,41 +2125,8 @@ export const ProfilePage: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Bloc Telegram Option 1 (Recommandée) */}
-                    <div className="p-4 rounded-[18px] bg-[#f5faf4] border-[1.5px] border-[#dbf0dd] text-center space-y-2.5">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <span className="size-2 rounded-full bg-[#17664e] animate-pulse" />
-                        <p className="text-xs text-[#0B2C25] font-semibold">
-                          Option 1 · Validation instantanée sur Telegram
-                        </p>
-                      </div>
-
-                      <a
-                        href={telegramLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full h-12 rounded-[14px] bg-[#229ED9] hover:bg-[#1E88E5] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-md transition cursor-pointer active:scale-[0.98]"
-                      >
-                        <svg className="size-5 fill-current" viewBox="0 0 24 24">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z" />
-                        </svg>
-                        <span>Recevoir le code sur Telegram (@forsa_auth_bot)</span>
-                      </a>
-
-                      <p className="text-[10px] text-[#0b2c25]/70 leading-normal">
-                        ⚡ Synchronisation en direct : dès confirmation sur Telegram, votre numéro se valide automatiquement sans avoir à taper le code !
-                      </p>
-                    </div>
-
-                    {/* Séparateur élégant Option 2 */}
-                    <div className="flex items-center gap-3 text-[11px] text-gray-400 my-1">
-                      <div className="h-px bg-[#dbf0dd] flex-1" />
-                      <span className="font-medium text-[#0b2c25]/60">Option 2 · ou saisissez le code reçu</span>
-                      <div className="h-px bg-[#dbf0dd] flex-1" />
-                    </div>
-
-                    {/* 6 OTP Boxes */}
-                    <div className="flex justify-center gap-2 sm:gap-2.5">
+                    {/* 6 Cases de code (Figma Frame 994:58335 : 56x64px, rounded 14px, font 24px) */}
+                    <div className="flex gap-[10px] sm:gap-[12px] items-center justify-center my-1" data-name="Code">
                       {otpDigits.map((digit, idx) => (
                         <input
                           key={idx}
@@ -2063,10 +2141,12 @@ export const ProfilePage: React.FC = () => {
                           onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                           onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                           onPaste={handleOtpPaste}
-                          className={`size-11 sm:size-12 text-center text-xl font-bold rounded-[14px] border-[1.5px] transition focus:outline-none ${
+                          className={`w-[48px] sm:w-[56px] h-[60px] sm:h-[64px] text-center text-[24px] font-semibold rounded-[14px] border transition focus:outline-none ${
                             otpError
-                              ? 'border-[#B22222] bg-[#fff5f5] text-[#B22222]'
-                              : 'border-[#dbf0dd] bg-[#fffaf0] focus:border-[#17664E] focus:bg-white text-[#0b2c25]'
+                              ? 'border-2 border-[#b22222] bg-[#fff5f5] text-[#b22222]'
+                              : digit
+                                ? 'bg-[#ebeee1] border-black/10 text-[#0b2c25]'
+                                : 'bg-white border-black/15 focus:border-2 focus:border-[#0b2c25] text-[#0b2c25]'
                           }`}
                         />
                       ))}
@@ -2074,32 +2154,47 @@ export const ProfilePage: React.FC = () => {
 
                     {/* Message d'erreur OTP */}
                     {otpError && (
-                      <p className="text-xs text-[#B22222] font-semibold text-center animate-shake">
+                      <p className="text-xs text-[#b22222] font-semibold text-center animate-shake">
                         {otpError}
                       </p>
                     )}
 
-                    {/* Compteur de validité */}
-                    <div className="text-center text-xs text-[#0b2c25]/75">
+                    {/* Minuteur Figma 994:58346 avec icône clock-01 */}
+                    <div className="flex items-center justify-center gap-[6px] text-[13px] text-[#0b2c25]/70">
+                      <img src={figmaClock} alt="" className="size-[14px] shrink-0" />
                       {otpSecondsLeft > 0 ? (
                         <span>
-                          Validité du code :{' '}
-                          <strong className="text-[#17664E] font-semibold">{formatOtpTimer(otpSecondsLeft)}</strong>
+                          Renvoyer le code dans <strong className="font-semibold text-[#0b2c25]">{formatOtpTimer(otpSecondsLeft)}</strong>
                         </span>
                       ) : (
-                        <span className="text-[#B22222] font-semibold">
-                          Le code a expiré. Demandez un nouveau code ci-dessous.
-                        </span>
+                        <button
+                          type="button"
+                          onClick={handleStartPhoneVerification}
+                          className="text-[#17664e] font-semibold hover:underline cursor-pointer"
+                        >
+                          Renvoyer un nouveau code
+                        </button>
                       )}
                     </div>
 
-                    {/* Actions */}
-                    <div className="space-y-2 pt-1">
+                    {/* Boutons d'actions Figma 994:58349 (Annuler + Vérifier mon numéro) */}
+                    <div className="flex items-center justify-center gap-[12px] pt-2 w-full">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtpSent(false);
+                          setOtpError(null);
+                          setTelegramMismatch(false);
+                        }}
+                        className="border border-black/30 hover:bg-black/5 h-[44px] px-[20px] rounded-[10px] text-[13px] font-semibold text-[#0b2c25]/75 transition cursor-pointer"
+                      >
+                        Changer de numéro
+                      </button>
                       <button
                         type="button"
                         onClick={handleConfirmOtp}
                         disabled={isVerifyingOtp || otpSecondsLeft === 0}
-                        className="w-full h-12 rounded-[14px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-semibold text-sm transition cursor-pointer disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
+                        className="bg-[#0b2c25] hover:bg-[#17664e] h-[44px] px-[24px] rounded-[10px] text-[13px] font-semibold text-white transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {isVerifyingOtp ? (
                           <>
@@ -2107,30 +2202,25 @@ export const ProfilePage: React.FC = () => {
                             <span>Vérification...</span>
                           </>
                         ) : (
-                          <span>Valider le code</span>
+                          <span>Vérifier mon numéro</span>
                         )}
                       </button>
+                    </div>
 
-                      <div className="flex items-center justify-between text-xs pt-1 px-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOtpSent(false);
-                            setOtpError(null);
-                            setTelegramMismatch(false);
-                          }}
-                          className="text-[#0b2c25]/70 hover:text-[#0b2c25] hover:underline"
-                        >
-                          ← Changer de numéro
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleStartPhoneVerification}
-                          className="text-[#17664E] font-semibold hover:underline"
-                        >
-                          Renvoyer un nouveau code
-                        </button>
-                      </div>
+                    {/* Option Telegram intégrée en toute élégance (discrète et épurée) */}
+                    <div className="flex flex-col items-center gap-1 pt-2 mt-1 border-t border-[#f0f3eb] w-full">
+                      <a
+                        href={telegramLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#f4f7f2] hover:bg-[#e7eee4] border border-[#dbf0dd] text-[12px] font-medium text-[#0b2c25] transition cursor-pointer"
+                      >
+                        <svg className="size-3.5 fill-[#229ED9]" viewBox="0 0 24 24">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z" />
+                        </svg>
+                        <span>Valider aussi via le bot Telegram <strong>@forsa_auth_bot</strong></span>
+                      </a>
+                      <span className="text-[11px] text-[#0b2c25]/50">Validation automatique en direct dès réception</span>
                     </div>
                   </div>
                 )}
@@ -2330,10 +2420,46 @@ export const ProfilePage: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => {
-                  requestCurrentPosition();
-                  setPreferredLocation('Bab Ezzouar, Alger');
-                  setShowLocationModal(false);
+                onClick={async () => {
+                  if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                      async (pos) => {
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        let label = '';
+                        try {
+                          const res = await fetch(
+                            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=fr`
+                          );
+                          if (res.ok) {
+                            const data = await res.json();
+                            const loc = data.locality || data.city || data.principalSubdivision;
+                            const reg = data.principalSubdivision
+                              ? data.principalSubdivision.replace(/wilaya d['’e\s]*/i, '').trim()
+                              : data.city || '';
+                            if (loc && reg && loc.toLowerCase() !== reg.toLowerCase()) {
+                              label = `${loc}, ${reg}`;
+                            } else if (loc) {
+                              label = loc;
+                            }
+                          }
+                        } catch {}
+                        if (!label) {
+                          label = `Position (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
+                        }
+                        setLocation({ lat, lng, label });
+                        setPreferredLocation(label);
+                        localStorage.setItem('forsa_user_location', JSON.stringify({ lat, lng, label }));
+                        setShowLocationModal(false);
+                      },
+                      () => {
+                        setShowLocationModal(false);
+                      },
+                      { timeout: 7000, enableHighAccuracy: false, maximumAge: 60000 }
+                    );
+                  } else {
+                    setShowLocationModal(false);
+                  }
                 }}
                 className="w-full text-xs text-[#17664E] font-semibold hover:underline flex items-center justify-center gap-1.5 py-1"
               >
@@ -2352,7 +2478,10 @@ export const ProfilePage: React.FC = () => {
                   type="button"
                   onClick={() => {
                     if (newLocationInput.trim()) {
-                      setPreferredLocation(newLocationInput.trim());
+                      const val = newLocationInput.trim();
+                      setPreferredLocation(val);
+                      setLocation({ lat: location.lat, lng: location.lng, label: val });
+                      localStorage.setItem('forsa_user_location', JSON.stringify({ lat: location.lat, lng: location.lng, label: val }));
                     }
                     setShowLocationModal(false);
                   }}

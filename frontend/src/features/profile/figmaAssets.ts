@@ -69,6 +69,8 @@ import figmaIllustrationAide from '../../assets/images/figma/825_imgIllustration
 import figmaMultiplicationSign from '../../assets/icons/figma/figmaMultiplicationSign.svg';
 import figmaAlertCircle from '../../assets/icons/figma/figmaAlertCircle.svg';
 import figmaRefresh from '../../assets/icons/figma/figmaRefresh.svg';
+import figmaClock from '../../assets/icons/figma/figmaClock.svg';
+import figmaSmartPhone01 from '../../assets/icons/figma/figmaSmartPhone01.svg';
 
 export {
   defaultAvatar,
@@ -91,6 +93,7 @@ export {
   figmaUserCircle,
   figmaEditSmall,
   figmaSmartPhone,
+  figmaSmartPhone01,
   figmaTickSmall,
   figmaMail,
   figmaLocationTile,
@@ -130,4 +133,5 @@ export {
   figmaMultiplicationSign,
   figmaAlertCircle,
   figmaRefresh,
+  figmaClock,
 };

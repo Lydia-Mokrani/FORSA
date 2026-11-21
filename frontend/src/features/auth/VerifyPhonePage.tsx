@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CheckCircle2, AlertCircle, ArrowLeft, MessageSquare, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
+import { figmaSmartPhone01, figmaClock } from '../profile/figmaAssets';
 
 const OTP_LENGTH = 6;
 
@@ -37,8 +38,7 @@ export const VerifyPhonePage: React.FC = () => {
         const code = data?.error?.code;
         if (code === 'OTP_COOLDOWN') setTimer(data?.error?.details?.[0]?.retryAfter ?? 60);
         if (code === 'PHONE_ALREADY_VERIFIED') {
-          setSuccess(true);
-          setTimeout(() => navigate('/'), 1500);
+          navigate('/profile?changePhone=1');
           return;
         }
         throw new Error(data?.error?.message || 'Impossible d’envoyer le code.');
@@ -239,94 +239,23 @@ export const VerifyPhonePage: React.FC = () => {
       {/* 16 · Vérification du téléphone avec option Telegram en vedette */}
       <main className="relative z-10 w-full max-w-[500px] backdrop-blur-[20px] bg-white/40 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-5 text-center my-auto">
         
-        {/* Badge d'icône officiel parfaitement centré */}
-        <div className="size-16 mx-auto rounded-full bg-white/85 border border-[#0B2C25]/15 flex items-center justify-center shadow-sm">
-          {method === 'telegram' ? (
-            <svg
-              className="size-8 text-[#229ED9] -translate-x-[1px]"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="m20.665 3.717-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701h-.002l-.313 4.673c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.434z" />
-            </svg>
-          ) : (
-            <MessageSquare className="size-7 text-[#17664E]" />
-          )}
+        {/* Pastille smartphone Figma 994:58331 */}
+        <div className="size-20 mx-auto rounded-[22px] bg-[#ebeee1] flex items-center justify-center shadow-xs">
+          <img src={figmaSmartPhone01} alt="" className="size-7" />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl sm:text-[28px] font-semibold text-[#0B2C25] leading-tight">
-            Vérification de votre compte
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl sm:text-[24px] font-semibold text-[#0B2C25] leading-tight">
+            Entrez le code reçu
           </h1>
-          <p className="text-xs sm:text-[13px] text-[#0B2C25]/75 leading-relaxed">
+          <p className="text-[13px] text-[#0B2C25]/75 leading-relaxed">
             {userPhone ? (
-              <>Pour le numéro <span className="font-semibold text-[#0B2C25]">{userPhone}</span></>
+              <>Nous avons envoyé un code à 6 chiffres au <strong className="text-[#0B2C25]">{userPhone}</strong>.</>
             ) : (
-              'Validez votre numéro pour sécuriser votre compte'
+              'Nous avons envoyé un code à 6 chiffres pour valider votre numéro.'
             )}
           </p>
         </div>
-
-        {/* Sélecteur de méthode : Telegram (Recommandé) / SMS */}
-        <div className="grid grid-cols-2 gap-2 bg-[#0B2C25]/5 p-1 rounded-2xl border border-white/40">
-          <button
-            type="button"
-            onClick={() => setMethod('telegram')}
-            className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-              method === 'telegram'
-                ? 'bg-white text-[#229ED9] shadow-sm'
-                : 'text-[#0B2C25]/70 hover:text-[#0B2C25]'
-            }`}
-          >
-            <svg className="size-3.5 shrink-0 fill-current" viewBox="0 0 24 24">
-              <path d="m20.665 3.717-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701h-.002l-.313 4.673c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.434z" />
-            </svg>
-            <span>Telegram (Rapide)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMethod('sms')}
-            className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-              method === 'sms'
-                ? 'bg-white text-[#17664E] shadow-sm'
-                : 'text-[#0B2C25]/70 hover:text-[#0B2C25]'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>SMS classique</span>
-          </button>
-        </div>
-
-        {/* Bloc interactif Telegram style RedotPay */}
-        {method === 'telegram' ? (
-          <div className="bg-white/60 border border-[#229ED9]/25 rounded-2xl p-4 flex flex-col items-center gap-2.5 text-center shadow-sm">
-            <div className="inline-flex items-center gap-2 bg-[#229ED9]/10 text-[#229ED9] px-3 py-1 rounded-full text-xs font-semibold">
-              <span className="size-2 rounded-full bg-[#229ED9] animate-pulse" />
-              <span>Code envoyé sur Telegram</span>
-            </div>
-
-            <p className="text-[12px] text-[#0B2C25]/75 leading-relaxed">
-              Appuyez sur le code reçu sur Telegram pour le copier, puis collez-le ci-dessous.
-            </p>
-
-            <a
-              href={telegramLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setBotOpened(true)}
-              className="w-full py-3 px-4 bg-[#229ED9] hover:bg-[#1E88C7] text-white font-medium text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition cursor-pointer active:scale-[0.99]"
-            >
-              <svg className="size-4 shrink-0 fill-current" viewBox="0 0 24 24">
-                <path d="m20.665 3.717-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701h-.002l-.313 4.673c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.434z" />
-              </svg>
-              <span>Ouvrir @forsa_auth_bot sur Telegram</span>
-            </a>
-          </div>
-        ) : (
-          <div className="bg-white/50 border border-white/80 rounded-2xl p-3 text-xs text-[#0B2C25]/75 text-center">
-            Un SMS contenant votre code à 6 chiffres a été envoyé sur votre téléphone.
-          </div>
-        )}
 
         {errorMessage && (
           <div className="flex items-center gap-2 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs px-3 py-2.5 rounded-xl text-left">
@@ -361,10 +290,12 @@ export const VerifyPhonePage: React.FC = () => {
                     onKeyDown={(e) => handleKeyDown(index, e)}
                     onPaste={handlePaste}
                     autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                    className={`w-10 h-13 sm:w-11 sm:h-14 rounded-xl text-center text-xl font-bold focus:outline-none shadow-sm transition ${
+                    className={`w-11 sm:w-12 h-14 sm:h-16 rounded-[14px] text-center text-[22px] font-semibold focus:outline-none transition ${
                       codeError
-                        ? 'border-[1.5px] border-[#B22222] bg-[#B22222]/5 text-[#B22222] focus:border-[#B22222]'
-                        : 'bg-white/70 border-[1.5px] border-white/95 focus:border-[#229ED9] text-[#0B2C25]'
+                        ? 'border-2 border-[#B22222] bg-[#fff5f5] text-[#B22222]'
+                        : digits[index]
+                          ? 'bg-[#ebeee1] border border-black/10 text-[#0B2C25]'
+                          : 'bg-white border border-black/15 focus:border-2 focus:border-[#0B2C25] text-[#0B2C25]'
                     } ${locked || expireTimer === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
                   />
                 ))}
@@ -373,9 +304,12 @@ export const VerifyPhonePage: React.FC = () => {
 
             <div className="flex flex-col items-center gap-2">
               {expireTimer > 0 ? (
-                <p className="text-xs text-[#0B2C25]/75">
-                  Validité du code : <strong className="font-semibold text-[#0B2C25]">{formatTime(expireTimer)}</strong>
-                </p>
+                <div className="flex items-center justify-center gap-1.5 text-xs text-[#0B2C25]/75">
+                  <img src={figmaClock} alt="" className="size-3.5 opacity-70" />
+                  <span>
+                    Renvoyer le code dans <strong className="font-semibold text-[#0B2C25]">{formatTime(expireTimer)}</strong>
+                  </span>
+                </div>
               ) : (
                 <div className="flex flex-col items-center gap-1.5 text-center bg-[#B22222]/10 border border-[#B22222]/20 rounded-xl p-3 w-full">
                   <p className="text-xs text-[#B22222] font-semibold flex items-center justify-center gap-1.5">
@@ -396,30 +330,41 @@ export const VerifyPhonePage: React.FC = () => {
                 </div>
               )}
 
-              {expireTimer > 0 && (
-                <p className="text-xs text-[#0B2C25]/70">
-                  {timer > 0 ? (
-                    <>Rien reçu ? Renvoyer le code (00:{timer < 10 ? `0${timer}` : timer})</>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={requestOtp}
-                      className="font-semibold text-[#17664E] hover:underline cursor-pointer"
-                    >
-                      Renvoyer un nouveau code
-                    </button>
-                  )}
-                </p>
+              {expireTimer > 0 && timer === 0 && (
+                <button
+                  type="button"
+                  onClick={requestOtp}
+                  className="text-xs font-semibold text-[#17664E] hover:underline cursor-pointer"
+                >
+                  Renvoyer un nouveau code
+                </button>
               )}
             </div>
 
             <button
               type="submit"
               disabled={loading || locked || expireTimer === 0}
-              className="w-full h-[52px] disabled:opacity-60 bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer active:scale-[0.99]"
+              className="w-full h-12 disabled:opacity-60 bg-[#0B2C25] hover:bg-[#17664E] text-white font-semibold text-[14px] rounded-[12px] flex items-center justify-center gap-2 shadow-sm transition cursor-pointer"
             >
               {loading ? 'Validation...' : 'Valider mon compte'}
             </button>
+
+            {/* Accès discret Telegram */}
+            <div className="flex flex-col items-center gap-1 pt-1 mt-1 border-t border-black/5">
+              <a
+                href={telegramLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setBotOpened(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/80 hover:bg-white border border-[#dbf0dd] text-[12px] font-medium text-[#0b2c25] transition shadow-2xs"
+              >
+                <svg className="size-3.5 fill-[#229ED9]" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z" />
+                </svg>
+                <span>Recevoir également le code via Telegram <strong>@forsa_auth_bot</strong></span>
+              </a>
+              <span className="text-[11px] text-[#0b2c25]/50">Validation automatique en direct dès réception</span>
+            </div>
           </form>
         )}
 
