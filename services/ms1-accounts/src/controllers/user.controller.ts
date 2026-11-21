@@ -13,6 +13,7 @@ import { prisma } from '../config/prisma';
 import { devDb, isPostgresAlive } from '../services/dev-db.service';
 import { jwtService } from '../services/jwt.service';
 import { sendSms, sendTwilioVerification, checkTwilioVerification, sendTelegramOtp } from '../services/sms.service';
+import { registerPendingTelegramOtp, getTelegramDeepLink } from '../services/telegram.service';
 import { mobilePhoneSchema } from '../utils/phone';
 import { avatarFilePath, hasImageSignature } from '../middleware/avatar-upload.middleware';
 import { config } from '../config/env';
@@ -207,7 +208,11 @@ export class UserController {
       const codeHash = hashOtp(userId, code);
       const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-      // 1. Envoi instantané du code sur Telegram
+      // Enregistrer pour deep link Telegram bot
+      const telegramToken = registerPendingTelegramOtp(userId, code, user.phone, user.fullName);
+      const telegramLink = getTelegramDeepLink(telegramToken);
+
+      // 1. Envoi instantané du code sur Telegram si chat_id déjà associé
       await sendTelegramOtp(user.phone, code);
 
       // 2. Envoi par SMS Twilio si numéro vérifié
@@ -233,10 +238,14 @@ export class UserController {
       }
 
       res.json({
-        message: `Code à ${OTP_LENGTH} chiffres envoyé par SMS.`,
+        message: `Code à ${OTP_LENGTH} chiffres disponible.`,
         expiresInSeconds: OTP_TTL_MS / 1000,
         resendInSeconds: OTP_RESEND_MS / 1000,
         sentViaTwilio,
+        telegramToken,
+        telegramLink,
+        botUsername: 'forsa_auth_bot',
+        phone: user.phone,
       });
     } catch (err) {
       next(err);

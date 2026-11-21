@@ -2,6 +2,7 @@ import { app } from './app';
 import { ConsulRegistry } from '@forsa/common';
 import { config } from './config/env';
 import { initRabbitMQ, rabbitMQ } from './services/rabbitmq.service';
+import { startTelegramBot, stopTelegramBot } from './services/telegram.service';
 
 // Enregistrement Consul pour la découverte dynamique Traefik
 const consul = new ConsulRegistry({
@@ -22,11 +23,15 @@ const server = app.listen(config.port, async () => {
 
   // Enregistrement du service auprès de Consul
   await consul.register();
+
+  // Démarrage du bot Telegram officiel FORSA
+  await startTelegramBot();
 });
 
 // Arrêt gracieux (Graceful Shutdown)
 const gracefulShutdown = async (signal: string) => {
   console.log(`[MS1-Accounts] Signal ${signal} reçu. Fermeture propre du service...`);
+  stopTelegramBot();
   await consul.deregister();
   await rabbitMQ.close();
   server.close(() => {

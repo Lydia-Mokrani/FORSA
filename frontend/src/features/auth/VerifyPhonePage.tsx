@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Phone, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ArrowLeft, MessageSquare, Send, ShieldCheck } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
 
 const OTP_LENGTH = 6;
@@ -13,6 +13,10 @@ export const VerifyPhonePage: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [timer, setTimer] = useState(0);
   const [locked, setLocked] = useState(false);
+  const [telegramLink, setTelegramLink] = useState('https://t.me/forsa_auth_bot');
+  const [userPhone, setUserPhone] = useState<string>('');
+  const [method, setMethod] = useState<'telegram' | 'sms'>('telegram');
+  const [botOpened, setBotOpened] = useState(false);
 
   const authHeaders = () => ({
     'Content-Type': 'application/json',
@@ -37,6 +41,8 @@ export const VerifyPhonePage: React.FC = () => {
         throw new Error(data?.error?.message || 'Impossible d’envoyer le code.');
       }
       setTimer(data.resendInSeconds ?? 60);
+      if (data.telegramLink) setTelegramLink(data.telegramLink);
+      if (data.phone) setUserPhone(data.phone);
     } catch (e: any) {
       setErrorMessage(e.message || 'Impossible d’envoyer le code. Vérifiez votre connexion.');
     }
@@ -122,7 +128,7 @@ export const VerifyPhonePage: React.FC = () => {
             localStorage.setItem('forsa_refresh_token', t.refreshToken);
           }
         } catch {
-          /* refresh token if possible */
+          /* refresh token */
         }
       }
 
@@ -143,8 +149,8 @@ export const VerifyPhonePage: React.FC = () => {
         <div className="absolute inset-0 bg-[#FFFAF0]/28" />
       </div>
 
-      {/* En-tête Figma 1030:23892 */}
-      <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-4">
+      {/* En-tête Figma */}
+      <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-6 px-2 sm:px-4">
         <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
         </Link>
@@ -153,24 +159,101 @@ export const VerifyPhonePage: React.FC = () => {
         </span>
       </header>
 
-      {/* 16 · Vérification du téléphone (Figma 1030:23892) */}
-      <main className="relative z-10 w-full max-w-[480px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-6 text-center my-auto">
+      {/* 16 · Vérification du téléphone avec option Telegram en vedette */}
+      <main className="relative z-10 w-full max-w-[500px] backdrop-blur-[20px] bg-white/40 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-5 text-center my-auto">
         
-        <div className="size-16 mx-auto rounded-full bg-white/60 border border-[#0B2C25]/15 flex items-center justify-center text-[#17664E] shadow-sm">
-          <Phone className="size-7" />
+        {/* Badge d'icône */}
+        <div className="size-14 mx-auto rounded-full bg-white/70 border border-[#0B2C25]/15 flex items-center justify-center text-[#17664E] shadow-sm">
+          {method === 'telegram' ? (
+            <Send className="size-6 text-[#229ED9] -rotate-12 translate-x-0.5" />
+          ) : (
+            <MessageSquare className="size-6 text-[#17664E]" />
+          )}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl sm:text-[32px] font-semibold text-[#0B2C25] leading-tight">
-            Confirmez votre numéro
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-2xl sm:text-[28px] font-semibold text-[#0B2C25] leading-tight">
+            Vérification de votre compte
           </h1>
-          <p className="text-xs sm:text-[14px] text-[#0B2C25]/65 leading-relaxed">
-            Saisissez le code à 6 chiffres envoyé par SMS sur votre téléphone.
+          <p className="text-xs sm:text-[13px] text-[#0B2C25]/75 leading-relaxed">
+            {userPhone ? (
+              <>Pour le numéro <span className="font-semibold text-[#0B2C25]">{userPhone}</span></>
+            ) : (
+              'Validez votre numéro pour sécuriser votre compte'
+            )}
           </p>
         </div>
 
+        {/* Sélecteur de méthode : Telegram (Recommandé) / SMS */}
+        <div className="grid grid-cols-2 gap-2 bg-[#0B2C25]/5 p-1 rounded-2xl border border-white/40">
+          <button
+            type="button"
+            onClick={() => setMethod('telegram')}
+            className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              method === 'telegram'
+                ? 'bg-white text-[#229ED9] shadow-sm'
+                : 'text-[#0B2C25]/70 hover:text-[#0B2C25]'
+            }`}
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Telegram (Rapide)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMethod('sms')}
+            className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              method === 'sms'
+                ? 'bg-white text-[#17664E] shadow-sm'
+                : 'text-[#0B2C25]/70 hover:text-[#0B2C25]'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>SMS classique</span>
+          </button>
+        </div>
+
+        {/* Bloc interactif Telegram */}
+        {method === 'telegram' ? (
+          <div className="bg-white/60 border border-[#229ED9]/25 rounded-2xl p-4 flex flex-col gap-3 text-left">
+            <div className="flex items-start gap-3">
+              <div className="size-8 rounded-full bg-[#229ED9]/15 flex items-center justify-center shrink-0 text-[#229ED9] mt-0.5">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-[#0B2C25]">Recevez votre code instantanément</span>
+                <span className="text-[11px] text-[#0B2C25]/70 leading-normal">
+                  1. Cliquez ci-dessous pour ouvrir <strong>@forsa_auth_bot</strong><br />
+                  2. Cliquez sur <strong>Démarrer (Start)</strong> dans le bot<br />
+                  3. Votre code à 6 chiffres vous sera envoyé immédiatement !
+                </span>
+              </div>
+            </div>
+
+            <a
+              href={telegramLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setBotOpened(true)}
+              className="w-full py-3 px-4 bg-[#229ED9] hover:bg-[#1E88C7] text-white font-medium text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition cursor-pointer active:scale-[0.99]"
+            >
+              <Send className="w-4 h-4 -rotate-12" />
+              <span>Ouvrir Telegram &amp; Recevoir le code</span>
+            </a>
+
+            {botOpened && (
+              <p className="text-[11px] text-[#17664E] bg-[#17664E]/10 rounded-lg p-2 text-center font-medium">
+                ✅ Bot ouvert ! Dès que vous cliquez sur <strong>Démarrer (Start)</strong> sur Telegram, recopiez le code ci-dessous.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="bg-white/50 border border-white/80 rounded-2xl p-3 text-xs text-[#0B2C25]/75 text-center">
+            Un SMS contenant votre code à 6 chiffres a été envoyé sur votre téléphone.
+          </div>
+        )}
+
         {errorMessage && (
-          <div className="flex items-center gap-2 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-sm px-4 py-3 rounded-2xl">
+          <div className="flex items-center gap-2 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs px-3 py-2.5 rounded-xl text-left">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -179,27 +262,32 @@ export const VerifyPhonePage: React.FC = () => {
         {success ? (
           <div className="flex flex-col items-center gap-3 py-4 text-[#17664E]">
             <CheckCircle2 className="w-12 h-12" />
-            <p className="font-semibold text-base sm:text-lg">Numéro validé avec succès !</p>
+            <p className="font-semibold text-base sm:text-lg">Compte validé avec succès !</p>
             <p className="text-xs text-[#0B2C25]/60">Redirection en cours...</p>
           </div>
         ) : (
-          <form onSubmit={handleVerify} className="flex flex-col gap-6">
-            <div className="flex items-center justify-center gap-2 sm:gap-3">
-              {Array.from({ length: OTP_LENGTH }, (_, index) => index).map((index) => (
-                <input
-                  key={index}
-                  id={`otp-input-${index}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digits[index]}
-                  onChange={(e) => handleDigitChange(index, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(index, e)}
-                  onPaste={handlePaste}
-                  autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                  className="w-10 h-14 sm:w-12 sm:h-16 bg-white/70 border-[1.5px] border-white/95 focus:border-[#17664E] rounded-2xl text-center text-xl sm:text-2xl font-bold text-[#0B2C25] focus:outline-none shadow-sm transition"
-                />
-              ))}
+          <form onSubmit={handleVerify} className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-[#0B2C25]/80 text-left">
+                Saisissez le code à 6 chiffres :
+              </label>
+              <div className="flex items-center justify-center gap-2 sm:gap-2.5">
+                {Array.from({ length: OTP_LENGTH }, (_, index) => index).map((index) => (
+                  <input
+                    key={index}
+                    id={`otp-input-${index}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digits[index]}
+                    onChange={(e) => handleDigitChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    onPaste={handlePaste}
+                    autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                    className="w-10 h-13 sm:w-11 sm:h-14 bg-white/70 border-[1.5px] border-white/95 focus:border-[#229ED9] rounded-xl text-center text-xl font-bold text-[#0B2C25] focus:outline-none shadow-sm transition"
+                  />
+                ))}
+              </div>
             </div>
 
             <p className="text-xs text-[#0B2C25]/70">
@@ -215,9 +303,9 @@ export const VerifyPhonePage: React.FC = () => {
             <button
               type="submit"
               disabled={loading || locked}
-              className="w-full h-[56px] disabled:opacity-60 bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer active:scale-[0.99]"
+              className="w-full h-[52px] disabled:opacity-60 bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer active:scale-[0.99]"
             >
-              {loading ? 'Validation...' : 'Valider'}
+              {loading ? 'Validation...' : 'Valider mon compte'}
             </button>
           </form>
         )}
@@ -232,7 +320,7 @@ export const VerifyPhonePage: React.FC = () => {
       </main>
 
       {/* Spacer pour l'alignement vertical exact */}
-      <div className="relative z-10 w-full max-w-6xl h-8" />
+      <div className="relative z-10 w-full max-w-6xl h-6" />
     </div>
   );
 };
