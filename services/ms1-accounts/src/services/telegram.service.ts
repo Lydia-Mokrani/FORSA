@@ -19,6 +19,16 @@ const pendingOtpsByToken = new Map<string, PendingOtpInfo>();
 const userTokenMap = new Map<string, string>();
 // Map chatId -> PendingOtpInfo (session Telegram en cours)
 const chatPendingSession = new Map<number | string, PendingOtpInfo>();
+// Mémoire persistante des téléphones certifiés : E.164 -> chatId et chatId -> E.164
+const phoneToChatIdMap = new Map<string, number | string>();
+const chatIdToPhoneMap = new Map<number | string, string>();
+
+// Pré-enregistrement du compte vérifié de l'administratrice/testeuse
+if (config.telegramChatId) {
+  chatIdToPhoneMap.set(config.telegramChatId, '+213697937637');
+  phoneToChatIdMap.set('+213697937637', config.telegramChatId);
+}
+
 // Dernier token en attente
 let lastPendingToken: string | null = null;
 
@@ -47,46 +57,20 @@ export async function markUserPhoneVerified(userId: string): Promise<boolean> {
 }
 
 /**
- * Enregistre un OTP en attente pour validation par Telegram.
+ * Formatage minimaliste & ultra-pro style RedotPay :
+ * Code en monospace pour copie directe d'un seul clic sur Telegram !
  */
-export function registerPendingTelegramOtp(
-  userId: string,
-  code: string,
-  phone: string,
-  fullName?: string
-): string {
-  const rawToken = crypto.randomBytes(6).toString('hex');
-  const token = `v_${rawToken}`;
-
-  const info: PendingOtpInfo = {
-    userId,
-    code,
-    phone: toE164(phone),
-    fullName,
-    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-    telegramVerified: false,
-  };
-
-  pendingOtpsByToken.set(token, info);
-  userTokenMap.set(userId, token);
-  lastPendingToken = token;
-
-  setTimeout(() => {
-    pendingOtpsByToken.delete(token);
-    if (userTokenMap.get(userId) === token) userTokenMap.delete(userId);
-  }, 10 * 60 * 1000);
-
-  return token;
-}
-
-export function getTelegramDeepLink(token: string): string {
-  return `https://t.me/forsa_auth_bot?start=${token}`;
+export function formatRedotPayTelegramOtp(code: string): string {
+  return `🔐 *FORSA Verification Code*\n\n` +
+         `\`${code}\`\n\n` +
+         `_(Appuyez sur le code pour copier)_\n` +
+         `⏱️ Valable 5 minutes. Ne partagez jamais ce code.`;
 }
 
 /**
  * Envoie un message texte simple ou avec boutons.
  */
-async function sendTelegramMessage(
+export async function sendTelegramMessage(
   chatId: string | number,
   text: string,
   replyMarkup?: any
@@ -116,6 +100,52 @@ async function sendTelegramMessage(
 }
 
 /**
+ * Enregistre un OTP en attente pour validation par Telegram.
+ * Si le numéro est déjà lié à un compte Telegram connu, l'envoi se fait automatiquement !
+ */
+export function registerPendingTelegramOtp(
+  userId: string,
+  code: string,
+  phone: string,
+  fullName?: string
+): string {
+  const rawToken = crypto.randomBytes(6).toString('hex');
+  const token = `v_${rawToken}`;
+  const formattedPhone = toE164(phone);
+
+  const info: PendingOtpInfo = {
+    userId,
+    code,
+    phone: formattedPhone,
+    fullName,
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    telegramVerified: false,
+  };
+
+  pendingOtpsByToken.set(token, info);
+  userTokenMap.set(userId, token);
+  lastPendingToken = token;
+
+  // Envoi automatique direct style RedotPay si le numéro a déjà été lié
+  const knownChatId = phoneToChatIdMap.get(formattedPhone);
+  if (knownChatId) {
+    sendTelegramMessage(knownChatId, formatRedotPayTelegramOtp(code), { remove_keyboard: true });
+    console.log(`[TelegramService] ⚡ Envoi automatique RedotPay du code ${code} à chat_id ${knownChatId} (${formattedPhone})`);
+  }
+
+  setTimeout(() => {
+    pendingOtpsByToken.delete(token);
+    if (userTokenMap.get(userId) === token) userTokenMap.delete(userId);
+  }, 10 * 60 * 1000);
+
+  return token;
+}
+
+export function getTelegramDeepLink(token: string): string {
+  return `https://t.me/forsa_auth_bot?start=${token}`;
+}
+
+/**
  * Traite les messages Telegram reçus (texte /start ou contact partagé).
  */
 async function handleTelegramUpdate(update: any): Promise<void> {
@@ -131,7 +161,6 @@ async function handleTelegramUpdate(update: any): Promise<void> {
     const contactPhone = toE164(rawContactPhone);
     const contactUserId = message.contact.user_id;
 
-    // Vérifier que le contact partagé est bien celui du compte qui écrit
     if (contactUserId && senderId && contactUserId !== senderId) {
       await sendTelegramMessage(
         chatId,
@@ -141,7 +170,6 @@ async function handleTelegramUpdate(update: any): Promise<void> {
       return;
     }
 
-    // Récupérer la session d'inscription associée
     let targetOtp = chatPendingSession.get(chatId);
     if (!targetOtp && lastPendingToken) {
       targetOtp = pendingOtpsByToken.get(lastPendingToken);
@@ -150,7 +178,7 @@ async function handleTelegramUpdate(update: any): Promise<void> {
     if (!targetOtp || targetOtp.expiresAt.getTime() <= Date.now()) {
       await sendTelegramMessage(
         chatId,
-        '⚠️ *Session expirée ou introuvable.*\n\nVeuillez relancer la vérification sur FORSA pour obtenir un nouveau lien.',
+        '⚠️ *Session expirée ou introuvable.*\n\nVeuillez relancer la vérification sur FORSA pour obtenir un nouveau code.',
         { remove_keyboard: true }
       );
       return;
@@ -158,31 +186,27 @@ async function handleTelegramUpdate(update: any): Promise<void> {
 
     const registeredPhone = toE164(targetOtp.phone);
 
-    // ─── CONTRÔLE DE SÉCURITÉ ABSOLU : LES DEUX NUMÉROS DOIVENT ÊTRE IDENTIQUES ───
+    // Contrôle strict : Numéro Telegram == Numéro FORSA
     if (contactPhone !== registeredPhone) {
-      const errorMsg = `❌ *Vérification refusée : Numéros non concordants !*\n\n` +
-        `• 📱 *Numéro de votre compte Telegram :* \`${contactPhone}\`\n` +
-        `• 📝 *Numéro saisi sur FORSA :* \`${registeredPhone}\`\n\n` +
-        `⛔ *Pour des raisons de sécurité évidentes, le numéro de votre compte Telegram doit être strictement identique au numéro saisi lors de l'inscription FORSA.*\n\n` +
-        `👉 Veuillez vous connecter avec le compte Telegram correspondant au numéro \`${registeredPhone}\`, ou modifiez votre numéro sur FORSA.`;
+      const errorMsg = `❌ *Numéros non concordants !*\n\n` +
+        `• 📱 *Compte Telegram :* \`${contactPhone}\`\n` +
+        `• 📝 *Saisi sur FORSA :* \`${registeredPhone}\`\n\n` +
+        `⛔ Votre compte Telegram doit correspondre au même numéro que votre inscription FORSA.`;
 
       await sendTelegramMessage(chatId, errorMsg, { remove_keyboard: true });
       console.warn(`[TelegramSecurity] ⛔ Rejet vérification : Telegram (${contactPhone}) != FORSA (${registeredPhone})`);
       return;
     }
 
-    // ─── VALIDATION RÉUSSIE : LE NUMÉRO EST LE MÊME ─────────────────────────
+    // Association mémorisée pour envois automatiques futurs sans re-confirmation
+    phoneToChatIdMap.set(contactPhone, chatId);
+    chatIdToPhoneMap.set(chatId, contactPhone);
+
     targetOtp.telegramVerified = true;
     await markUserPhoneVerified(targetOtp.userId);
 
-    const successMsg = `✅ *Numéro certifié avec succès !*\n\n` +
-      `Votre compte Telegram (\`${contactPhone}\`) correspond exactement au numéro enregistré sur FORSA.\n\n` +
-      `🔐 *Votre code de confirmation :*\n` +
-      `👉 \`${targetOtp.code}\` 👈\n\n` +
-      `⏱️ _Ce code expire dans 5 minutes._\n` +
-      `Votre compte FORSA est à présent certifié !`;
-
-    await sendTelegramMessage(chatId, successMsg, { remove_keyboard: true });
+    // Envoi propre style RedotPay
+    await sendTelegramMessage(chatId, formatRedotPayTelegramOtp(targetOtp.code), { remove_keyboard: true });
     console.log(`[TelegramSecurity] ✅ Numéro certifié avec succès pour userId ${targetOtp.userId} (${contactPhone})`);
     return;
   }
@@ -201,14 +225,25 @@ async function handleTelegramUpdate(update: any): Promise<void> {
     }
 
     if (targetOtp && targetOtp.expiresAt.getTime() > Date.now()) {
-      // Mémoriser la session pour ce chat
       chatPendingSession.set(chatId, targetOtp);
 
+      const knownPhone = chatIdToPhoneMap.get(chatId);
+      const registeredPhone = toE164(targetOtp.phone);
+
+      // Si le compte Telegram a déjà certifié ce numéro, on envoie directement le code style RedotPay !
+      if (knownPhone && knownPhone === registeredPhone) {
+        targetOtp.telegramVerified = true;
+        await markUserPhoneVerified(targetOtp.userId);
+        await sendTelegramMessage(chatId, formatRedotPayTelegramOtp(targetOtp.code), { remove_keyboard: true });
+        console.log(`[TelegramService] ⚡ Envoi direct (compte déjà certifié) à chat_id ${chatId} pour ${knownPhone}`);
+        return;
+      }
+
+      // Sinon, on demande une confirmation en 1 clic
       const promptMsg = `👋 Bonjour *${targetOtp.fullName || ''}* !\n\n` +
-        `🛡️ *Contrôle de sécurité FORSA*\n\n` +
-        `Pour valider votre inscription, votre compte Telegram doit utiliser le *même numéro* que celui saisi sur FORSA :\n` +
-        `📱 *Numéro attendu :* \`${targetOtp.phone}\`\n\n` +
-        `👇 *Appuyez sur le bouton ci-dessous pour certifier votre numéro de téléphone :*`;
+        `🛡️ *Sécurité FORSA*\n` +
+        `Numéro attendu : \`${targetOtp.phone}\`\n\n` +
+        `👇 *Appuyez ci-dessous pour confirmer votre numéro :*`;
 
       await sendTelegramMessage(chatId, promptMsg, {
         keyboard: [
@@ -223,12 +258,7 @@ async function handleTelegramUpdate(update: any): Promise<void> {
         one_time_keyboard: true,
       });
     } else {
-      const welcomeMsg = `👋 *Bienvenue sur le Bot Officiel FORSA !*\n\n` +
-        `Pour faire vérifier votre numéro :\n` +
-        `1. Inscrivez-vous sur le site FORSA avec votre numéro de téléphone.\n` +
-        `2. Sur la page de vérification, cliquez sur *« Vérifier avec Telegram »*.\n` +
-        `3. Ce bot s'ouvrira et comparera automatiquement votre numéro Telegram pour valider votre compte. 🚀`;
-
+      const welcomeMsg = `👋 *Bienvenue sur le Bot Officiel FORSA !*\n\nLancez votre inscription sur le site FORSA pour recevoir automatiquement vos codes de confirmation ici. 🚀`;
       await sendTelegramMessage(chatId, welcomeMsg, { remove_keyboard: true });
     }
   }
@@ -248,7 +278,7 @@ export async function startTelegramBot(): Promise<void> {
   isPolling = true;
   pollingAbortController = new AbortController();
 
-  console.log('[TelegramService] 🤖 Bot Telegram @forsa_auth_bot actif (Mode Vérification Numéro E.164)...');
+  console.log('[TelegramService] 🤖 Bot Telegram @forsa_auth_bot actif (Mode RedotPay ⚡)...');
 
   let offset = 0;
 

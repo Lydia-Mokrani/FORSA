@@ -248,41 +248,30 @@ export const VerifyPhonePage: React.FC = () => {
           </button>
         </div>
 
-        {/* Bloc interactif Telegram */}
+        {/* Bloc interactif Telegram style RedotPay */}
         {method === 'telegram' ? (
-          <div className="bg-white/60 border border-[#229ED9]/25 rounded-2xl p-4 flex flex-col gap-3 text-left">
-            <div className="flex items-start gap-3">
-              <div className="size-8 rounded-full bg-[#229ED9]/15 flex items-center justify-center shrink-0 text-[#229ED9] mt-0.5">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold text-[#0B2C25]">Certification Telegram sécurisée</span>
-                <span className="text-[11px] text-[#0B2C25]/70 leading-normal">
-                  1. Cliquez ci-dessous pour ouvrir <strong>@forsa_auth_bot</strong><br />
-                  2. Cliquez sur <strong>Démarrer (Start)</strong> dans le bot<br />
-                  3. Cliquez sur <strong>« Confirmer mon numéro »</strong> : le bot certifie que votre Telegram utilise bien ce numéro !
-                </span>
-              </div>
+          <div className="bg-white/60 border border-[#229ED9]/25 rounded-2xl p-4 flex flex-col items-center gap-2.5 text-center shadow-sm">
+            <div className="inline-flex items-center gap-2 bg-[#229ED9]/10 text-[#229ED9] px-3 py-1 rounded-full text-xs font-semibold">
+              <span className="size-2 rounded-full bg-[#229ED9] animate-pulse" />
+              <span>Code envoyé sur Telegram</span>
             </div>
+
+            <p className="text-[12px] text-[#0B2C25]/75 leading-relaxed">
+              Appuyez sur le code reçu sur Telegram pour le copier, puis collez-le ci-dessous.
+            </p>
 
             <a
               href={telegramLink}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setBotOpened(true)}
-              className="w-full py-3.5 px-4 bg-[#229ED9] hover:bg-[#1E88C7] text-white font-medium text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2.5 shadow-sm transition cursor-pointer active:scale-[0.99]"
+              className="w-full py-3 px-4 bg-[#229ED9] hover:bg-[#1E88C7] text-white font-medium text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition cursor-pointer active:scale-[0.99]"
             >
               <svg className="size-4 shrink-0 fill-current" viewBox="0 0 24 24">
                 <path d="m20.665 3.717-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701h-.002l-.313 4.673c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.434z" />
               </svg>
-              <span>Ouvrir Telegram &amp; Certifier mon numéro</span>
+              <span>Ouvrir @forsa_auth_bot sur Telegram</span>
             </a>
-
-            {botOpened && (
-              <p className="text-[11px] text-[#17664E] bg-[#17664E]/10 rounded-lg p-2 text-center font-medium">
-                ✅ Bot ouvert ! Cliquez sur <strong>« Confirmer mon numéro »</strong> dans Telegram : la validation se fera automatiquement, ou recopiez le code ci-dessous.
-              </p>
-            )}
           </div>
         ) : (
           <div className="bg-white/50 border border-white/80 rounded-2xl p-3 text-xs text-[#0B2C25]/75 text-center">
