@@ -252,6 +252,22 @@ export class UserController {
     }
   }
 
+  public static async getPhoneStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.sub;
+      if (!userId) throw new UnauthorizedError();
+
+      const user = await findUserWithProfile(userId);
+      if (!user) throw new NotFoundError('Utilisateur non trouvé.');
+
+      res.json({
+        phoneVerified: !!user.phoneVerified,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   public static async confirmPhoneOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user?.sub;

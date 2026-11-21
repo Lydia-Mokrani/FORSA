@@ -17,6 +17,7 @@ userRouter.delete('/me/avatar', authenticate, UserController.deleteAvatar);
 // Vérification téléphone
 userRouter.post('/verify-phone/request', authenticate, UserController.requestPhoneOtp);
 userRouter.post('/verify-phone/confirm', authenticate, UserController.confirmPhoneOtp);
+userRouter.get('/verify-phone/status', authenticate, UserController.getPhoneStatus);
 
 // Comptes sociaux liés
 userRouter.get('/me/social', authenticate, SocialController.list);

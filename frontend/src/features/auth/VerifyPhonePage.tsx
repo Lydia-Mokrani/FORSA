@@ -58,6 +58,35 @@ export const VerifyPhonePage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Détection automatique en temps réel de la validation Telegram
+  useEffect(() => {
+    if (success) return;
+    const token = localStorage.getItem('forsa_access_token');
+    if (!token) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/users/verify-phone/status', {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.phoneVerified) {
+            setSuccess(true);
+            setTimeout(() => navigate('/'), 1800);
+          }
+        }
+      } catch {
+        // ignorer erreurs réseau silencieuses
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [success, navigate]);
+
   const handleDigitChange = (index: number, raw: string) => {
     const value = raw.replace(/\D/g, '').slice(-1);
     const next = [...digits];
@@ -219,11 +248,11 @@ export const VerifyPhonePage: React.FC = () => {
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-semibold text-[#0B2C25]">Recevez votre code instantanément</span>
+                <span className="text-xs font-semibold text-[#0B2C25]">Certification Telegram sécurisée</span>
                 <span className="text-[11px] text-[#0B2C25]/70 leading-normal">
                   1. Cliquez ci-dessous pour ouvrir <strong>@forsa_auth_bot</strong><br />
                   2. Cliquez sur <strong>Démarrer (Start)</strong> dans le bot<br />
-                  3. Votre code à 6 chiffres vous sera envoyé immédiatement !
+                  3. Cliquez sur <strong>« Confirmer mon numéro »</strong> : le bot certifie que votre Telegram utilise bien ce numéro !
                 </span>
               </div>
             </div>
@@ -236,12 +265,12 @@ export const VerifyPhonePage: React.FC = () => {
               className="w-full py-3 px-4 bg-[#229ED9] hover:bg-[#1E88C7] text-white font-medium text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition cursor-pointer active:scale-[0.99]"
             >
               <Send className="w-4 h-4 -rotate-12" />
-              <span>Ouvrir Telegram &amp; Recevoir le code</span>
+              <span>Ouvrir Telegram &amp; Certifier mon numéro</span>
             </a>
 
             {botOpened && (
               <p className="text-[11px] text-[#17664E] bg-[#17664E]/10 rounded-lg p-2 text-center font-medium">
-                ✅ Bot ouvert ! Dès que vous cliquez sur <strong>Démarrer (Start)</strong> sur Telegram, recopiez le code ci-dessous.
+                ✅ Bot ouvert ! Cliquez sur <strong>« Confirmer mon numéro »</strong> dans Telegram : la validation se fera automatiquement, ou recopiez le code ci-dessous.
               </p>
             )}
           </div>
