@@ -73,7 +73,7 @@ export async function sendTelegramOtpCode(
       inline_keyboard: [
         [
           {
-            text: `📋 Copier le code : ${code}`,
+            text: '📋 Copier',
             copy_text: { text: code },
           },
         ],
@@ -216,10 +216,10 @@ async function handleTelegramUpdate(update: any): Promise<void> {
 
     // Contrôle strict : Numéro Telegram == Numéro FORSA
     if (contactPhone !== registeredPhone) {
-      const errorMsg = `❌ *Numéros non concordants !*\n\n` +
+      const errorMsg = `❌ *Numéro faux / non valide !*\n\n` +
         `• 📱 *Compte Telegram :* \`${contactPhone}\`\n` +
         `• 📝 *Saisi sur FORSA :* \`${registeredPhone}\`\n\n` +
-        `⛔ Votre compte Telegram doit correspondre au même numéro que votre inscription FORSA.`;
+        `⛔ *Le numéro ne correspond pas.* Ce compte Telegram n'utilise pas le même numéro que votre inscription FORSA.`;
 
       await sendTelegramMessage(chatId, errorMsg, { remove_keyboard: true });
       console.warn(`[TelegramSecurity] ⛔ Rejet vérification : Telegram (${contactPhone}) != FORSA (${registeredPhone})`);

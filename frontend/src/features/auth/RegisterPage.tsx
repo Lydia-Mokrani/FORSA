@@ -167,6 +167,18 @@ export const RegisterPage: React.FC = () => {
     }
   };
 
+  const clientCleanPhone = clientData.phone.replace(/[\s.\-()]/g, '');
+  const isClientPhoneWrong = clientCleanPhone.length > 0 && (
+    !/^[567]/.test(clientCleanPhone) || clientCleanPhone.length > 9
+  );
+  const isClientPhoneValid = /^[567]\d{8}$/.test(clientCleanPhone);
+
+  const merchantCleanPhone = merchantData.phone.replace(/[\s.\-()]/g, '');
+  const isMerchantPhoneWrong = merchantCleanPhone.length > 0 && (
+    !/^[567]/.test(merchantCleanPhone) || merchantCleanPhone.length > 9
+  );
+  const isMerchantPhoneValid = /^[567]\d{8}$/.test(merchantCleanPhone);
+
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white overflow-x-hidden">
       {/* Fond photo officiel Figma (Image bokeh feuille verte + overlay #FFFAF0 à 28%) */}
@@ -255,22 +267,39 @@ export const RegisterPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4 focus-within:border-[#17664E] transition">
-                <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-2.5 shrink-0" />
-                <span className="text-[#0B2C25] font-semibold text-sm sm:text-[15px] select-none mr-2.5 pr-2.5 border-r border-[#0B2C25]/20">
-                  +213
-                </span>
-                <input
-                  type="tel"
-                  placeholder="6 61 45 17 40"
-                  value={clientData.phone}
-                  onChange={(e) => {
-                    let val = e.target.value.replace(/[^\d\s]/g, '');
-                    if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
-                    setClientData({ ...clientData, phone: val });
-                  }}
-                  className="w-full bg-transparent text-[#0B2C25] text-sm sm:text-[15px] focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
-                />
+              <div className="flex flex-col gap-1">
+                <div className={`flex items-center bg-white/65 border-[1.2px] ${isClientPhoneWrong ? 'border-[#B22222] ring-1 ring-[#B22222]/30' : 'border-white/95 focus-within:border-[#17664E]'} rounded-[14px] h-14 px-4 transition`}>
+                  <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-2.5 shrink-0" />
+                  <span className="text-[#0B2C25] font-semibold text-sm sm:text-[15px] select-none mr-2.5 pr-2.5 border-r border-[#0B2C25]/20">
+                    +213
+                  </span>
+                  <input
+                    type="tel"
+                    placeholder="6 61 45 17 40"
+                    value={clientData.phone}
+                    onChange={(e) => {
+                      let val = e.target.value.replace(/[^\d\s]/g, '');
+                      if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
+                      setClientData({ ...clientData, phone: val });
+                    }}
+                    className="w-full bg-transparent text-[#0B2C25] text-sm sm:text-[15px] focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
+                  />
+                  {isClientPhoneWrong && (
+                    <span className="text-xs text-[#B22222] font-semibold flex items-center gap-1 shrink-0 bg-[#B22222]/10 px-2 py-0.5 rounded-md">
+                      ❌ Numéro faux
+                    </span>
+                  )}
+                  {isClientPhoneValid && (
+                    <span className="text-sm text-[#17664E] font-bold shrink-0 bg-[#17664E]/10 px-2 py-0.5 rounded-md">
+                      ✓
+                    </span>
+                  )}
+                </div>
+                {isClientPhoneWrong && (
+                  <span className="text-[11px] text-[#B22222] px-2 font-medium">
+                    Le numéro doit commencer par 5, 6 ou 7 et comporter 9 chiffres.
+                  </span>
+                )}
               </div>
 
               <div className="flex flex-col gap-1">
@@ -393,23 +422,40 @@ export const RegisterPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4 focus-within:border-[#17664E] transition">
-                  <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-2.5 shrink-0" />
-                  <span className="text-[#0B2C25] font-semibold text-sm select-none mr-2.5 pr-2.5 border-r border-[#0B2C25]/20">
-                    +213
-                  </span>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="6 61 45 17 40"
-                    value={merchantData.phone}
-                    onChange={(e) => {
-                      let val = e.target.value.replace(/[^\d\s]/g, '');
-                      if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
-                      setMerchantData({ ...merchantData, phone: val });
-                    }}
-                    className="w-full bg-transparent text-[#0B2C25] text-sm focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
-                  />
+                <div className="flex flex-col gap-1">
+                  <div className={`flex items-center bg-white/65 border-[1.2px] ${isMerchantPhoneWrong ? 'border-[#B22222] ring-1 ring-[#B22222]/30' : 'border-white/95 focus-within:border-[#17664E]'} rounded-[14px] h-14 px-4 transition`}>
+                    <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-2.5 shrink-0" />
+                    <span className="text-[#0B2C25] font-semibold text-sm select-none mr-2.5 pr-2.5 border-r border-[#0B2C25]/20">
+                      +213
+                    </span>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="6 61 45 17 40"
+                      value={merchantData.phone}
+                      onChange={(e) => {
+                        let val = e.target.value.replace(/[^\d\s]/g, '');
+                        if (val.trim().startsWith('0')) val = val.trim().replace(/^0+/, '');
+                        setMerchantData({ ...merchantData, phone: val });
+                      }}
+                      className="w-full bg-transparent text-[#0B2C25] text-sm focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
+                    />
+                    {isMerchantPhoneWrong && (
+                      <span className="text-xs text-[#B22222] font-semibold flex items-center gap-1 shrink-0 bg-[#B22222]/10 px-2 py-0.5 rounded-md">
+                        ❌ Numéro faux
+                      </span>
+                    )}
+                    {isMerchantPhoneValid && (
+                      <span className="text-sm text-[#17664E] font-bold shrink-0 bg-[#17664E]/10 px-2 py-0.5 rounded-md">
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                  {isMerchantPhoneWrong && (
+                    <span className="text-[11px] text-[#B22222] px-2 font-medium">
+                      Le numéro doit commencer par 5, 6 ou 7 et comporter 9 chiffres.
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4">
