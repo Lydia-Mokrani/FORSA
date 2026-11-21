@@ -228,7 +228,7 @@ export const RegisterPage: React.FC = () => {
               }}
               className="group inline-flex items-center gap-2 bg-white/65 hover:bg-white/85 border border-[#0B2C25]/20 px-3.5 py-1.5 rounded-full transition shadow-sm"
             >
-              {role === 'CUSTOMER' ? <User className="w-4 h-4 text-[#0B2C25]" /> : <Store className="w-4 h-4 text-[#0B2C25]" />}
+              <img src={badgeRoleIcon} alt="" className="w-4 h-4" />
               <span className="text-xs sm:text-[13px] font-medium text-[#0B2C25]">
                 {role === 'CUSTOMER' ? 'Espace client' : 'Espace commerçant'}
               </span>
