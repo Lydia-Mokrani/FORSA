@@ -115,6 +115,10 @@ export const VerifyPhonePage: React.FC = () => {
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (codeError && /^\d$/.test(e.key)) {
+      setCodeError(false);
+      setErrorMessage(null);
+    }
     if (e.key === 'Backspace' && !digits[index] && index > 0) {
       document.getElementById(`otp-input-${index - 1}`)?.focus();
     }
@@ -134,8 +138,20 @@ export const VerifyPhonePage: React.FC = () => {
     document.getElementById(`otp-input-${Math.min(pasted.length, OTP_LENGTH - 1)}`)?.focus();
   };
 
+  const formatTime = (seconds: number) => {
+    const s = Math.max(0, seconds);
+    const m = Math.floor(s / 60).toString().padStart(2, '0');
+    const sec = (s % 60).toString().padStart(2, '0');
+    return `${m}:${sec}`;
+  };
+
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (expireTimer === 0 || locked) {
+      setErrorMessage('Le code a expiré. Veuillez cliquer sur « Renvoyer un nouveau code ».');
+      return;
+    }
+
     const code = digits.join('');
     if (code.length !== OTP_LENGTH) {
       setErrorMessage(`Veuillez saisir le code complet à ${OTP_LENGTH} chiffres.`);
@@ -160,9 +176,21 @@ export const VerifyPhonePage: React.FC = () => {
           setCodeError(true);
           setDigits(Array(OTP_LENGTH).fill(''));
           document.getElementById('otp-input-0')?.focus();
-          throw new Error(`Code incorrect.${left !== undefined ? ` Il vous reste ${left} essai${left > 1 ? 's' : ''}.` : ''}`);
+          setErrorMessage(`Code incorrect.${left !== undefined ? ` Il vous reste ${left} essai${left > 1 ? 's' : ''}.` : ''}`);
+          return;
         }
-        if (err?.code === 'OTP_EXPIRED' || err?.code === 'OTP_TOO_MANY_ATTEMPTS') setLocked(true);
+        if (err?.code === 'OTP_EXPIRED') {
+          setLocked(true);
+          setExpireTimer(0);
+          setErrorMessage('Le code a expiré. Veuillez cliquer sur « Renvoyer un nouveau code ».');
+          return;
+        }
+        if (err?.code === 'OTP_TOO_MANY_ATTEMPTS') {
+          setLocked(true);
+          setCodeError(true);
+          setErrorMessage('Trop d’essais incorrects. Veuillez demander un nouveau code.');
+          return;
+        }
         throw new Error(err?.message || 'Code de vérification incorrect ou expiré.');
       }
 
@@ -330,6 +358,7 @@ export const VerifyPhonePage: React.FC = () => {
                     type="text"
                     inputMode="numeric"
                     maxLength={1}
+                    disabled={loading || locked || expireTimer === 0}
                     value={digits[index]}
                     onChange={(e) => handleDigitChange(index, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(index, e)}
@@ -339,38 +368,57 @@ export const VerifyPhonePage: React.FC = () => {
                       codeError
                         ? 'border-[1.5px] border-[#B22222] bg-[#B22222]/5 text-[#B22222] focus:border-[#B22222]'
                         : 'bg-white/70 border-[1.5px] border-white/95 focus:border-[#229ED9] text-[#0B2C25]'
-                    }`}
+                    } ${locked || expireTimer === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
                   />
                 ))}
               </div>
             </div>
 
-            <div className="flex flex-col items-center gap-1">
-              <p className="text-xs text-[#0B2C25]/75">
-                {expireTimer > 0 ? (
-                  <span>
-                    Validité du code : <strong className="font-semibold text-[#0B2C25]">{Math.floor(expireTimer / 60)}:{(expireTimer % 60).toString().padStart(2, '0')}</strong>
-                  </span>
-                ) : (
-                  <span className="text-[#B22222] font-semibold">
-                    Code expiré (délai de 5 minutes écoulé).
-                  </span>
-                )}
-              </p>
-              <p className="text-xs text-[#0B2C25]/70">
-                {timer > 0 ? (
-                  <>Rien reçu ? Renvoyer le code (00:{timer < 10 ? `0${timer}` : timer})</>
-                ) : (
-                  <button type="button" onClick={requestOtp} className="font-semibold text-[#17664E] hover:underline cursor-pointer">
-                    Renvoyer un nouveau code
-                  </button>
-                )}
-              </p>
+            <div className="flex flex-col items-center gap-2">
+              {expireTimer > 0 ? (
+                <p className="text-xs text-[#0B2C25]/75">
+                  Validité du code : <strong className="font-semibold text-[#0B2C25]">{formatTime(expireTimer)}</strong>
+                </p>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 text-center bg-[#B22222]/10 border border-[#B22222]/20 rounded-xl p-3 w-full">
+                  <p className="text-xs text-[#B22222] font-semibold flex items-center justify-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    Le code a expiré.
+                  </p>
+                  <p className="text-xs text-[#0B2C25]/85">
+                    Veuillez cliquer sur{' '}
+                    <button
+                      type="button"
+                      onClick={requestOtp}
+                      className="font-bold text-[#17664E] underline hover:text-[#0B2C25] cursor-pointer"
+                    >
+                      « Renvoyer un nouveau code »
+                    </button>
+                    .
+                  </p>
+                </div>
+              )}
+
+              {expireTimer > 0 && (
+                <p className="text-xs text-[#0B2C25]/70">
+                  {timer > 0 ? (
+                    <>Rien reçu ? Renvoyer le code (00:{timer < 10 ? `0${timer}` : timer})</>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={requestOtp}
+                      className="font-semibold text-[#17664E] hover:underline cursor-pointer"
+                    >
+                      Renvoyer un nouveau code
+                    </button>
+                  )}
+                </p>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={loading || locked}
+              disabled={loading || locked || expireTimer === 0}
               className="w-full h-[52px] disabled:opacity-60 bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer active:scale-[0.99]"
             >
               {loading ? 'Validation...' : 'Valider mon compte'}

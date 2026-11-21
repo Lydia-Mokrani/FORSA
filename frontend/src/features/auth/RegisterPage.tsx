@@ -60,7 +60,7 @@ export const RegisterPage: React.FC = () => {
     const isValidAlgerianPhone = /^[567]\d{8}$/.test(phoneDigits);
 
     if (!isValidAlgerianPhone) {
-      setClientPhoneError('Numéro de téléphone incorrect. Il doit comporter 9 chiffres et commencer par 5, 6 ou 7 (ex: 6 61 45 17 40).');
+      setClientPhoneError('Numéro de téléphone incorrect.');
       return;
     }
 
@@ -387,7 +387,7 @@ export const RegisterPage: React.FC = () => {
                   const isValidAlgerianPhone = /^[567]\d{8}$/.test(phoneDigits);
 
                   if (!isValidAlgerianPhone) {
-                    setMerchantPhoneError('Numéro de téléphone incorrect. Il doit comporter 9 chiffres et commencer par 5, 6 ou 7 (ex: 6 61 45 17 40).');
+                    setMerchantPhoneError('Numéro de téléphone incorrect.');
                     return;
                   }
 
