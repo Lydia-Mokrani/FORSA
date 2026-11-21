@@ -1,8 +1,13 @@
 // frontend/src/features/profile/ProfileCard.tsx
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Camera, MapPin, Check, AlertCircle, ShieldCheck, Edit3 } from 'lucide-react';
 import { UserProfile } from './types';
+import {
+  defaultAvatar,
+  figmaCamera,
+  figmaCheckmarkBadge,
+  figmaLocationPin,
+  figmaTickPill,
+} from './figmaAssets';
 
 interface ProfileCardProps {
   user: UserProfile;
@@ -28,27 +33,25 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       <div className="flex items-start gap-4">
         {/* Photo de profil (65x66) avec bouton caméra */}
         <div className="relative shrink-0 size-[65px]">
-          <div className="size-full rounded-full overflow-hidden bg-emerald-900 border-2 border-[#DBF0DD] shadow-sm flex items-center justify-center text-white text-xl font-bold">
-            {user.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt={user.fullName}
-                className="h-full w-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
-            ) : (
-              <span>{user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}</span>
-            )}
+          <div className="size-full rounded-full overflow-hidden bg-[#ebeee1] border-2 border-[#DBF0DD] shadow-sm flex items-center justify-center">
+            <img
+              src={user.avatarUrl || defaultAvatar}
+              alt={user.fullName || 'Profil'}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = defaultAvatar;
+              }}
+            />
           </div>
 
-          <div
-            className="absolute bottom-0 right-0 size-[24px] rounded-full bg-[#0B2C25] border-2 border-white flex items-center justify-center text-white shadow-sm"
+          <button
+            type="button"
+            onClick={onEditClick}
+            className="absolute bottom-0 right-0 size-[24px] rounded-full bg-[#0B2C25] border-2 border-white flex items-center justify-center text-white shadow-sm hover:bg-[#17664e] transition"
             title="Photo de profil"
           >
-            <Camera size={11} />
-          </div>
+            <img src={figmaCamera} alt="" className="size-[12px]" />
+          </button>
         </div>
 
         {/* Identité */}
@@ -58,17 +61,16 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             <h4 className="text-[17px] font-bold text-[#0B2C25] truncate leading-tight">
               {user.fullName || 'Lydia Benali'}
             </h4>
-            <div
-              className="size-[18px] rounded-full bg-[#17664E] text-white flex items-center justify-center shrink-0"
-              title="Compte Vérifié"
-            >
-              <Check size={11} strokeWidth={3} />
-            </div>
+            <img
+              src={figmaCheckmarkBadge}
+              alt="Compte Vérifié"
+              className="size-[18px] shrink-0"
+            />
           </div>
 
           {/* Localisation */}
           <div className="flex items-center gap-1 text-xs text-[#0B2C25]/75 mt-1 truncate">
-            <MapPin size={12} className="text-[#17664E] shrink-0" />
+            <img src={figmaLocationPin} alt="" className="size-[14px] shrink-0" />
             <span className="truncate">Bab Ezzouar, Alger</span>
           </div>
 
@@ -77,14 +79,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             <span
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                 user.emailVerified
-                  ? 'bg-[#DBF0DD] text-[#0B2C25]'
+                  ? 'bg-[#DBF0DD] text-[#17664E]'
                   : 'bg-amber-100 text-amber-900'
               }`}
             >
-              {user.emailVerified ? (
-                <Check size={10} className="text-[#17664E]" strokeWidth={2.5} />
-              ) : (
-                <AlertCircle size={10} className="text-amber-700" />
+              {user.emailVerified && (
+                <img src={figmaTickPill} alt="" className="size-[10px]" />
               )}
               {user.emailVerified ? 'E-mail vérifié' : 'E-mail non vérifié'}
             </span>
@@ -92,43 +92,33 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             <span
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                 user.phoneVerified
-                  ? 'bg-[#DBF0DD] text-[#0B2C25]'
+                  ? 'bg-[#DBF0DD] text-[#17664E]'
                   : 'bg-amber-100 text-amber-900'
               }`}
             >
-              {user.phoneVerified ? (
-                <Check size={10} className="text-[#17664E]" strokeWidth={2.5} />
-              ) : (
-                <AlertCircle size={10} className="text-amber-700" />
+              {user.phoneVerified && (
+                <img src={figmaTickPill} alt="" className="size-[10px]" />
               )}
-              {user.phoneVerified ? 'Tél. vérifié' : 'Tél. non vérifié'}
+              {user.phoneVerified ? 'Tél vérifié' : 'Tél non vérifié'}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Footer bar: Statut & Action */}
-      <div className="pt-2 border-t border-[#0B2C25]/8 flex items-center justify-between text-xs">
-        <span className="text-[11px] text-[#0B2C25]/60">
-          {user.phone ? `+213 ${user.phone}` : user.email}
+      {/* Bottom section: Membre depuis + Action */}
+      <div className="flex items-center justify-between pt-3 border-t border-[#DBF0DD]/60">
+        <span className="text-[11px] font-medium text-[#0B2C25]/60">
+          Membre depuis oct. 2026
         </span>
 
-        {onEditClick ? (
+        {onEditClick && (
           <button
+            type="button"
             onClick={onEditClick}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-[#17664E] hover:text-[#0B2C25] transition"
+            className="text-xs font-semibold text-[#17664E] hover:text-[#0B2C25] transition"
           >
-            <Edit3 size={12} />
-            <span>Modifier</span>
+            Modifier →
           </button>
-        ) : (
-          <Link
-            to="/profile"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-[#17664E] hover:text-[#0B2C25] transition"
-          >
-            <Edit3 size={12} />
-            <span>Modifier</span>
-          </Link>
         )}
       </div>
     </div>

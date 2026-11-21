@@ -41,3 +41,6 @@ lerna-debug.log*
 # Docker
 *.local
 .neon
+
+uploads/
+**/uploads/
