@@ -12,7 +12,7 @@ import {
 import { prisma } from '../config/prisma';
 import { devDb, isPostgresAlive } from '../services/dev-db.service';
 import { jwtService } from '../services/jwt.service';
-import { sendSms } from '../services/sms.service';
+import { sendSms, sendTwilioVerification, checkTwilioVerification } from '../services/sms.service';
 import { mobilePhoneSchema } from '../utils/phone';
 import { avatarFilePath, hasImageSignature } from '../middleware/avatar-upload.middleware';
 import { config } from '../config/env';
@@ -202,13 +202,17 @@ export class UserController {
         }
       }
 
-      // Générer code 6 chiffres
+      // Tenter d'envoyer un vrai SMS via Twilio Verify
+      const sentViaTwilio = await sendTwilioVerification(user.phone);
+
+      // Générer code 6 chiffres (local ou secours)
       const code = String(Math.floor(Math.random() * 10 ** OTP_LENGTH)).padStart(OTP_LENGTH, '0');
       const codeHash = hashOtp(userId, code);
       const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-      // Envoyer le SMS avant de sauvegarder
-      await sendSms(user.phone, `Votre code FORSA : ${code}\nValable 5 minutes.`);
+      if (!sentViaTwilio) {
+        await sendSms(user.phone, `Votre code FORSA : ${code}\nValable 5 minutes.`);
+      }
 
       if (await isPostgresAlive()) {
         await prisma.phoneOtp.create({
@@ -230,8 +234,9 @@ export class UserController {
         message: `Code à ${OTP_LENGTH} chiffres envoyé par SMS.`,
         expiresInSeconds: OTP_TTL_MS / 1000,
         resendInSeconds: OTP_RESEND_MS / 1000,
-        // Afficher en dev pour la soutenance
-        ...(config.nodeEnv !== 'production' ? { simulatedCode: code } : {}),
+        sentViaTwilio,
+        // Afficher en dev pour la soutenance si Twilio n'a pas été utilisé
+        ...((config.nodeEnv !== 'production' && !sentViaTwilio) ? { simulatedCode: code } : {}),
       });
     } catch (err) {
       next(err);
@@ -276,8 +281,13 @@ export class UserController {
         throw new ApiError(429, 'OTP_TOO_MANY_ATTEMPTS', 'Trop d\'essais incorrects. Demandez un nouveau code.');
       }
 
+      // 1. Tenter la vérification via Twilio Verify si activé
+      const user = await findUserWithProfile(userId);
+      const isTwilioApproved = user?.phone ? await checkTwilioVerification(user.phone, code) : false;
+
+      // 2. Vérification locale du code
       const expectedHash = hashOtp(userId, code);
-      const isValid = crypto.timingSafeEqual(
+      const isValid = isTwilioApproved || crypto.timingSafeEqual(
         Buffer.from(expectedHash, 'hex'),
         Buffer.from(otpRecord.codeHash, 'hex'),
       );

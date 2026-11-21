@@ -3,6 +3,17 @@ import path from 'path';
 
 dotenv.config();
 
+function getRequiredEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    if (process.env.NODE_ENV === 'test') {
+      return '0860c84a8ea7aaca109f98b5b30ce65a262d67425aad0f474290c3f3e86822f9';
+    }
+    throw new Error(`[MS1-Env] Variable d'environnement obligatoire manquante : ${key}`);
+  }
+  return value;
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -13,13 +24,13 @@ export const config = {
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   
-  rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672',
+  rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://forsa_user:forsa_password@10.0.0.10:5672',
   
-  consulHost: process.env.CONSUL_HOST || 'localhost',
+  consulHost: process.env.CONSUL_HOST || '10.0.0.10',
   consulPort: parseInt(process.env.CONSUL_PORT || '8500', 10),
-  serviceHost: process.env.SERVICE_HOST || 'localhost',
+  serviceHost: process.env.SERVICE_HOST || '10.0.0.11',
   
-  internalApiKey: process.env.INTERNAL_API_KEY || 'forsa-internal-secret-token-2026',
+  internalApiKey: getRequiredEnv('INTERNAL_API_KEY'),
   
   uploadDir: process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'uploads', 'documents'),
 
@@ -31,6 +42,7 @@ export const config = {
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || '',
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
   twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+  twilioVerifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID || '',
 
   // Répertoire de stockage des avatars
   avatarDir: process.env.AVATAR_DIR || path.join(__dirname, '..', '..', 'uploads', 'avatars'),
