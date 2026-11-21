@@ -164,8 +164,48 @@ export const ProfilePage: React.FC = () => {
 
       if (!res.ok) {
         if (res.status === 401) {
+          // Tentative de renouvellement silencieux avec le refresh token
+          const refreshToken = localStorage.getItem('forsa_refresh_token');
+          if (refreshToken) {
+            try {
+              const refreshRes = await fetch('/api/auth/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken }),
+              });
+              if (refreshRes.ok) {
+                const refreshData = await refreshRes.json();
+                if (refreshData.accessToken) {
+                  localStorage.setItem('forsa_access_token', refreshData.accessToken);
+                  if (refreshData.refreshToken) {
+                    localStorage.setItem('forsa_refresh_token', refreshData.refreshToken);
+                  }
+                  const retryRes = await fetch('/api/users/me', {
+                    headers: { Authorization: `Bearer ${refreshData.accessToken}` },
+                  });
+                  if (retryRes.ok) {
+                    const retryData = await retryRes.json();
+                    const u = retryData.user;
+                    setProfile(u);
+                    setInitialProfile(u);
+                    setFullName(u.fullName || 'Lydia Benali');
+                    setEmail(u.email || '');
+                    const clean = extractAlgerianMobile9(u.phone);
+                    setPhone(clean);
+                    setModalPhoneInput(clean);
+                    setAvatarPreview(u.avatarUrl || null);
+                    return;
+                  }
+                }
+              }
+            } catch {
+              // ignore
+            }
+          }
+
           localStorage.removeItem('forsa_access_token');
           localStorage.removeItem('token');
+          localStorage.removeItem('forsa_refresh_token');
           navigate('/login');
           return;
         }

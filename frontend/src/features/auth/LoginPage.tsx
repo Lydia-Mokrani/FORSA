@@ -125,7 +125,7 @@ export const LoginPage: React.FC = () => {
 
     if (data.accessToken) {
       localStorage.setItem('forsa_access_token', data.accessToken);
-      if (rememberMe && data.refreshToken) {
+      if (data.refreshToken) {
         localStorage.setItem('forsa_refresh_token', data.refreshToken);
       }
       localStorage.setItem('forsa_user', JSON.stringify(data.user));
