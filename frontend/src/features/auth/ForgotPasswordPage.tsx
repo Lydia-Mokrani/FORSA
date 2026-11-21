@@ -6,7 +6,9 @@ import { FigmaGalleryBar } from './FigmaGalleryBar';
 
 export const ForgotPasswordPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const initialStep = (searchParams.get('step') as 'request' | 'sent' | 'reset') || 'request';
+  // Le lien reçu par e-mail ressemble à /forgot-password?token=… → on affiche directement « Nouveau mot de passe »
+  const resetToken = searchParams.get('token');
+  const initialStep = resetToken ? 'reset' : (searchParams.get('step') as 'request' | 'sent' | 'reset') || 'request';
 
   const [step, setStep] = useState<'request' | 'sent' | 'reset'>(initialStep);
   const [email, setEmail] = useState('');
@@ -23,10 +25,16 @@ export const ForgotPasswordPage: React.FC = () => {
     setLoading(true);
 
     try {
-      await new Promise((r) => setTimeout(r, 600));
-      setStep('sent');
-    } catch {
-      setErrorMessage('Une erreur est survenue lors de l’envoi.');
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message || 'Une erreur est survenue lors de l’envoi.');
+      setStep('sent'); // réponse identique que le compte existe ou non (pas d'énumération)
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Une erreur est survenue lors de l’envoi.');
     } finally {
       setLoading(false);
     }
@@ -36,11 +44,14 @@ export const ForgotPasswordPage: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
+    if (!resetToken) {
+      setErrorMessage('Lien invalide. Refaites une demande de réinitialisation.');
+      return;
+    }
     if (newPassword.length < 8) {
       setErrorMessage('Le mot de passe doit contenir au moins 8 caractères.');
       return;
     }
-
     if (newPassword !== confirmPassword) {
       setErrorMessage('Les mots de passe ne correspondent pas.');
       return;
@@ -48,10 +59,16 @@ export const ForgotPasswordPage: React.FC = () => {
 
     setLoading(true);
     try {
-      await new Promise((r) => setTimeout(r, 600));
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, password: newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message || 'Impossible de réinitialiser le mot de passe.');
       setSuccessReset(true);
-    } catch {
-      setErrorMessage('Impossible de réinitialiser le mot de passe.');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Impossible de réinitialiser le mot de passe.');
     } finally {
       setLoading(false);
     }

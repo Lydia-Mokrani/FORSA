@@ -11,6 +11,7 @@ import { prisma } from '../config/prisma';
 import { jwtService } from '../services/jwt.service';
 import { rabbitMQ } from '../services/rabbitmq.service';
 import { devDb, isPostgresAlive } from '../services/dev-db.service';
+import { issueEmailToken } from '../services/email-token.service';
 
 const registerSchema = z.object({
   email: z.string().email('Format email invalide'),
@@ -99,12 +100,21 @@ export class AuthController {
         });
       }
 
-      // Émission de l'événement user.registered sur RabbitMQ (non bloquant)
+      // Émission de l'événement user.registered sur RabbitMQ avec verificationToken
+      let verificationToken: string | undefined;
+      try {
+        const result = await issueEmailToken(user.id, 'VERIFY_EMAIL');
+        verificationToken = result.token;
+      } catch {
+        // Non bloquant : le token sera régénéré au prochain renvoi
+      }
+
       await rabbitMQ.publish('user.registered', {
         userId: user.id,
         email: user.email,
         role: user.role,
         fullName: user.fullName,
+        verificationToken,
       }).catch((err) => console.warn('[MS1-Auth] RabbitMQ publish user.registered warning:', err.message));
 
       // Génération des tokens
@@ -188,6 +198,11 @@ export class AuthController {
         throw new ForbiddenError('Ce compte a été suspendu pour non-respect des règles de la plateforme.');
       }
 
+      // Vérifier que le compte a un mot de passe (compte Google sans mot de passe)
+      if (!user.passwordHash) {
+        throw new UnauthorizedError('Ce compte utilise la connexion Google. Veuillez vous connecter avec Google.');
+      }
+
       const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
       if (!isPasswordValid) {
         throw new UnauthorizedError('Identifiants invalides.');
@@ -237,97 +252,6 @@ export class AuthController {
           emailVerified: user.emailVerified,
           shopId: user.shop?.id,
           shopStatus: user.shop?.status,
-        },
-        accessToken,
-        refreshToken: rawRefreshToken,
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  public static async googleLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const email = req.body.email || 'hiba.hambli@gmail.com';
-      const fullName = req.body.fullName || 'Hiba Hambli';
-
-      const usePrisma = await isPostgresAlive();
-      let user: any = null;
-
-      if (usePrisma) {
-        try {
-          user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-        } catch {
-          user = await devDb.findByEmail(email);
-        }
-      } else {
-        user = await devDb.findByEmail(email);
-      }
-
-      if (!user) {
-        const passwordHash = await bcrypt.hash('GoogleOAuthPass2026!', 10);
-        if (usePrisma) {
-          try {
-            user = await prisma.user.create({
-              data: {
-                email: email.toLowerCase(),
-                fullName,
-                passwordHash,
-                role: 'CUSTOMER',
-                emailVerified: true,
-              },
-            });
-          } catch {
-            user = await devDb.createUser({
-              id: `usr_google_${Date.now()}`,
-              email: email.toLowerCase(),
-              passwordHash,
-              fullName,
-              role: 'CUSTOMER',
-              status: 'ACTIVE',
-              emailVerified: true,
-              phoneVerified: false,
-              shop: null,
-            });
-          }
-        } else {
-          user = await devDb.createUser({
-            id: `usr_google_${Date.now()}`,
-            email: email.toLowerCase(),
-            passwordHash,
-            fullName,
-            role: 'CUSTOMER',
-            status: 'ACTIVE',
-            emailVerified: true,
-            phoneVerified: false,
-            shop: null,
-          });
-        }
-      }
-
-      const accessToken = jwtService.generateAccessToken({
-        sub: user.id,
-        email: user.email,
-        role: user.role,
-        fullName: user.fullName,
-        emailVerified: user.emailVerified,
-        phoneVerified: user.phoneVerified,
-        shopId: null,
-        merchantId: null,
-        shopStatus: null,
-        merchantStatus: null,
-      });
-
-      const { token: rawRefreshToken } = jwtService.generateRefreshToken();
-
-      res.json({
-        user: {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          role: user.role,
-          status: user.status,
-          emailVerified: user.emailVerified,
         },
         accessToken,
         refreshToken: rawRefreshToken,

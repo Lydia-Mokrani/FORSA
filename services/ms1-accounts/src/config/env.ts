@@ -22,4 +22,13 @@ export const config = {
   internalApiKey: process.env.INTERNAL_API_KEY || 'forsa-internal-secret-token-2026',
   
   uploadDir: process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'uploads', 'documents'),
+
+  // Google OAuth
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+
+  // SMS Provider : 'log' (dev) | 'twilio' (prod)
+  smsProvider: process.env.SMS_PROVIDER || 'log',
+
+  // Répertoire de stockage des avatars
+  avatarDir: process.env.AVATAR_DIR || path.join(__dirname, '..', '..', 'uploads', 'avatars'),
 };

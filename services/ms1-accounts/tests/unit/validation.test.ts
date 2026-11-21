@@ -19,7 +19,7 @@ const refreshSchema = z.object({
 });
 
 const verifyPhoneSchema = z.object({
-  code: z.string().length(4, 'Le code doit contenir exactement 4 chiffres'),
+  code: z.string().regex(/^\d{6}$/, 'Le code doit contenir exactement 6 chiffres'),
 });
 
 const createShopSchema = z.object({
@@ -155,19 +155,19 @@ describe('Validation Schemas (Zod) - Unit Tests', () => {
     });
   });
 
-  describe('verifyPhoneSchema (OTP 4 chiffres)', () => {
-    it('doit accepter un code SMS exactement à 4 chiffres', () => {
-      const result = verifyPhoneSchema.safeParse({ code: '1234' });
+  describe('verifyPhoneSchema (OTP 6 chiffres)', () => {
+    it('doit accepter un code SMS exactement à 6 chiffres', () => {
+      const result = verifyPhoneSchema.safeParse({ code: '123456' });
       expect(result.success).toBe(true);
-    });
-
-    it('doit rejeter un code à 3 chiffres', () => {
-      const result = verifyPhoneSchema.safeParse({ code: '123' });
-      expect(result.success).toBe(false);
     });
 
     it('doit rejeter un code à 5 chiffres', () => {
       const result = verifyPhoneSchema.safeParse({ code: '12345' });
+      expect(result.success).toBe(false);
+    });
+
+    it('doit rejeter un code à 7 chiffres', () => {
+      const result = verifyPhoneSchema.safeParse({ code: '1234567' });
       expect(result.success).toBe(false);
     });
   });

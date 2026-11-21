@@ -31,13 +31,15 @@ export async function isPostgresAlive(): Promise<boolean> {
 export interface DevUser {
   id: string;
   email: string;
-  passwordHash: string;
+  passwordHash?: string | null;
   fullName: string;
-  phone?: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
   role: 'CUSTOMER' | 'MERCHANT' | 'ADMIN';
   status: 'ACTIVE' | 'SUSPENDED';
   emailVerified: boolean;
   phoneVerified: boolean;
+  createdAt?: Date;
   shop?: {
     id: string;
     name: string;
@@ -46,8 +48,35 @@ export interface DevUser {
   } | null;
 }
 
+export interface DevRefreshToken {
+  userId: string;
+  revoked: boolean;
+  expiresAt: Date;
+}
+
+export interface DevEmailToken {
+  userId: string;
+  type: 'VERIFY_EMAIL' | 'RESET_PASSWORD';
+  expiresAt: Date;
+  usedAt: Date | null;
+}
+
+export interface DevPhoneOtp {
+  userId: string;
+  codeHash: string;
+  expiresAt: Date;
+  used: boolean;
+  attempts: number;
+  createdAt: Date;
+}
+
 class DevDbService {
-  private users: Map<string, DevUser> = new Map();
+  // Maps publiques accessibles depuis les services
+  public users: Map<string, DevUser> = new Map();
+  public refreshTokens: Map<string, DevRefreshToken> = new Map();
+  public emailTokens: Map<string, DevEmailToken> = new Map();
+  public phoneOtps: Map<string, DevPhoneOtp> = new Map();
+
   private initialized = false;
 
   constructor() {
@@ -59,7 +88,7 @@ class DevDbService {
     const defaultPasswordHash = await bcrypt.hash('Password123!', 10);
 
     // Client de démonstration
-    this.users.set('client@forsa.dz', {
+    this.users.set('usr_dev_client_01', {
       id: 'usr_dev_client_01',
       email: 'client@forsa.dz',
       passwordHash: defaultPasswordHash,
@@ -69,11 +98,12 @@ class DevDbService {
       status: 'ACTIVE',
       emailVerified: true,
       phoneVerified: true,
+      createdAt: new Date(),
       shop: null,
     });
 
     // Commerçant de démonstration approuvé
-    this.users.set('merchant@forsa.dz', {
+    this.users.set('usr_dev_merchant_01', {
       id: 'usr_dev_merchant_01',
       email: 'merchant@forsa.dz',
       passwordHash: defaultPasswordHash,
@@ -83,6 +113,7 @@ class DevDbService {
       status: 'ACTIVE',
       emailVerified: true,
       phoneVerified: true,
+      createdAt: new Date(),
       shop: {
         id: 'shop_dev_boulangerie_01',
         name: 'Boulangerie El Amel',
@@ -92,7 +123,7 @@ class DevDbService {
     });
 
     // Commerçant suspendu pour démonstration de l'écran 06
-    this.users.set('suspendu@forsa.dz', {
+    this.users.set('usr_dev_suspended_01', {
       id: 'usr_dev_suspended_01',
       email: 'suspendu@forsa.dz',
       passwordHash: defaultPasswordHash,
@@ -102,6 +133,7 @@ class DevDbService {
       status: 'SUSPENDED',
       emailVerified: true,
       phoneVerified: false,
+      createdAt: new Date(),
       shop: {
         id: 'shop_dev_suspended_01',
         name: 'Boutique Suspendue',
@@ -115,13 +147,21 @@ class DevDbService {
 
   public async findByEmail(email: string): Promise<DevUser | null> {
     await this.init();
-    return this.users.get(email.toLowerCase()) || null;
+    for (const [, u] of this.users) {
+      if (u.email.toLowerCase() === email.toLowerCase()) return u;
+    }
+    return null;
   }
 
   public async createUser(user: DevUser): Promise<DevUser> {
     await this.init();
-    this.users.set(user.email.toLowerCase(), user);
+    user.createdAt = user.createdAt ?? new Date();
+    this.users.set(user.id, user);
     return user;
+  }
+
+  public get(id: string): DevUser | undefined {
+    return this.users.get(id);
   }
 }
 

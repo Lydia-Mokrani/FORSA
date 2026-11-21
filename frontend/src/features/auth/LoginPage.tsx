@@ -104,40 +104,15 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleSocialLogin = async (provider: 'Google' | 'Apple') => {
-    setLoading(true);
+  const handleSocialLogin = (provider: 'Google' | 'Apple') => {
     setErrorMessage(null);
-    setIsSuspended(false);
-
-    try {
-      const response = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: `${provider.toLowerCase()}.user@forsa.dz`,
-          fullName: `Utilisateur ${provider}`,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error?.message || 'Échec de connexion');
-      }
-
-      handleLoginSuccess(data);
-    } catch {
-      // Fallback local direct
-      handleLoginSuccess({
-        accessToken: 'fake_jwt_token_demo',
-        user: {
-          id: `usr_${provider.toLowerCase()}`,
-          email: `${provider.toLowerCase()}@forsa.dz`,
-          fullName: `Hiba Hambli (${provider})`,
-          role: 'CUSTOMER',
-        },
-      });
-    } finally {
-      setLoading(false);
+    if (provider === 'Apple') {
+      setErrorMessage('La connexion avec Apple n\'est pas encore disponible.');
+      return;
+    }
+    if (provider === 'Google') {
+      setErrorMessage('Connexion Google bientôt disponible. En attendant, utilisez votre e-mail et mot de passe.');
+      return;
     }
   };
 

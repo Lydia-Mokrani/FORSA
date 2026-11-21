@@ -4,72 +4,88 @@ import { Phone, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
 import { FigmaGalleryBar } from './FigmaGalleryBar';
 
+const OTP_LENGTH = 6;
+
 export const VerifyPhonePage: React.FC = () => {
   const navigate = useNavigate();
-  const [digits, setDigits] = useState(['', '', '', '']);
+  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
-  const [timer, setTimer] = useState(45);
+  const [timer, setTimer] = useState(0);
+  const [locked, setLocked] = useState(false); // trop de tentatives / code expiré : il faut renvoyer un code
+
+  const authHeaders = () => ({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${localStorage.getItem('forsa_access_token')}`,
+  });
+
+  const requestOtp = async () => {
+    setErrorMessage(null);
+    setLocked(false);
+    setDigits(Array(OTP_LENGTH).fill(''));
+    try {
+      const res = await fetch('/api/users/verify-phone/request', { method: 'POST', headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) {
+        const code = data?.error?.code;
+        if (code === 'OTP_COOLDOWN') setTimer(data?.error?.details?.[0]?.retryAfter ?? 60);
+        if (code === 'PHONE_ALREADY_VERIFIED') {
+          setSuccess(true);
+          setTimeout(() => navigate('/'), 1500);
+          return;
+        }
+        throw new Error(data?.error?.message || 'Impossible d’envoyer le code.');
+      }
+      setTimer(data.resendInSeconds ?? 60);
+      setSimulatedCode(data.simulatedCode ?? null);
+    } catch (e: any) {
+      setErrorMessage(e.message || 'Impossible d’envoyer le code. Vérifiez votre connexion.');
+    }
+  };
 
   useEffect(() => {
-    // Demander l'envoi du code OTP au chargement
-    const requestOtp = async () => {
-      const token = localStorage.getItem('forsa_access_token');
-      if (!token) return;
-
-      try {
-        const res = await fetch('/api/users/verify-phone/request', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const data = await res.json();
-        if (data.simulatedCode) {
-          setSimulatedCode(data.simulatedCode);
-        }
-      } catch (e) {
-        // Mode hors ligne / dev
-      }
-    };
-
-    requestOtp();
-
-    const interval = setInterval(() => {
-      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-
+    if (!localStorage.getItem('forsa_access_token')) {
+      setErrorMessage('Session expirée. Veuillez vous reconnecter.');
+    } else {
+      requestOtp();
+    }
+    const interval = setInterval(() => setTimer((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDigitChange = (index: number, value: string) => {
-    if (value.length > 1) value = value.slice(-1);
-    const newDigits = [...digits];
-    newDigits[index] = value;
-    setDigits(newDigits);
-
-    // Auto-focus next input
-    if (value && index < 3) {
-      const nextInput = document.getElementById(`otp-input-${index + 1}`);
-      nextInput?.focus();
-    }
+  const handleDigitChange = (index: number, raw: string) => {
+    const value = raw.replace(/\D/g, '').slice(-1);
+    const next = [...digits];
+    next[index] = value;
+    setDigits(next);
+    if (value && index < OTP_LENGTH - 1) document.getElementById(`otp-input-${index + 1}`)?.focus();
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      const prevInput = document.getElementById(`otp-input-${index - 1}`);
-      prevInput?.focus();
+      document.getElementById(`otp-input-${index - 1}`)?.focus();
     }
+  };
+
+  // Coller le code reçu par SMS remplit toutes les cases
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
+    if (!pasted) return;
+    e.preventDefault();
+    const next = Array(OTP_LENGTH).fill('');
+    pasted.split('').forEach((d, i) => (next[i] = d));
+    setDigits(next);
+    document.getElementById(`otp-input-${Math.min(pasted.length, OTP_LENGTH - 1)}`)?.focus();
   };
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = digits.join('');
-    if (code.length !== 4) {
-      setErrorMessage('Veuillez saisir le code complet à 4 chiffres.');
+    if (code.length !== OTP_LENGTH) {
+      setErrorMessage(`Veuillez saisir le code complet à ${OTP_LENGTH} chiffres.`);
       return;
     }
 
@@ -77,25 +93,46 @@ export const VerifyPhonePage: React.FC = () => {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('forsa_access_token');
       const response = await fetch('/api/users/verify-phone/confirm', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: authHeaders(),
         body: JSON.stringify({ code }),
       });
-
       const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(data?.error?.message || 'Code de vérification incorrect ou expiré.');
+        const err = data?.error;
+        if (err?.code === 'OTP_INVALID') {
+          const left = err?.details?.[0]?.attemptsLeft;
+          setDigits(Array(OTP_LENGTH).fill(''));
+          document.getElementById('otp-input-0')?.focus();
+          throw new Error(`Code incorrect.${left !== undefined ? ` Il vous reste ${left} essai${left > 1 ? 's' : ''}.` : ''}`);
+        }
+        if (err?.code === 'OTP_EXPIRED' || err?.code === 'OTP_TOO_MANY_ATTEMPTS') setLocked(true);
+        throw new Error(err?.message || 'Code de vérification incorrect ou expiré.');
+      }
+
+      // Récupère un token qui porte phoneVerified: true
+      const refreshToken = localStorage.getItem('forsa_refresh_token');
+      if (refreshToken) {
+        try {
+          const r = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          });
+          if (r.ok) {
+            const t = await r.json();
+            localStorage.setItem('forsa_access_token', t.accessToken);
+            localStorage.setItem('forsa_refresh_token', t.refreshToken);
+          }
+        } catch {
+          /* le prochain login rafraîchira le token */
+        }
       }
 
       setSuccess(true);
-      setTimeout(() => {
-        navigate('/');
-      }, 2000);
+      setTimeout(() => navigate('/'), 2000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Code incorrect.');
     } finally {
@@ -133,7 +170,7 @@ export const VerifyPhonePage: React.FC = () => {
             Confirmez votre numéro
           </h1>
           <p className="text-xs sm:text-[15px] text-[#0B2C25]/65">
-            Saisissez le code à 4 chiffres envoyé sur votre téléphone portable.
+            Saisissez le code à 6 chiffres envoyé par SMS sur votre téléphone portable.
           </p>
         </div>
 
@@ -158,8 +195,8 @@ export const VerifyPhonePage: React.FC = () => {
           </div>
         ) : (
           <form onSubmit={handleVerify} className="flex flex-col gap-6">
-            <div className="flex items-center justify-center gap-3 sm:gap-4">
-              {[0, 1, 2, 3].map((index) => (
+            <div className="flex items-center justify-center gap-2 sm:gap-3">
+              {Array.from({ length: OTP_LENGTH }, (_, index) => index).map((index) => (
                 <input
                   key={index}
                   id={`otp-input-${index}`}
@@ -169,20 +206,18 @@ export const VerifyPhonePage: React.FC = () => {
                   value={digits[index]}
                   onChange={(e) => handleDigitChange(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
-                  className="w-14 h-16 sm:w-16 sm:h-18 bg-white/70 border-[1.5px] border-white/95 focus:border-[#17664E] rounded-2xl text-center text-2xl font-bold text-[#0B2C25] focus:outline-none shadow-sm transition"
+                  onPaste={handlePaste}
+                  autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                  className="w-11 h-14 sm:w-12 sm:h-16 bg-white/70 border-[1.5px] border-white/95 focus:border-[#17664E] rounded-2xl text-center text-2xl font-bold text-[#0B2C25] focus:outline-none shadow-sm transition"
                 />
               ))}
             </div>
 
             <p className="text-xs text-[#0B2C25]/70">
               {timer > 0 ? (
-                <>Rien reçu ? Renvoyer le code ({`00:${timer < 10 ? `0${timer}` : timer}`})</>
+                <>Rien reçu ? Renvoyer le code (00:{timer < 10 ? `0${timer}` : timer})</>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setTimer(45)}
-                  className="font-semibold text-[#17664E] hover:underline"
-                >
+                <button type="button" onClick={requestOtp} className="font-semibold text-[#17664E] hover:underline">
                   Renvoyer un nouveau code
                 </button>
               )}
@@ -190,8 +225,8 @@ export const VerifyPhonePage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full h-14 bg-[#0B2C25] hover:bg-[#0B2C25]/90 text-white font-medium text-base rounded-[16px] flex items-center justify-center gap-2 shadow-md transition"
+              disabled={loading || locked}
+              className="w-full h-14 disabled:opacity-60 bg-[#0B2C25] hover:bg-[#0B2C25]/90 text-white font-medium text-base rounded-[16px] flex items-center justify-center gap-2 shadow-md transition"
             >
               {loading ? 'Validation...' : 'Valider'}
             </button>

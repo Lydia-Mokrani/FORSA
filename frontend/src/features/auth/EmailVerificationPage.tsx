@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import loginBg from '../../assets/login-bg.png';
 import { FigmaGalleryBar } from './FigmaGalleryBar';
@@ -10,14 +10,71 @@ export const EmailVerificationPage: React.FC = () => {
   const [status, setStatus] = useState<'pending' | 'verified' | 'expired'>(initialStatus);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
+  const token = searchParams.get('token');
+  const [checking, setChecking] = useState(!!token);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleResend = () => {
+  // Adresse à laquelle renvoyer le lien : ?email=… ou utilisateur connecté
+  const knownEmail = (): string | null => {
+    const fromUrl = searchParams.get('email');
+    if (fromUrl) return fromUrl;
+    try {
+      return JSON.parse(localStorage.getItem('forsa_user') || 'null')?.email ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Clic sur le lien reçu par e-mail : /verify-email?token=…
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/verify-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          setStatus('verified'); // VERIFIED ou ALREADY_VERIFIED
+        } else if (data?.error?.code === 'TOKEN_EXPIRED') {
+          setStatus('expired');
+        } else {
+          setStatus('expired');
+          setErrorMessage(data?.error?.message || 'Lien de vérification invalide.');
+        }
+      } catch {
+        setErrorMessage('Impossible de joindre le serveur. Réessayez.');
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }, [token]);
+
+  const handleResend = async () => {
+    const email = knownEmail();
+    if (!email) {
+      setErrorMessage('Indiquez votre adresse e-mail en vous reconnectant pour recevoir un nouveau lien.');
+      return;
+    }
+    setErrorMessage(null);
     setResending(true);
-    setTimeout(() => {
-      setResending(false);
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message || 'Envoi impossible pour le moment.');
       setResent(true);
       setStatus('pending');
-    }, 1000);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Envoi impossible pour le moment.');
+    } finally {
+      setResending(false);
+    }
   };
 
   return (
@@ -43,8 +100,16 @@ export const EmailVerificationPage: React.FC = () => {
       {/* Carte centrale multi-états (Frames 13, 14, 15) */}
       <main className="w-full max-w-[500px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-8 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col items-center text-center gap-6 my-auto">
         
+        {checking && <p className="text-sm text-[#0B2C25]/75">Vérification de votre e-mail…</p>}
+
+        {errorMessage && (
+          <div className="w-full bg-red-500/10 border border-red-500/30 text-red-800 text-xs sm:text-sm px-4 py-3 rounded-xl">
+            {errorMessage}
+          </div>
+        )}
+
         {/* État 13 · Vérification de l'e-mail */}
-        {status === 'pending' && (
+        {!checking && status === 'pending' && (
           <>
             <div className="w-20 h-20 rounded-full bg-emerald-500/15 text-[#17664E] flex items-center justify-center border border-emerald-600/20 shadow-inner">
               <Mail className="w-10 h-10" />
@@ -98,7 +163,7 @@ export const EmailVerificationPage: React.FC = () => {
         )}
 
         {/* État 14 · E-mail vérifié */}
-        {status === 'verified' && (
+        {!checking && status === 'verified' && (
           <>
             <div className="w-20 h-20 rounded-full bg-emerald-500/20 text-[#17664E] flex items-center justify-center border border-emerald-600/30">
               <CheckCircle className="w-10 h-10" />
@@ -124,7 +189,7 @@ export const EmailVerificationPage: React.FC = () => {
         )}
 
         {/* État 15 · Lien de vérification expiré */}
-        {status === 'expired' && (
+        {!checking && status === 'expired' && (
           <>
             <div className="w-20 h-20 rounded-full bg-amber-500/20 text-amber-700 flex items-center justify-center border border-amber-600/30">
               <AlertTriangle className="w-10 h-10" />
@@ -151,13 +216,10 @@ export const EmailVerificationPage: React.FC = () => {
           </>
         )}
 
-        <Link to="/login" className="text-xs text-[#0B2C25]/70 hover:underline">
-          Retour à la page de connexion
-        </Link>
       </main>
 
-      <footer className="w-full max-w-6xl text-center text-xs text-[#0B2C25]/60 mt-8">
-        © 2026 FORSA (فرصة) · Frames 13, 14, 15 Vérification E-mail (Figma)
+      <footer className="w-full max-w-6xl text-center text-xs text-[#0B2C25]/60 mt-8 py-2">
+        © 2026 FORSA — Plateforme anti-gaspillage alimentaire DZ.
       </footer>
     </div>
   );

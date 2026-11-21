@@ -38,22 +38,35 @@ enum DocumentStatus {
   REJECTED
 }
 
+enum EmailTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+enum SocialProvider {
+  GOOGLE
+  APPLE
+}
+
 model User {
-  id             String         @id @default(uuid())
-  email          String         @unique
-  passwordHash   String
+  id             String          @id @default(uuid())
+  email          String          @unique
+  passwordHash   String?
   fullName       String
-  phone          String?
-  role           Role           @default(CUSTOMER)
-  emailVerified  Boolean        @default(false)
-  phoneVerified  Boolean        @default(false)
-  status         UserStatus     @default(ACTIVE)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  phone          String?         @unique
+  avatarUrl      String?
+  role           Role            @default(CUSTOMER)
+  emailVerified  Boolean         @default(false)
+  phoneVerified  Boolean         @default(false)
+  status         UserStatus      @default(ACTIVE)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   shop           Shop?
   refreshTokens  RefreshToken[]
   phoneOtps      PhoneOtp[]
+  emailTokens    EmailToken[]
+  socialAccounts SocialAccount[]
 
   @@map("users")
 }
@@ -61,7 +74,8 @@ model User {
 model PhoneOtp {
   id        String   @id @default(uuid())
   userId    String
-  code      String
+  codeHash  String
+  attempts  Int      @default(0)
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -70,6 +84,35 @@ model PhoneOtp {
 
   @@index([userId])
   @@map("phone_otps")
+}
+
+model EmailToken {
+  id        String         @id @default(uuid())
+  userId    String
+  type      EmailTokenType
+  tokenHash String         @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("email_tokens")
+}
+
+model SocialAccount {
+  id             String         @id @default(uuid())
+  provider       SocialProvider
+  providerUserId String
+  userId         String
+  createdAt      DateTime       @default(now())
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@map("social_accounts")
 }
 
 model Shop {

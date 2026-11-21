@@ -4,6 +4,7 @@ import { errorHandler, loggerMiddleware } from '@forsa/common';
 import { authRouter } from './routes/auth.routes';
 import { userRouter } from './routes/user.routes';
 import { shopRouter } from './routes/shop.routes';
+import { config } from './config/env';
 
 export const createApp = (): Express => {
   const app = express();
@@ -26,6 +27,9 @@ export const createApp = (): Express => {
   app.use('/api/auth', authRouter);
   app.use('/api/users', userRouter);
   app.use('/api/shops', shopRouter);
+
+  // Fichiers statiques : avatars
+  app.use('/api/users/avatars', express.static(config.avatarDir, { maxAge: '7d' }));
 
   // Gestionnaire global d'erreurs uniforme FORSA
   app.use(errorHandler);
