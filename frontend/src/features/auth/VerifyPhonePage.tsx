@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CheckCircle2, AlertCircle, ArrowLeft, MessageSquare, Send, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ArrowLeft, MessageSquare, ShieldCheck } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
 
 const OTP_LENGTH = 6;
@@ -190,12 +190,18 @@ export const VerifyPhonePage: React.FC = () => {
       {/* 16 · Vérification du téléphone avec option Telegram en vedette */}
       <main className="relative z-10 w-full max-w-[500px] backdrop-blur-[20px] bg-white/40 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-5 text-center my-auto">
         
-        {/* Badge d'icône */}
-        <div className="size-14 mx-auto rounded-full bg-white/70 border border-[#0B2C25]/15 flex items-center justify-center text-[#17664E] shadow-sm">
+        {/* Badge d'icône officiel parfaitement centré */}
+        <div className="size-16 mx-auto rounded-full bg-white/85 border border-[#0B2C25]/15 flex items-center justify-center shadow-sm">
           {method === 'telegram' ? (
-            <Send className="size-6 text-[#229ED9] -rotate-12 translate-x-0.5" />
+            <svg
+              className="size-8 text-[#229ED9] -translate-x-[1px]"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="m20.665 3.717-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701h-.002l-.313 4.673c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.434z" />
+            </svg>
           ) : (
-            <MessageSquare className="size-6 text-[#17664E]" />
+            <MessageSquare className="size-7 text-[#17664E]" />
           )}
         </div>
 
@@ -223,7 +229,9 @@ export const VerifyPhonePage: React.FC = () => {
                 : 'text-[#0B2C25]/70 hover:text-[#0B2C25]'
             }`}
           >
-            <Send className="w-3.5 h-3.5" />
+            <svg className="size-3.5 shrink-0 fill-current" viewBox="0 0 24 24">
+              <path d="m20.665 3.717-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701h-.002l-.313 4.673c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.434z" />
+            </svg>
             <span>Telegram (Rapide)</span>
           </button>
           <button
@@ -262,9 +270,11 @@ export const VerifyPhonePage: React.FC = () => {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setBotOpened(true)}
-              className="w-full py-3 px-4 bg-[#229ED9] hover:bg-[#1E88C7] text-white font-medium text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition cursor-pointer active:scale-[0.99]"
+              className="w-full py-3.5 px-4 bg-[#229ED9] hover:bg-[#1E88C7] text-white font-medium text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2.5 shadow-sm transition cursor-pointer active:scale-[0.99]"
             >
-              <Send className="w-4 h-4 -rotate-12" />
+              <svg className="size-4 shrink-0 fill-current" viewBox="0 0 24 24">
+                <path d="m20.665 3.717-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701h-.002l-.313 4.673c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.434z" />
+              </svg>
               <span>Ouvrir Telegram &amp; Certifier mon numéro</span>
             </a>
 
