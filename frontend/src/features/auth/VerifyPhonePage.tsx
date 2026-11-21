@@ -49,9 +49,8 @@ export const VerifyPhonePage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!localStorage.getItem('forsa_access_token')) {
-      setErrorMessage('Session expirée. Veuillez vous reconnecter.');
-    } else {
+    const token = localStorage.getItem('forsa_access_token');
+    if (token) {
       requestOtp();
     }
     const interval = setInterval(() => setTimer((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
