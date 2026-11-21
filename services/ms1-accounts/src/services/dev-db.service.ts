@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import net from 'net';
+import { prisma } from '../config/prisma';
 
 let lastCheckTime = 0;
 let cachedStatus = false;
@@ -9,23 +9,16 @@ export async function isPostgresAlive(): Promise<boolean> {
   if (now - lastCheckTime < 4000) {
     return cachedStatus;
   }
-  return new Promise((resolve) => {
-    const socket = net.createConnection({ port: 5432, host: '127.0.0.1', timeout: 150 });
-    socket.on('connect', () => {
-      socket.destroy();
-      cachedStatus = true;
-      lastCheckTime = Date.now();
-      resolve(true);
-    });
-    const onError = () => {
-      socket.destroy();
-      cachedStatus = false;
-      lastCheckTime = Date.now();
-      resolve(false);
-    };
-    socket.on('error', onError);
-    socket.on('timeout', onError);
-  });
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    cachedStatus = true;
+    lastCheckTime = Date.now();
+    return true;
+  } catch {
+    cachedStatus = false;
+    lastCheckTime = Date.now();
+    return false;
+  }
 }
 
 export interface DevUser {
