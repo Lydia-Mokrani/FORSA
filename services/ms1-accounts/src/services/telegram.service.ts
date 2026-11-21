@@ -51,14 +51,48 @@ export async function markUserPhoneVerified(userId: string): Promise<boolean> {
 }
 
 /**
- * Formatage minimaliste & ultra-pro style RedotPay :
- * Code en monospace pour copie directe d'un seul clic sur Telegram !
+ * Envoie le code OTP dans le bloc officiel de copie Telegram (<pre><code>) avec bouton de copie automatique (copy_text).
+ * Affiche l'icône de copie Telegram dans le coin supérieur droit (comme sur la capture de l'utilisateur) !
  */
-export function formatRedotPayTelegramOtp(code: string): string {
-  return `🔐 *FORSA Verification Code*\n\n` +
-         `\`${code}\`\n\n` +
-         `_(Appuyez sur le code pour copier)_\n` +
-         `⏱️ Valable 5 minutes. Ne partagez jamais ce code.`;
+export async function sendTelegramOtpCode(
+  chatId: string | number,
+  code: string
+): Promise<boolean> {
+  const token = config.telegramBotToken;
+  if (!token) return false;
+
+  const htmlText = `🔐 <b>FORSA — Code de vérification</b>\n\n` +
+                   `<pre><code>${code}</code></pre>\n` +
+                   `⏱️ <i>Valable 5 minutes. Ne partagez jamais ce code.</i>`;
+
+  const payload: any = {
+    chat_id: chatId,
+    text: htmlText,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: `📋 Copier le code : ${code}`,
+            copy_text: { text: code },
+          },
+        ],
+      ],
+    },
+  };
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data: any = await res.json();
+    return !!data.ok;
+  } catch (err) {
+    console.error('[TelegramService] Erreur sendTelegramOtpCode:', err);
+    return false;
+  }
 }
 
 /**
@@ -123,7 +157,7 @@ export function registerPendingTelegramOtp(
   // Envoi automatique direct style RedotPay si le numéro a déjà été lié
   const knownChatId = phoneToChatIdMap.get(formattedPhone);
   if (knownChatId) {
-    sendTelegramMessage(knownChatId, formatRedotPayTelegramOtp(code), { remove_keyboard: true });
+    sendTelegramOtpCode(knownChatId, code);
     console.log(`[TelegramService] ⚡ Envoi automatique RedotPay du code ${code} à chat_id ${knownChatId} (${formattedPhone})`);
   }
 
@@ -199,8 +233,8 @@ async function handleTelegramUpdate(update: any): Promise<void> {
     targetOtp.telegramVerified = true;
     await markUserPhoneVerified(targetOtp.userId);
 
-    // Envoi propre style RedotPay
-    await sendTelegramMessage(chatId, formatRedotPayTelegramOtp(targetOtp.code), { remove_keyboard: true });
+    // Envoi propre avec bloc de copie (<pre><code>) et bouton dédié
+    await sendTelegramOtpCode(chatId, targetOtp.code);
     console.log(`[TelegramSecurity] ✅ Numéro certifié avec succès pour userId ${targetOtp.userId} (${contactPhone})`);
     return;
   }
@@ -228,7 +262,7 @@ async function handleTelegramUpdate(update: any): Promise<void> {
       if (knownPhone && knownPhone === registeredPhone) {
         targetOtp.telegramVerified = true;
         await markUserPhoneVerified(targetOtp.userId);
-        await sendTelegramMessage(chatId, formatRedotPayTelegramOtp(targetOtp.code), { remove_keyboard: true });
+        await sendTelegramOtpCode(chatId, targetOtp.code);
         console.log(`[TelegramService] ⚡ Envoi direct (compte déjà certifié) à chat_id ${chatId} pour ${knownPhone}`);
         return;
       }
