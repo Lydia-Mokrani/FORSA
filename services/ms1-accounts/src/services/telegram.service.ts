@@ -10,6 +10,7 @@ export interface PendingOtpInfo {
   phone: string;
   fullName?: string;
   expiresAt: Date;
+  telegramSent?: boolean;
   telegramVerified?: boolean;
   telegramMismatch?: boolean;
   mismatchPhone?: string;
@@ -71,6 +72,7 @@ export async function sendTelegramOtpCode(
 
   const htmlText = `🔐 <b>FORSA — Code de vérification</b>\n\n` +
                    `<pre><code>${code}</code></pre>\n` +
+                   `📋 <b>Copiez ce code et saisissez-le sur FORSA pour valider votre numéro.</b>\n\n` +
                    `⏱️ <i>Valable 5 minutes. Ne partagez jamais ce code.</i>`;
 
   const payload: any = {
@@ -281,12 +283,37 @@ async function handleTelegramUpdate(update: any): Promise<void> {
     phoneToChatIdMap.set(contactPhone, chatId);
     chatIdToPhoneMap.set(chatId, contactPhone);
 
+    targetOtp.telegramSent = true;
     targetOtp.telegramVerified = true;
-    await markUserPhoneVerified(targetOtp.userId);
 
-    // Envoi propre avec bloc de copie (<pre><code>) et bouton dédié
-    await sendTelegramOtpCode(chatId, targetOtp.code);
-    console.log(`[TelegramSecurity] ✅ Numéro certifié avec succès pour userId ${targetOtp.userId} (${contactPhone})`);
+    // Mise à jour directe de l'utilisateur comme vérifié en base
+    try {
+      if (await isPostgresAlive()) {
+        await prisma.user.update({
+          where: { id: targetOtp.userId },
+          data: { phone: targetOtp.phone, phoneVerified: true },
+        });
+      } else {
+        const u = devDb.users.get(targetOtp.userId);
+        if (u) {
+          u.phone = targetOtp.phone;
+          u.phoneVerified = true;
+        }
+      }
+      console.log(`[TelegramService] ✅ Numéro ${targetOtp.phone} validé et vérifié en direct pour l'utilisateur ${targetOtp.userId}`);
+    } catch (dbErr) {
+      console.error('[TelegramService] Erreur mise à jour utilisateur vérifié:', dbErr);
+    }
+
+    // Envoi du message de félicitations sur Telegram avec le code de secours
+    await sendTelegramMessage(
+      chatId,
+      `✅ *Félicitations ${targetOtp.fullName || ''} !*\n\n` +
+      `Votre numéro *${targetOtp.phone}* a été certifié avec succès sur FORSA.\n` +
+      `Votre session web est maintenant synchronisée et vérifiée.\n\n` +
+      `🔐 _Code secret de confirmation :_ \`${targetOtp.code}\``,
+      { remove_keyboard: true }
+    );
     return;
   }
 
@@ -309,12 +336,33 @@ async function handleTelegramUpdate(update: any): Promise<void> {
       const knownPhone = chatIdToPhoneMap.get(chatId);
       const registeredPhone = toE164(targetOtp.phone);
 
-      // Si le compte Telegram a déjà certifié ce numéro, on envoie directement le code style RedotPay !
+      // Si le compte Telegram a déjà certifié ce numéro, on valide et envoie directement le code style RedotPay !
       if (knownPhone && knownPhone === registeredPhone) {
+        targetOtp.telegramSent = true;
         targetOtp.telegramVerified = true;
-        await markUserPhoneVerified(targetOtp.userId);
+        try {
+          if (await isPostgresAlive()) {
+            await prisma.user.update({
+              where: { id: targetOtp.userId },
+              data: { phone: targetOtp.phone, phoneVerified: true },
+            });
+          } else {
+            const u = devDb.users.get(targetOtp.userId);
+            if (u) {
+              u.phone = targetOtp.phone;
+              u.phoneVerified = true;
+            }
+          }
+        } catch (dbErr) {
+          console.error('[TelegramService] Erreur mise à jour utilisateur:', dbErr);
+        }
         await sendTelegramOtpCode(chatId, targetOtp.code);
-        console.log(`[TelegramService] ⚡ Envoi direct (compte déjà certifié) à chat_id ${chatId} pour ${knownPhone}`);
+        await sendTelegramMessage(
+          chatId,
+          `✅ *Votre compte FORSA a été synchronisé et vérifié automatiquement !*`,
+          { remove_keyboard: true }
+        );
+        console.log(`[TelegramService] ⚡ Envoi direct et validation automatique pour ${knownPhone}`);
         return;
       }
 

@@ -280,13 +280,13 @@ export const LoginPage: React.FC = () => {
 
         {/* Formulaire de connexion Figma 1030:23490 */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-[14px] w-full">
-          {/* Champ Email avec icône Figma */}
+          {/* Champ Email ou Téléphone */}
           <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
             <img src={inputMailIcon} alt="Email" className="size-5 shrink-0 opacity-60" />
             <input
-              type="email"
+              type="text"
               required
-              placeholder="Adresse e-mail"
+              placeholder="Adresse e-mail ou n° de téléphone"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"

@@ -117,6 +117,8 @@ export const ProfilePage: React.FC = () => {
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [telegramSuccess, setTelegramSuccess] = useState(false);
+  const [telegramMismatch, setTelegramMismatch] = useState(false);
+  const [mismatchPhone, setMismatchPhone] = useState('');
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Email Change Modal State
@@ -207,9 +209,11 @@ export const ProfilePage: React.FC = () => {
     return () => clearInterval(interval);
   }, [showPhoneOtpModal, otpSent]);
 
-  // Polling automatique pour détecter la validation Telegram en temps réel
+  // Polling pour détecter la transmission du code sur Telegram ou un numéro discordant
+  const [telegramCodeSent, setTelegramCodeSent] = useState(false);
+
   useEffect(() => {
-    if (!showPhoneOtpModal || telegramSuccess) return;
+    if (!showPhoneOtpModal) return;
     const token =
       localStorage.getItem('forsa_access_token') ||
       localStorage.getItem('token') ||
@@ -225,8 +229,9 @@ export const ProfilePage: React.FC = () => {
           const data = await res.json();
           if (data.phoneVerified) {
             setTelegramSuccess(true);
+            const verifiedPhone = data.phone || modalPhoneInput || profile?.phone || null;
             if (profile) {
-              const updated = { ...profile, phone: modalPhoneInput || profile.phone, phoneVerified: true };
+              const updated = { ...profile, phone: verifiedPhone, phoneVerified: true };
               setProfile(updated);
               localStorage.setItem('forsa_user', JSON.stringify(updated));
             }
@@ -236,6 +241,15 @@ export const ProfilePage: React.FC = () => {
               setSaveSuccess('Numéro de téléphone vérifié avec succès via Telegram !');
               setTimeout(() => setSaveSuccess(null), 4000);
             }, 1800);
+            return;
+          }
+          if (data.telegramSent) {
+            setTelegramCodeSent(true);
+          }
+          if (data.telegramMismatch) {
+            setTelegramMismatch(true);
+            setMismatchPhone(data.mismatchPhone || '');
+            setOtpError(`Numéro Telegram (${data.mismatchPhone || ''}) non concordant avec le numéro saisi sur FORSA.`);
           }
         }
       } catch {
@@ -244,7 +258,7 @@ export const ProfilePage: React.FC = () => {
     }, 2000);
 
     return () => clearInterval(poll);
-  }, [showPhoneOtpModal, telegramSuccess, profile, modalPhoneInput]);
+  }, [showPhoneOtpModal]);
 
   const formatOtpTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -486,13 +500,19 @@ export const ProfilePage: React.FC = () => {
 
       const data = await res.json();
       if (!res.ok) {
-        if (data.code === 'PHONE_ALREADY_VERIFIED') {
+        const errCode = data?.error?.code || data?.code;
+        if (errCode === 'PHONE_ALREADY_VERIFIED') {
           if (profile) {
-            setProfile({ ...profile, phoneVerified: true });
+            const updated = { ...profile, phoneVerified: true };
+            setProfile(updated);
+            localStorage.setItem('forsa_user', JSON.stringify(updated));
           }
           setShowPhoneOtpModal(false);
           setSaveSuccess('Ce numéro est déjà vérifié !');
           return;
+        }
+        if (errCode === 'PHONE_CONFLICT') {
+          throw new Error('Ce numéro de téléphone est déjà associé à un autre compte FORSA.');
         }
         throw new Error(data?.error?.message || data?.message || 'Impossible d’envoyer le code.');
       }
@@ -511,6 +531,64 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
+  const submitOtpCode = async (codeToVerify: string) => {
+    if (codeToVerify.length !== 6) {
+      setOtpError('Veuillez saisir les 6 chiffres du code.');
+      return;
+    }
+
+    const token =
+      localStorage.getItem('forsa_access_token') ||
+      localStorage.getItem('token') ||
+      localStorage.getItem('forsa_auth_token');
+    if (!token) return;
+
+    setIsVerifyingOtp(true);
+    setOtpError(null);
+    try {
+      const res = await fetch('/api/users/verify-phone/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code: codeToVerify }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const remaining = data?.error?.details?.[0]?.attemptsLeft ?? otpAttemptsLeft - 1;
+        setOtpAttemptsLeft(Math.max(0, remaining));
+        setOtpError(`Code incorrect. Il vous reste ${Math.max(0, remaining)} essai(s).`);
+        return;
+      }
+
+      setTelegramSuccess(true);
+      const verifiedPhone = modalPhoneInput || profile?.phone || null;
+      if (profile) {
+        const updated = {
+          ...profile,
+          phone: verifiedPhone,
+          phoneVerified: true,
+        };
+        setProfile(updated);
+        localStorage.setItem('forsa_user', JSON.stringify(updated));
+      }
+
+      setTimeout(() => {
+        setShowPhoneOtpModal(false);
+        setTelegramSuccess(false);
+        setSaveSuccess('Numéro de téléphone vérifié avec succès !');
+        setTimeout(() => setSaveSuccess(null), 4000);
+      }, 1600);
+    } catch (err: any) {
+      setOtpError(err.message || 'Erreur lors de la validation du code.');
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
   const handleOtpDigitChange = (index: number, val: string) => {
     if (otpError) setOtpError(null);
     const cleaned = val.replace(/\D/g, '').slice(-1);
@@ -520,6 +598,11 @@ export const ProfilePage: React.FC = () => {
 
     if (cleaned && index < 5) {
       otpInputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-soumission dès que les 6 chiffres sont saisis
+    if (cleaned && nextDigits.every((d) => d !== '')) {
+      submitOtpCode(nextDigits.join(''));
     }
   };
 
@@ -541,58 +624,15 @@ export const ProfilePage: React.FC = () => {
     setOtpDigits(nextDigits);
     const targetIdx = Math.min(pasted.length, 5);
     otpInputRefs.current[targetIdx]?.focus();
+
+    // Auto-soumission immédiate si 6 chiffres collés
+    if (pasted.length === 6) {
+      submitOtpCode(pasted);
+    }
   };
 
-  const handleConfirmOtp = async () => {
-    const code = otpDigits.join('');
-    if (code.length !== 6) {
-      setOtpError('Veuillez saisir les 6 chiffres du code.');
-      return;
-    }
-
-    const token =
-      localStorage.getItem('forsa_access_token') ||
-      localStorage.getItem('token') ||
-      localStorage.getItem('forsa_auth_token');
-    if (!token) return;
-
-    setIsVerifyingOtp(true);
-    try {
-      const res = await fetch('/api/users/verify-phone/confirm', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ code }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        const remaining = data?.error?.details?.[0]?.attemptsLeft ?? otpAttemptsLeft - 1;
-        setOtpAttemptsLeft(Math.max(0, remaining));
-        setOtpError(`Code incorrect. Il vous reste ${Math.max(0, remaining)} essai(s).`);
-        return;
-      }
-
-      setShowPhoneOtpModal(false);
-      if (profile) {
-        const updated = {
-          ...profile,
-          phone: modalPhoneInput || profile.phone,
-          phoneVerified: true,
-        };
-        setProfile(updated);
-        localStorage.setItem('forsa_user', JSON.stringify(updated));
-      }
-      setSaveSuccess('Numéro de téléphone vérifié avec succès !');
-      setTimeout(() => setSaveSuccess(null), 4000);
-    } catch (err: any) {
-      setOtpError(err.message || 'Erreur lors de la validation du code.');
-    } finally {
-      setIsVerifyingOtp(false);
-    }
+  const handleConfirmOtp = () => {
+    submitOtpCode(otpDigits.join(''));
   };
 
   // Change Password
@@ -853,7 +893,7 @@ export const ProfilePage: React.FC = () => {
             </div>
           )}
 
-          {/* État Téléphone non vérifié (Figma Frame 785:21220 - Bannière Confirmez votre numéro de téléphone) */}
+          {/* État Téléphone non vérifié (Bannière d'alerte contextuelle) */}
           {!isPhoneVerified && (
             <div className="bg-[#fdf3d8] border-[1.5px] border-[#dbf0dd] rounded-[20px] p-[18px] flex items-center justify-between gap-4 w-full flex-wrap">
               <div className="flex items-center gap-[16px]">
@@ -861,33 +901,49 @@ export const ProfilePage: React.FC = () => {
                   <img src={figmaAlertCircle} alt="" className="size-[22px] text-[#0b2c25]" />
                 </div>
                 <div className="flex flex-col gap-[3px] text-[#0b2c25]">
-                  <p className="font-semibold text-[15px]">Confirmez votre numéro de téléphone</p>
+                  <p className="font-semibold text-[15px]">
+                    {hasPhone ? 'Confirmez votre numéro de téléphone' : 'Ajoutez un numéro de téléphone'}
+                  </p>
                   <p className="text-[12px] opacity-80">
                     {hasPhone
-                      ? `Pour sécuriser votre compte, saisissez le code reçu par SMS au +213 ${profile?.phone}.`
-                      : 'Pour sécuriser votre compte, renseignez et confirmez votre numéro de téléphone.'}
+                      ? `Pour sécuriser votre compte, saisissez le code reçu par SMS ou Telegram au +213 ${formatAlgerianMobileDisplay(profile?.phone)}.`
+                      : 'Pour sécuriser votre compte et finaliser vos réservations, renseignez votre numéro de téléphone.'}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-[10px] shrink-0">
-                <button
-                  type="button"
-                  onClick={handleStartPhoneVerification}
-                  className="h-[44px] px-[20px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-[14px] font-semibold rounded-[12px] flex items-center gap-2 transition"
-                >
-                  <img src={figmaSmartPhone} alt="" className="size-[18px] brightness-0 invert" />
-                  <span>Saisir le code</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewMode('edit');
-                    setModalPhoneInput(phone);
-                  }}
-                  className="h-[44px] px-[20px] border border-[#0b2c25] text-[#0b2c25] hover:bg-[#0b2c25]/5 text-[14px] font-semibold rounded-[12px] transition"
-                >
-                  Changer le numéro
-                </button>
+                {hasPhone ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleStartPhoneVerification}
+                      className="h-[44px] px-[20px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-[14px] font-semibold rounded-[12px] flex items-center gap-2 transition cursor-pointer"
+                    >
+                      <img src={figmaSmartPhone} alt="" className="size-[18px] brightness-0 invert" />
+                      <span>Valider le numéro</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewMode('edit');
+                        setModalPhoneInput(phone);
+                      }}
+                      className="h-[44px] px-[20px] border border-[#0b2c25] text-[#0b2c25] hover:bg-[#0b2c25]/5 text-[14px] font-semibold rounded-[12px] transition cursor-pointer"
+                    >
+                      Modifier
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('edit');
+                    }}
+                    className="h-[44px] px-[20px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-[14px] font-semibold rounded-[12px] flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <span>+ Ajouter un numéro</span>
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1050,79 +1106,77 @@ export const ProfilePage: React.FC = () => {
                       <div className="size-[44px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
                         <img src={figmaSmartPhone} alt="" className="size-[22px]" />
                       </div>
-                      <div className="flex flex-col gap-[3px] min-w-0 flex-1">
+                      <div className="flex flex-col gap-[4px] min-w-0 flex-1">
+                        {/* Ligne 1 : Titre + Badge d'état sobre */}
                         <div className="flex items-center justify-between gap-[8px]">
-                          <p className="text-[11px] font-normal text-[#0b2c25]">Téléphone</p>
+                          <p className="text-[11px] font-normal text-[#0b2c25]/70">Téléphone</p>
                           {isPhoneVerified ? (
-                            <div className="flex items-center gap-[6px]">
-                              <div className="bg-[#dbf0dd] flex items-center gap-[3px] pl-[5px] pr-[7px] py-[2px] rounded-[100px]">
-                                <img src={figmaTickSmall} alt="" className="size-[11px]" />
-                                <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setModalPhoneInput(extractAlgerianMobile9(profile?.phone));
-                                  setShowPhoneOtpModal(true);
-                                  setOtpSent(false);
-                                }}
-                                className="border border-[#78847f]/40 hover:bg-[#ebeee1] text-[10px] font-semibold text-[#0b2c25] px-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
-                              >
-                                Modifier
-                              </button>
+                            <div className="bg-[#dbf0dd] flex items-center gap-[3px] px-[8px] py-[2px] rounded-full">
+                              <img src={figmaTickSmall} alt="" className="size-[11px]" />
+                              <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
                             </div>
                           ) : hasPhone ? (
-                            <div className="flex items-center gap-[6px]">
-                              <div className="bg-red-100 border border-red-200 flex items-center gap-[3px] pl-[5px] pr-[7px] py-[2px] rounded-[100px]">
-                                <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
-                                <span className="text-[10px] font-semibold text-[#b22222]">Non vérifié</span>
-                              </div>
+                            <div className="bg-amber-50 border border-amber-200 flex items-center gap-[3px] px-[8px] py-[2px] rounded-full">
+                              <span className="text-[10px] font-semibold text-amber-800">Non vérifié</span>
+                            </div>
+                          ) : (
+                            <div className="bg-[#ebeee1]/70 flex items-center gap-[3px] px-[8px] py-[2px] rounded-full">
+                              <span className="text-[10px] font-medium text-[#78847f]">Non renseigné</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Ligne 2 : Numéro affiché + Bouton d'action épuré */}
+                        <div className="flex items-center justify-between gap-[8px]">
+                          <p className="text-[14px] font-semibold text-[#0b2c25] truncate">
+                            {hasPhone ? displayPhone : (
+                              <span className="text-[#0b2c25]/45 italic font-normal text-[13px]">
+                                Aucun numéro associé
+                              </span>
+                            )}
+                          </p>
+
+                          {isPhoneVerified ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setViewMode('edit');
+                              }}
+                              className="text-[11px] font-semibold text-[#0b2c25]/70 hover:text-[#0b2c25] hover:underline transition cursor-pointer"
+                            >
+                              Modifier
+                            </button>
+                          ) : hasPhone ? (
+                            <div className="flex items-center gap-2">
                               <button
                                 type="button"
                                 onClick={handleStartPhoneVerification}
-                                className="bg-[#0b2c25] hover:bg-[#17664e] text-white text-[10px] font-semibold px-[8px] py-[2px] rounded-[100px] cursor-pointer transition shadow-xs"
+                                className="bg-[#0b2c25] hover:bg-[#17664e] text-white text-[11px] font-semibold px-2.5 py-1 rounded-[8px] transition cursor-pointer shadow-xs"
                               >
                                 Vérifier
                               </button>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setModalPhoneInput(extractAlgerianMobile9(profile?.phone));
-                                  setShowPhoneOtpModal(true);
-                                  setOtpSent(false);
+                                  setViewMode('edit');
                                 }}
-                                className="border border-[#78847f]/40 hover:bg-[#ebeee1] text-[10px] font-semibold text-[#0b2c25] px-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
+                                className="text-[11px] font-semibold text-[#0b2c25]/70 hover:text-[#0b2c25] hover:underline transition cursor-pointer"
                               >
                                 Modifier
                               </button>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-[6px]">
-                              <div className="bg-red-100 border border-red-200 flex items-center gap-[3px] pl-[5px] pr-[7px] py-[2px] rounded-[100px]">
-                                <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
-                                <span className="text-[10px] font-semibold text-[#b22222]">Non renseigné</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setModalPhoneInput('');
-                                  setShowPhoneOtpModal(true);
-                                  setOtpSent(false);
-                                }}
-                                className="bg-[#0b2c25] hover:bg-[#17664e] text-white text-[10px] font-semibold px-[8px] py-[2px] rounded-[100px] cursor-pointer transition shadow-xs"
-                              >
-                                + Ajouter / Vérifier
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setViewMode('edit');
+                              }}
+                              className="bg-[#0b2c25] hover:bg-[#17664e] text-white text-[11px] font-semibold px-3 py-1 rounded-[8px] transition cursor-pointer shadow-xs"
+                            >
+                              + Ajouter
+                            </button>
                           )}
                         </div>
-                        <p className="text-[14px] font-semibold text-[#0b2c25] truncate">
-                          {hasPhone ? displayPhone : (
-                            <span className="text-[#0b2c25]/45 italic font-normal text-[13px]">
-                              Non renseigné
-                            </span>
-                          )}
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -1563,17 +1617,16 @@ export const ProfilePage: React.FC = () => {
                       className="flex-1 h-full text-[14px] font-medium text-[#0b2c25] focus:outline-none bg-transparent"
                     />
 
-                    {/* Badge vérifié ou badge X non vérifié */}
+                    {/* Badge vérifié ou badge non vérifié si un numéro est saisi */}
                     {isPhoneVerified && phone === extractAlgerianMobile9(profile?.phone) ? (
                       <div className="bg-[#dbf0dd] flex items-center gap-[3px] pl-[6px] pr-[8px] py-[3px] rounded-[100px] shrink-0">
                         <img src={figmaTickVerified} alt="" className="size-[12px]" />
                         <span className="text-[10px] font-semibold text-[#17664e]">Vérifié</span>
                       </div>
-                    ) : (
+                    ) : phone ? (
                       <div className="flex items-center gap-2 shrink-0">
-                        <div className="bg-red-100 border border-red-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[3px] rounded-[100px]">
-                          <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
-                          <span className="text-[10px] font-semibold text-[#b22222]">Non vérifié</span>
+                        <div className="bg-amber-50 border border-amber-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[3px] rounded-[100px]">
+                          <span className="text-[10px] font-semibold text-amber-800">Non vérifié</span>
                         </div>
                         <button
                           type="button"
@@ -1583,7 +1636,7 @@ export const ProfilePage: React.FC = () => {
                           Vérifier
                         </button>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                   {phoneError ? (
                     <p className="text-[11px] text-[#b22222] font-semibold">{phoneError}</p>
@@ -1766,112 +1819,178 @@ export const ProfilePage: React.FC = () => {
 
       {/* ── MODALE VALIDATION TÉLÉPHONE (TELEGRAM BOT & SMS) (FRAME 786:23506) ── */}
       {showPhoneOtpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-[24px] bg-white p-7 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="w-full max-w-[440px] rounded-[28px] bg-white border-[1.5px] border-[#dbf0dd] p-7 sm:p-8 shadow-2xl relative font-poppins">
+            {/* Bouton Fermer Figma */}
             <button
               type="button"
-              onClick={() => setShowPhoneOtpModal(false)}
-              className="absolute top-5 right-5 size-9 rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-black/5 flex items-center justify-center text-[#0b2c25] transition"
+              onClick={() => {
+                setShowPhoneOtpModal(false);
+                setTelegramSuccess(false);
+                setTelegramMismatch(false);
+              }}
+              className="absolute top-5 right-5 size-9 rounded-full border border-[#dbf0dd] bg-white hover:bg-[#FAF6ED] flex items-center justify-center text-[#0b2c25] transition shadow-xs cursor-pointer"
               aria-label="Fermer"
             >
               <img src={figmaMultiplicationSign} alt="" className="size-3 text-[#0b2c25]" />
             </button>
 
-            <div className="flex flex-col items-center text-center mb-5">
-              <div className="size-12 rounded-full bg-[#FAF6ED] text-[#0B2C25] flex items-center justify-center mb-2">
-                <img src={figmaSmartPhone} alt="" className="size-6" />
-              </div>
-              <h3 className="text-xl font-bold text-[#0B2C25]">Vérification du numéro</h3>
-              <p className="text-xs text-gray-500 mt-1 max-w-xs">
-                Validez votre numéro de téléphone algérien via notre Bot officiel Telegram ou par code OTP.
-              </p>
-            </div>
-
-            {/* Étape 1 : Saisir le numéro si pas encore envoyé */}
-            {!otpSent ? (
-              <div className="space-y-4">
+            {/* ÉTAT 1 : SUCCÈS VÉRIFIÉ (Auto-synchronisation Telegram ou validation code) */}
+            {telegramSuccess ? (
+              <div className="flex flex-col items-center justify-center text-center py-6 space-y-4">
+                <div className="size-20 rounded-full bg-[#dbf0dd] border-4 border-[#17664e]/20 flex items-center justify-center shadow-md animate-bounce">
+                  <img src={figmaTickVerified} alt="" className="size-10" />
+                </div>
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-[#0B2C25]">
-                    Numéro de téléphone
-                  </label>
-                  <div className="flex items-center h-12 rounded-[12px] border border-[#78847F] px-3 bg-white">
-                    <span className="text-xs font-semibold text-gray-700 mr-2 select-none">🇩🇿 +213</span>
-                    <input
-                      type="tel"
-                      value={formatAlgerianMobileDisplay(modalPhoneInput)}
-                      onChange={(e) => {
-                        const raw = extractAlgerianMobile9(e.target.value);
-                        setModalPhoneInput(raw);
-                        setPhone(raw);
-                        if (otpError) setOtpError(null);
-                      }}
-                      placeholder="6 97 93 76 37"
-                      className="flex-1 h-full text-sm font-medium focus:outline-none bg-transparent"
-                    />
+                  <h3 className="text-2xl font-bold text-[#0b2c25]">Numéro vérifié !</h3>
+                  <p className="text-sm font-semibold text-[#17664e]">
+                    ✓ Votre compte est désormais certifié et sécurisé.
+                  </p>
+                  <p className="text-xs text-[#0b2c25]/70 max-w-xs mt-1">
+                    Numéro validé : <strong>+213 {formatAlgerianMobileDisplay(modalPhoneInput || phone || profile?.phone)}</strong>
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPhoneOtpModal(false);
+                      setTelegramSuccess(false);
+                    }}
+                    className="px-6 py-2.5 rounded-[12px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-xs font-semibold shadow-sm transition cursor-pointer"
+                  >
+                    Continuer
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* En-tête officiel de la modale */}
+                <div className="flex flex-col items-center text-center mb-6">
+                  <div className="size-14 rounded-full bg-[#eef7ec] border border-[#dbf0dd] flex items-center justify-center mb-3 shadow-xs">
+                    <img src={figmaSmartPhone} alt="" className="size-7" />
                   </div>
-                  <p className="text-[11px] text-gray-500">
-                    Il doit comporter 9 chiffres et commencer par 5, 6 ou 7.
+                  <h3 className="text-[22px] font-bold text-[#0B2C25] leading-tight">
+                    Vérification du numéro
+                  </h3>
+                  <p className="text-xs text-[#0b2c25]/70 mt-1 max-w-xs leading-relaxed">
+                    Validez votre numéro algérien via Telegram en 1 clic ou par code SMS.
                   </p>
                 </div>
 
-                {otpError && (
-                  <p className="text-xs text-[#B22222] font-semibold text-center">{otpError}</p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleStartPhoneVerification}
-                  disabled={isSendingOtp}
-                  className="w-full h-12 rounded-[14px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-semibold text-sm transition cursor-pointer shadow-md disabled:opacity-50"
-                >
-                  {isSendingOtp ? 'Génération du code...' : 'Continuer vers la vérification'}
-                </button>
-              </div>
-            ) : (
-              /* Étape 2 : Vérification via Bot Telegram ou saisie du code */
-              <div className="space-y-5">
-                {telegramSuccess ? (
-                  <div className="p-4 rounded-[16px] bg-emerald-50 border border-emerald-300 text-center space-y-2">
-                    <div className="size-10 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto text-xl">
-                      ✓
+                {/* Étape 1 : Saisir le numéro si pas encore envoyé */}
+                {!otpSent ? (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-[#0B2C25]">
+                        Numéro de téléphone algérien
+                      </label>
+                      <div className={`flex items-center h-12 rounded-[14px] border-[1.5px] ${phoneError ? 'border-[#b22222] bg-[#fff5f5]' : 'border-[#dbf0dd] bg-[#fffaf0]'} px-3.5 transition focus-within:border-[#17664e] focus-within:bg-white`}>
+                        <img src={figmaPhoneInput} alt="" className="size-4 mr-2 opacity-80" />
+                        <span className="text-xs font-bold text-[#0b2c25] mr-2 select-none">🇩🇿 +213</span>
+                        <input
+                          type="tel"
+                          value={formatAlgerianMobileDisplay(modalPhoneInput)}
+                          onChange={(e) => {
+                            const raw = extractAlgerianMobile9(e.target.value);
+                            setModalPhoneInput(raw);
+                            setPhone(raw);
+                            if (otpError) setOtpError(null);
+                            if (phoneError) setPhoneError(null);
+                          }}
+                          placeholder="6 97 93 76 37"
+                          className="flex-1 h-full text-sm font-semibold text-[#0b2c25] focus:outline-none bg-transparent placeholder:font-normal placeholder:text-gray-400"
+                        />
+                      </div>
+                      <p className="text-[11px] text-[#0b2c25]/60">
+                        9 chiffres commençant par 5, 6 ou 7 (ex : 6 97 93 76 37).
+                      </p>
                     </div>
-                    <p className="text-sm font-bold text-emerald-900">
-                      Numéro validé avec succès via Telegram !
-                    </p>
+
+                    {otpError && (
+                      <div className="p-2.5 rounded-[12px] bg-red-50 border border-red-200 text-xs text-[#b22222] font-semibold text-center">
+                        {otpError}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleStartPhoneVerification}
+                      disabled={isSendingOtp}
+                      className="w-full h-12 rounded-[14px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-semibold text-sm transition cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isSendingOtp ? (
+                        <>
+                          <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Connexion en cours...</span>
+                        </>
+                      ) : (
+                        <span>Recevoir le code de vérification</span>
+                      )}
+                    </button>
                   </div>
                 ) : (
-                  <>
-                    {/* Bouton Telegram direct */}
-                    <div className="p-4 rounded-[16px] bg-[#EEF7EC] border border-[#DBF0DD] text-center space-y-2.5">
-                      <p className="text-xs text-[#0B2C25] font-medium leading-relaxed">
-                        Pour une validation instantanée, ouvrez notre bot Telegram et appuyez sur <strong>Démarrer</strong> :
-                      </p>
+                  /* Étape 2 : Vérification via Bot Telegram ou saisie du code */
+                  <div className="space-y-4">
+                    {/* Alerte Numéro Discordant (Telegram Mismatch) */}
+                    {telegramMismatch && (
+                      <div className="p-3.5 rounded-[16px] bg-[#fff5f5] border border-[#b22222]/30 text-center space-y-2">
+                        <div className="flex items-center justify-center gap-1.5 text-[#b22222] font-bold text-xs">
+                          <img src={figmaAlertCircle} alt="" className="size-4 shrink-0 text-[#b22222]" />
+                          <span>Numéro Telegram non concordant</span>
+                        </div>
+                        <p className="text-[11px] text-[#0b2c25]/80 leading-relaxed">
+                          Votre compte Telegram utilise le numéro <strong className="text-[#b22222]">{mismatchPhone}</strong>, différent du numéro saisi (+213 {formatAlgerianMobileDisplay(modalPhoneInput || phone)}).
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTelegramMismatch(false);
+                            setOtpSent(false);
+                            setOtpError(null);
+                          }}
+                          className="px-3 py-1.5 rounded-[8px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-[11px] font-semibold transition cursor-pointer"
+                        >
+                          Modifier mon numéro et recommencer
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Bloc Telegram Option 1 (Recommandée) */}
+                    <div className="p-4 rounded-[18px] bg-[#f5faf4] border-[1.5px] border-[#dbf0dd] text-center space-y-2.5">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="size-2 rounded-full bg-[#17664e] animate-pulse" />
+                        <p className="text-xs text-[#0B2C25] font-semibold">
+                          Option 1 · Validation instantanée sur Telegram
+                        </p>
+                      </div>
 
                       <a
                         href={telegramLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full h-12 rounded-[12px] bg-[#229ED9] hover:bg-[#1E88E5] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
+                        className="w-full h-12 rounded-[14px] bg-[#229ED9] hover:bg-[#1E88E5] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-md transition cursor-pointer active:scale-[0.98]"
                       >
                         <svg className="size-5 fill-current" viewBox="0 0 24 24">
                           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z" />
                         </svg>
-                        <span>Ouvrir le Bot Telegram (@forsa_auth_bot)</span>
+                        <span>Recevoir le code sur Telegram (@forsa_auth_bot)</span>
                       </a>
 
-                      <p className="text-[10px] text-gray-500">
-                        ⚡ Détection automatique en direct : la fenêtre se validera dès votre confirmation sur Telegram.
+                      <p className="text-[10px] text-[#0b2c25]/70 leading-normal">
+                        ⚡ Synchronisation en direct : dès confirmation sur Telegram, votre numéro se valide automatiquement sans avoir à taper le code !
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <div className="h-px bg-gray-200 flex-1" />
-                      <span>ou tapez le code à 6 chiffres reçu</span>
-                      <div className="h-px bg-gray-200 flex-1" />
+                    {/* Séparateur élégant Option 2 */}
+                    <div className="flex items-center gap-3 text-[11px] text-gray-400 my-1">
+                      <div className="h-px bg-[#dbf0dd] flex-1" />
+                      <span className="font-medium text-[#0b2c25]/60">Option 2 · ou saisissez le code reçu</span>
+                      <div className="h-px bg-[#dbf0dd] flex-1" />
                     </div>
 
                     {/* 6 OTP Boxes */}
-                    <div className="flex justify-center gap-2">
+                    <div className="flex justify-center gap-2 sm:gap-2.5">
                       {otpDigits.map((digit, idx) => (
                         <input
                           key={idx}
@@ -1882,57 +2001,82 @@ export const ProfilePage: React.FC = () => {
                           inputMode="numeric"
                           maxLength={1}
                           value={digit}
-                          disabled={otpSecondsLeft === 0}
+                          disabled={otpSecondsLeft === 0 || isVerifyingOtp}
                           onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                           onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                           onPaste={handleOtpPaste}
-                          className={`w-11 h-14 text-center text-xl font-bold rounded-[12px] border transition focus:outline-none ${
+                          className={`size-11 sm:size-12 text-center text-xl font-bold rounded-[14px] border-[1.5px] transition focus:outline-none ${
                             otpError
-                              ? 'border-[#B22222] bg-[#B22222]/5 text-[#B22222]'
-                              : 'border-gray-300 bg-gray-50 focus:border-[#17664E] focus:bg-white text-gray-900'
+                              ? 'border-[#B22222] bg-[#fff5f5] text-[#B22222]'
+                              : 'border-[#dbf0dd] bg-[#fffaf0] focus:border-[#17664E] focus:bg-white text-[#0b2c25]'
                           }`}
                         />
                       ))}
                     </div>
 
+                    {/* Message d'erreur OTP */}
                     {otpError && (
-                      <p className="text-xs text-[#B22222] font-semibold text-center">{otpError}</p>
+                      <p className="text-xs text-[#B22222] font-semibold text-center animate-shake">
+                        {otpError}
+                      </p>
                     )}
 
-                    <div className="text-center text-xs text-gray-500">
+                    {/* Compteur de validité */}
+                    <div className="text-center text-xs text-[#0b2c25]/75">
                       {otpSecondsLeft > 0 ? (
                         <span>
                           Validité du code :{' '}
-                          <strong className="text-[#17664E]">{formatOtpTimer(otpSecondsLeft)}</strong>
+                          <strong className="text-[#17664E] font-semibold">{formatOtpTimer(otpSecondsLeft)}</strong>
                         </span>
                       ) : (
                         <span className="text-[#B22222] font-semibold">
-                          Le code a expiré. Demandez un nouveau code.
+                          Le code a expiré. Demandez un nouveau code ci-dessous.
                         </span>
                       )}
                     </div>
 
-                    <div className="space-y-2">
+                    {/* Actions */}
+                    <div className="space-y-2 pt-1">
                       <button
                         type="button"
                         onClick={handleConfirmOtp}
                         disabled={isVerifyingOtp || otpSecondsLeft === 0}
-                        className="w-full h-12 rounded-[12px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-semibold text-sm transition cursor-pointer disabled:opacity-50"
+                        className="w-full h-12 rounded-[14px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-semibold text-sm transition cursor-pointer disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
                       >
-                        {isVerifyingOtp ? 'Vérification...' : 'Valider le code'}
+                        {isVerifyingOtp ? (
+                          <>
+                            <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Vérification...</span>
+                          </>
+                        ) : (
+                          <span>Valider le code</span>
+                        )}
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={handleStartPhoneVerification}
-                        className="w-full text-xs text-[#17664E] font-semibold hover:underline text-center block py-1"
-                      >
-                        Renvoyer un nouveau code (Telegram / SMS)
-                      </button>
+                      <div className="flex items-center justify-between text-xs pt-1 px-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOtpSent(false);
+                            setOtpError(null);
+                            setTelegramMismatch(false);
+                          }}
+                          className="text-[#0b2c25]/70 hover:text-[#0b2c25] hover:underline"
+                        >
+                          ← Changer de numéro
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleStartPhoneVerification}
+                          className="text-[#17664E] font-semibold hover:underline"
+                        >
+                          Renvoyer un nouveau code
+                        </button>
+                      </div>
                     </div>
-                  </>
+                  </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>

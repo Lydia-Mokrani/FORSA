@@ -23,7 +23,7 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-  email: z.string().email('Format email invalide'),
+  email: z.string().min(1, 'L’identifiant (adresse e-mail ou numéro de téléphone) est requis'),
   password: z.string().min(1, 'Le mot de passe est requis'),
 });
 
@@ -199,21 +199,48 @@ export class AuthController {
         throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
       }
 
-      const { email, password } = parsed.data;
+      const { email: identifier, password } = parsed.data;
+      const cleanIdent = identifier.trim();
+      const isEmail = cleanIdent.includes('@');
       const usePrisma = await isPostgresAlive();
       let user: any = null;
 
       if (usePrisma) {
         try {
-          user = await prisma.user.findUnique({
-            where: { email: email.toLowerCase() },
-            include: { shop: true },
-          });
+          if (isEmail) {
+            user = await prisma.user.findUnique({
+              where: { email: cleanIdent.toLowerCase() },
+              include: { shop: true },
+            });
+          } else {
+            let normPhone: string | null = null;
+            try {
+              normPhone = normalizePhone(cleanIdent);
+            } catch {
+              normPhone = cleanIdent.replace(/\D/g, '');
+            }
+            const phoneVariants = [
+              normPhone,
+              cleanIdent,
+              normPhone ? `+213${normPhone.replace(/^0/, '')}` : null,
+              normPhone ? normPhone.replace(/^0/, '') : null,
+              cleanIdent.replace(/\D/g, ''),
+            ].filter(Boolean) as string[];
+
+            user = await prisma.user.findFirst({
+              where: { phone: { in: phoneVariants } },
+              include: { shop: true },
+            });
+          }
         } catch {
-          user = await devDb.findByEmail(email);
+          user = isEmail ? await devDb.findByEmail(cleanIdent) : null;
         }
       } else {
-        user = await devDb.findByEmail(email);
+        user = isEmail ? await devDb.findByEmail(cleanIdent) : null;
+        if (!user && !isEmail) {
+          const digits = cleanIdent.replace(/\D/g, '');
+          user = [...devDb.users.values()].find((u) => u.phone && u.phone.replace(/\D/g, '').includes(digits));
+        }
       }
 
       if (!user) {
@@ -226,7 +253,7 @@ export class AuthController {
 
       // Vérifier que le compte a un mot de passe (compte Google sans mot de passe)
       if (!user.passwordHash) {
-        throw new UnauthorizedError('Ce compte utilise la connexion Google. Veuillez vous connecter avec Google.');
+        throw new UnauthorizedError(`Ce compte (${user.email}) utilise la connexion Google. Veuillez vous connecter avec le bouton "Continuer avec Google".`);
       }
 
       const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
