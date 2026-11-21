@@ -57,7 +57,7 @@ export class SocialController {
         throw new ApiError(503, 'GOOGLE_NOT_CONFIGURED', 'La connexion Google n\'est pas encore configurée.');
       }
 
-      const { idToken } = req.body;
+      const { idToken, role } = req.body;
       if (!idToken) throw new ApiError(400, 'MISSING_TOKEN', 'Le token Google est requis');
 
       // 1. Vérifier le token
@@ -122,7 +122,59 @@ export class SocialController {
         });
       }
 
-      // 4. Nouveau compte → NEEDS_ROLE
+      // 4. Si un rôle est fourni, créer le compte immédiatement
+      if (role && ['CUSTOMER', 'MERCHANT'].includes(role)) {
+        let newUser: any;
+        if (await isPostgresAlive()) {
+          newUser = await prisma.user.create({
+            data: {
+              email,
+              fullName,
+              role,
+              avatarUrl,
+              emailVerified: true,
+              phoneVerified: false,
+              socialAccounts: {
+                create: {
+                  provider: 'GOOGLE',
+                  providerUserId: googleId,
+                },
+              },
+            },
+            include: { shop: true },
+          });
+        } else {
+          newUser = {
+            id: `usr_${Date.now()}`,
+            email,
+            fullName,
+            role,
+            avatarUrl,
+            emailVerified: true,
+            phoneVerified: false,
+            status: 'ACTIVE',
+            createdAt: new Date(),
+          };
+          devDb.users.set(newUser.id, newUser);
+        }
+
+        const session = await createSession(newUser);
+        return res.status(201).json({
+          ...session,
+          user: {
+            id: newUser.id,
+            email: newUser.email,
+            fullName: newUser.fullName,
+            role: newUser.role,
+            avatarUrl: newUser.avatarUrl,
+            emailVerified: newUser.emailVerified,
+            phoneVerified: newUser.phoneVerified,
+            needsPhone: true,
+          },
+        });
+      }
+
+      // 5. Nouveau compte sans rôle prédéfini → NEEDS_ROLE (Figma Frame 20)
       return res.status(202).json({
         code: 'NEEDS_ROLE',
         message: 'Choisissez votre espace pour créer votre compte.',

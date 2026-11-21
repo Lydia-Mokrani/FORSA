@@ -10,6 +10,12 @@ import eyeSvg from '../../assets/icons/eye.svg';
 import arrowRightSvg from '../../assets/icons/arrow-right.svg';
 import userSvg from '../../assets/icons/user.svg';
 
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
+
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -43,6 +49,65 @@ export const LoginPage: React.FC = () => {
       setIsSuccess(true);
     }
   }, [searchParams, initialState]);
+
+  const handleGoogleCredentialResponse = async (response: any) => {
+    if (!response?.credential) return;
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken: response.credential,
+          role: role === 'MERCHANT' ? 'MERCHANT' : 'CUSTOMER',
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.status === 200 || res.status === 201) {
+        handleLoginSuccess(data);
+      } else if (res.status === 409) {
+        setErrorMessage(data.message || 'Un compte existe déjà avec cette adresse Google. Connectez-vous avec votre mot de passe.');
+      } else {
+        throw new Error(data?.error?.message || data?.message || 'Échec de connexion avec Google.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erreur lors de la connexion Google.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '847323556063-cs5ali0pf79u63amoqv6rg7g57r2g74q.apps.googleusercontent.com';
+    const initGoogle = () => {
+      if (typeof window !== 'undefined' && window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleCredentialResponse,
+        });
+        const container = document.getElementById('google-hidden-btn');
+        if (container) {
+          window.google.accounts.id.renderButton(container, {
+            theme: 'outline',
+            size: 'large',
+          });
+        }
+        return true;
+      }
+      return false;
+    };
+
+    if (!initGoogle()) {
+      const interval = setInterval(() => {
+        if (initGoogle()) clearInterval(interval);
+      }, 400);
+      return () => clearInterval(interval);
+    }
+  }, [role]);
 
   const toggleRole = () => {
     const nextRole = role === 'CUSTOMER' ? 'MERCHANT' : 'CUSTOMER';
@@ -107,12 +172,22 @@ export const LoginPage: React.FC = () => {
   const handleSocialLogin = (provider: 'Google' | 'Apple') => {
     setErrorMessage(null);
     if (provider === 'Apple') {
-      setErrorMessage('La connexion avec Apple n’est pas encore disponible.');
+      setErrorMessage('La connexion avec Apple nécessite un compte Apple Developer payant (99$/an). Pour votre démonstration, utilisez la connexion avec Google ou vos identifiants.');
       return;
     }
     if (provider === 'Google') {
-      setErrorMessage('Connexion Google en cours de configuration. Utilisez votre e-mail et mot de passe.');
-      return;
+      // 1. Tenter le clic direct sur le bouton Google officiel
+      const googleBtn = document.querySelector('#google-hidden-btn div[role="button"]') as HTMLElement;
+      if (googleBtn) {
+        googleBtn.click();
+        return;
+      }
+      // 2. Si non prêt, appeler prompt()
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.prompt();
+        return;
+      }
+      setErrorMessage('Initialisation du service Google en cours... Réessayez dans un instant.');
     }
   };
 
@@ -311,6 +386,9 @@ export const LoginPage: React.FC = () => {
             <span>Votre compte doit être approuvé par l’équipe FORSA avant de publier des offres.</span>
           </div>
         )}
+
+        {/* Elément conteneur invisible pour Google Identity Services */}
+        <div id="google-hidden-btn" className="hidden" aria-hidden="true" />
 
         {/* Lien de redirection vers l'inscription */}
         <p className="text-center text-[14px] text-[#0B2C25]/75 pt-1">
