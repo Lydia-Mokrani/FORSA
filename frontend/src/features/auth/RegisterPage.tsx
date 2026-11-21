@@ -213,8 +213,8 @@ export const RegisterPage: React.FC = () => {
         </span>
       </header>
 
-      {/* Carte Glassmorphism */}
-      <main className="relative z-10 w-full max-w-[560px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-5 sm:gap-6 my-auto">
+      {/* Carte Glassmorphism (520px de large, padding 48px, rounded 32px comme Figma) */}
+      <main className="relative z-10 w-full max-w-[520px] backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-5 sm:gap-6 my-auto">
         
         {/* Toggle Client / Commerçant (sauf à l'étape finale) */}
         {merchantStep !== 4 && (
@@ -369,14 +369,14 @@ export const RegisterPage: React.FC = () => {
             {/* Roadmap / Stepper officiel Figma : [1 Compte] [2 Commerce] [3 Documents] */}
             {merchantStep !== 4 && (
               <div className="w-full flex flex-col gap-2 mb-2">
-                {/* Pastilles & Lignes de liaison */}
-                <div className="flex items-center justify-between w-full px-5">
+                {/* Pastilles & Lignes de liaison (pleine largeur, bord à bord comme Figma) */}
+                <div className="flex items-center w-full">
                   {/* Pastille 1 : Compte */}
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${
                       merchantStep > 1
                         ? 'bg-[#0B2C25] text-white shadow-sm'
-                        : 'bg-white border-[1.5px] border-[#0B2C25] text-[#0B2C25] font-bold text-sm'
+                        : 'bg-white border-2 border-[#0B2C25] text-[#0B2C25] font-medium text-sm'
                     }`}
                   >
                     {merchantStep > 1 ? (
@@ -399,8 +399,8 @@ export const RegisterPage: React.FC = () => {
                       merchantStep > 2
                         ? 'bg-[#0B2C25] text-white shadow-sm'
                         : merchantStep === 2
-                        ? 'bg-white border-[1.5px] border-[#0B2C25] text-[#0B2C25] font-bold text-sm'
-                        : 'border-[1.5px] border-[#0B2C25]/25 text-[#0B2C25]/35 font-medium text-sm'
+                        ? 'bg-white border-2 border-[#0B2C25] text-[#0B2C25] font-medium text-sm'
+                        : 'bg-white border-[1.5px] border-[#0B2C25]/25 text-[#0B2C25]/40 font-normal text-sm'
                     }`}
                   >
                     {merchantStep > 2 ? (
@@ -421,43 +421,39 @@ export const RegisterPage: React.FC = () => {
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${
                       merchantStep === 3
-                        ? 'bg-white border-[1.5px] border-[#0B2C25] text-[#0B2C25] font-bold text-sm'
-                        : 'border-[1.5px] border-[#0B2C25]/25 text-[#0B2C25]/35 font-medium text-sm'
+                        ? 'bg-white border-2 border-[#0B2C25] text-[#0B2C25] font-medium text-sm'
+                        : 'bg-white border-[1.5px] border-[#0B2C25]/25 text-[#0B2C25]/40 font-normal text-sm'
                     }`}
                   >
                     3
                   </div>
                 </div>
 
-                {/* Libellés sous les pastilles */}
-                <div className="flex items-center justify-between w-full text-[13px] px-2 select-none">
+                {/* Libellés sous les pastilles (alignés au pixel près comme Figma) */}
+                <div className="flex items-center justify-between w-full text-[12px] select-none">
                   <span
-                    className={`w-16 text-center transition-all ${
+                    className={`transition-all text-left ${
                       merchantStep === 1
-                        ? 'font-bold text-[#0B2C25]'
-                        : merchantStep > 1
-                        ? 'font-medium text-[#0B2C25]/60'
-                        : 'font-normal text-[#0B2C25]/40'
+                        ? 'font-medium text-[#0B2C25]'
+                        : 'font-normal text-[#0B2C25]/50'
                     }`}
                   >
                     Compte
                   </span>
                   <span
-                    className={`w-20 text-center transition-all ${
+                    className={`transition-all text-center ${
                       merchantStep === 2
-                        ? 'font-bold text-[#0B2C25]'
-                        : merchantStep > 2
-                        ? 'font-medium text-[#0B2C25]/60'
-                        : 'font-normal text-[#0B2C25]/40'
+                        ? 'font-medium text-[#0B2C25]'
+                        : 'font-normal text-[#0B2C25]/50'
                     }`}
                   >
                     Commerce
                   </span>
                   <span
-                    className={`w-20 text-center transition-all ${
+                    className={`transition-all text-right ${
                       merchantStep === 3
-                        ? 'font-bold text-[#0B2C25]'
-                        : 'font-normal text-[#0B2C25]/40'
+                        ? 'font-medium text-[#0B2C25]'
+                        : 'font-normal text-[#0B2C25]/50'
                     }`}
                   >
                     Documents
@@ -667,9 +663,8 @@ export const RegisterPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setMerchantStep(1)}
-                    className="w-[110px] h-14 bg-white/60 hover:bg-white/80 border border-[#0B2C25]/20 text-[#0B2C25] font-semibold text-sm rounded-[16px] flex items-center justify-center gap-2 transition cursor-pointer"
+                    className="w-[110px] h-14 bg-white/60 hover:bg-white/80 border border-[#0B2C25]/20 text-[#0B2C25] font-semibold text-sm rounded-[16px] flex items-center justify-center transition cursor-pointer"
                   >
-                    <img src={arrowLeftIcon} alt="" className="w-4 h-4" />
                     <span>Retour</span>
                   </button>
                   <button
@@ -827,9 +822,8 @@ export const RegisterPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setMerchantStep(2)}
-                    className="w-[110px] h-14 bg-white/60 hover:bg-white/80 border border-[#0B2C25]/20 text-[#0B2C25] font-semibold text-sm rounded-[16px] flex items-center justify-center gap-2 transition cursor-pointer"
+                    className="w-[110px] h-14 bg-white/60 hover:bg-white/80 border border-[#0B2C25]/20 text-[#0B2C25] font-semibold text-sm rounded-[16px] flex items-center justify-center transition cursor-pointer"
                   >
-                    <img src={arrowLeftIcon} alt="" className="w-4 h-4" />
                     <span>Retour</span>
                   </button>
                   <button

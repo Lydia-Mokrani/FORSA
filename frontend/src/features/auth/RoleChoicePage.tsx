@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Store, ArrowRight } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
+import roleClientIcon from '../../assets/icons/role-client-icon.svg';
+import roleMerchantIcon from '../../assets/icons/role-merchant-icon.svg';
+import arrowRightIcon from '../../assets/icons/arrow-right.svg';
 
 export const RoleChoicePage: React.FC = () => {
   const navigate = useNavigate();
@@ -34,7 +36,7 @@ export const RoleChoicePage: React.FC = () => {
       </header>
 
       {/* 02 · Choix du profil · Carte Figma 1030:23469 */}
-      <main className="relative z-10 backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full">
+      <main className="relative z-10 backdrop-blur-[20px] bg-white/40 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full">
         <div className="flex flex-col gap-2 text-center w-full">
           <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[34px] leading-tight">
             Bienvenue sur FORSA
@@ -58,10 +60,14 @@ export const RoleChoicePage: React.FC = () => {
           >
             <div
               className={`size-12 sm:size-[56px] rounded-full flex items-center justify-center transition-colors ${
-                selectedRole === 'CUSTOMER' ? 'bg-[#0B2C25] text-white' : 'bg-[#FFFAF0] text-[#0B2C25]'
+                selectedRole === 'CUSTOMER' ? 'bg-[#0B2C25]' : 'bg-[#FFFAF0]'
               }`}
             >
-              <User className="size-6 shrink-0" />
+              <img
+                src={roleClientIcon}
+                alt=""
+                className={`w-[26px] h-[26px] ${selectedRole === 'CUSTOMER' ? 'invert brightness-0' : ''}`}
+              />
             </div>
             <p className="font-medium text-[#0B2C25] text-base sm:text-[18px]">Client</p>
             <p className="font-normal text-[11px] sm:text-[12px] text-[#0B2C25]/55 leading-tight">
@@ -81,10 +87,14 @@ export const RoleChoicePage: React.FC = () => {
           >
             <div
               className={`size-12 sm:size-[56px] rounded-full flex items-center justify-center transition-colors ${
-                selectedRole === 'MERCHANT' ? 'bg-[#0B2C25] text-white' : 'bg-[#FFFAF0] text-[#0B2C25]'
+                selectedRole === 'MERCHANT' ? 'bg-[#0B2C25]' : 'bg-[#FFFAF0]'
               }`}
             >
-              <Store className="size-6 shrink-0" />
+              <img
+                src={roleMerchantIcon}
+                alt=""
+                className={`w-[26px] h-[26px] ${selectedRole === 'MERCHANT' ? 'invert brightness-0' : ''}`}
+              />
             </div>
             <p className="font-medium text-[#0B2C25] text-base sm:text-[18px]">Commerçant</p>
             <p className="font-normal text-[11px] sm:text-[12px] text-[#0B2C25]/55 leading-tight">
@@ -100,14 +110,14 @@ export const RoleChoicePage: React.FC = () => {
           className="bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[17px] rounded-[16px] h-[56px] w-full flex items-center justify-center gap-2.5 transition shadow-md cursor-pointer active:scale-[0.99]"
         >
           <span>Se connecter</span>
-          <ArrowRight className="w-5 h-5 shrink-0" />
+          <img src={arrowRightIcon} alt="" className="w-5 h-5" />
         </button>
 
         {/* Bouton Créer un compte Figma 1030:23477 */}
         <button
           type="button"
           onClick={handleRegister}
-          className="bg-white/30 hover:bg-white/55 border-[1.2px] border-[#0B2C25]/50 text-[#0B2C25] font-medium text-[17px] rounded-[16px] h-[56px] w-full flex items-center justify-center transition shadow-sm cursor-pointer active:scale-[0.99]"
+          className="bg-white/60 hover:bg-white/80 border border-[#0B2C25]/20 text-[#0B2C25] font-semibold text-[17px] rounded-[16px] h-[56px] w-full flex items-center justify-center transition shadow-sm cursor-pointer active:scale-[0.99]"
         >
           Créer un compte
         </button>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
+import arrowRightIcon from '../../assets/icons/arrow-right.svg';
 
 export const WelcomePage: React.FC = () => {
   return (
@@ -44,7 +44,7 @@ export const WelcomePage: React.FC = () => {
           className="bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[17px] rounded-[16px] h-[56px] w-full sm:w-[240px] flex items-center justify-center gap-2.5 transition shadow-md active:scale-[0.99]"
         >
           <span>C’est parti</span>
-          <ArrowRight className="w-5 h-5 shrink-0" />
+          <img src={arrowRightIcon} alt="" className="w-5 h-5 shrink-0" />
         </Link>
       </main>
 

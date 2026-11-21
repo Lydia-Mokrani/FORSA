@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { AlertCircle, AlertTriangle } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
 import googleSvg from '../../assets/icons/google.svg';
 import appleSvg from '../../assets/icons/apple.svg';
-import emailSvg from '../../assets/icons/email.svg';
-import lockSvg from '../../assets/icons/lock.svg';
-import eyeSvg from '../../assets/icons/eye.svg';
-import arrowRightSvg from '../../assets/icons/arrow-right.svg';
-import userSvg from '../../assets/icons/user.svg';
+import inputMailIcon from '../../assets/icons/input-mail.svg';
+import inputLockIcon from '../../assets/icons/input-lock.svg';
+import inputEyeIcon from '../../assets/icons/input-eye.svg';
+import arrowRightIcon from '../../assets/icons/arrow-right.svg';
+import badgeRoleIcon from '../../assets/icons/badge-role-icon.svg';
+import infoCircleIcon from '../../assets/icons/information-circle.svg';
+import checkmarkIcon from '../../assets/icons/checkmark-circle-02.svg';
 
 declare global {
   interface Window {
@@ -213,8 +215,8 @@ export const LoginPage: React.FC = () => {
       {isSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white rounded-3xl p-8 flex flex-col items-center text-center gap-4 shadow-2xl border border-emerald-500/30">
-            <div className="w-20 h-20 rounded-full bg-emerald-100 text-[#17664E] flex items-center justify-center">
-              <CheckCircle className="w-12 h-12" />
+            <div className="w-16 h-16 rounded-full bg-[#0B2C25] text-white flex items-center justify-center shadow-md">
+              <img src={checkmarkIcon} alt="" className="w-8 h-8" />
             </div>
             <h2 className="text-2xl font-bold text-[#0B2C25]">Connexion réussie !</h2>
             <p className="text-sm text-[#0B2C25]/75">
@@ -225,21 +227,21 @@ export const LoginPage: React.FC = () => {
       )}
 
       {/* Carte Glassmorphism fidèle à 100% au design Figma 1030:23484 */}
-      <main className="relative z-10 backdrop-blur-[20px] bg-white/35 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full">
+      <main className="relative z-10 backdrop-blur-[20px] bg-white/40 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full">
         
         {/* Pastille rôle : Espace client / Espace commerçant · Changer (Figma 1030:23486) */}
-        <div className="flex items-center justify-center w-full">
+        <div className="flex items-center justify-start w-full">
           <button
             type="button"
             onClick={toggleRole}
-            className="group inline-flex items-center gap-2 bg-white/60 hover:bg-white/85 border border-[#0B2C25]/20 px-[14px] py-[8px] rounded-[24px] transition shadow-sm cursor-pointer"
+            className="group inline-flex items-center gap-2 bg-white/65 hover:bg-white/85 border border-[#0B2C25]/20 h-[38px] px-3.5 rounded-full transition shadow-sm cursor-pointer"
           >
-            <img src={userSvg} alt="User" className="size-4 shrink-0" />
-            <span className="text-[13px] font-medium text-[#0B2C25]">
+            <img src={badgeRoleIcon} alt="Rôle" className="w-4 h-4 shrink-0" />
+            <span className="text-[13px] font-semibold text-[#0B2C25]">
               {role === 'CUSTOMER' ? 'Espace client' : 'Espace commerçant'}
             </span>
             <span className="text-[#0B2C25]/40 text-[13px]">·</span>
-            <span className="text-[13px] font-medium text-[#17664E] group-hover:underline">
+            <span className="text-[13px] font-semibold text-[#17664E] group-hover:underline">
               Changer
             </span>
           </button>
@@ -280,7 +282,7 @@ export const LoginPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="flex flex-col gap-[14px] w-full">
           {/* Champ Email avec icône Figma */}
           <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
-            <img src={emailSvg} alt="Email" className="size-5 shrink-0 opacity-70" />
+            <img src={inputMailIcon} alt="Email" className="size-5 shrink-0 opacity-60" />
             <input
               type="email"
               required
@@ -293,7 +295,7 @@ export const LoginPage: React.FC = () => {
 
           {/* Champ Mot de passe avec icône Figma */}
           <div className="relative bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
-            <img src={lockSvg} alt="Lock" className="size-5 shrink-0 opacity-70" />
+            <img src={inputLockIcon} alt="Lock" className="size-5 shrink-0 opacity-60" />
             <input
               type={showPassword ? 'text' : 'password'}
               required
@@ -308,7 +310,7 @@ export const LoginPage: React.FC = () => {
               className="absolute right-4 text-[#0B2C25]/50 hover:text-[#0B2C25] transition cursor-pointer"
               aria-label={showPassword ? 'Masquer' : 'Afficher'}
             >
-              <img src={eyeSvg} alt="Toggle visibility" className="size-5 opacity-60" />
+              <img src={inputEyeIcon} alt="Toggle visibility" className="size-5 opacity-60" />
             </button>
           </div>
 
@@ -343,7 +345,7 @@ export const LoginPage: React.FC = () => {
             ) : (
               <>
                 <span>Se connecter</span>
-                <img src={arrowRightSvg} alt="Arrow" className="w-5 h-5 invert brightness-0" />
+                <img src={arrowRightIcon} alt="" className="w-5 h-5" />
               </>
             )}
           </button>
@@ -382,7 +384,7 @@ export const LoginPage: React.FC = () => {
           </>
         ) : (
           <div className="flex items-start gap-2.5 bg-white/40 border border-[#0B2C25]/15 rounded-[16px] p-3.5 text-xs text-[#0B2C25]/75">
-            <Info className="size-4 text-[#17664E] shrink-0 mt-0.5" />
+            <img src={infoCircleIcon} alt="" className="w-4 h-4 shrink-0 mt-0.5 opacity-80" />
             <span>Votre compte doit être approuvé par l’équipe FORSA avant de publier des offres.</span>
           </div>
         )}

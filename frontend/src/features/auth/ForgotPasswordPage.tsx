@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Mail, CheckCircle2, AlertCircle, ArrowLeft, ArrowRight, Lock, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
+import inputMailIcon from '../../assets/icons/input-mail.svg';
+import inputLockIcon from '../../assets/icons/input-lock.svg';
+import inputEyeIcon from '../../assets/icons/input-eye.svg';
+import arrowRightIcon from '../../assets/icons/arrow-right.svg';
+import arrowLeftIcon from '../../assets/icons/arrow-left.svg';
+import checkmarkIcon from '../../assets/icons/checkmark-circle-02.svg';
+import mailSentIllustration from '../../assets/icons/illustration-mail-sent.svg';
 
 export const ForgotPasswordPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -114,7 +121,7 @@ export const ForgotPasswordPage: React.FC = () => {
 
             <form onSubmit={handleRequestSubmit} className="flex flex-col gap-4">
               <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
-                <Mail className="w-5 h-5 text-[#0B2C25]/50 shrink-0" />
+                <img src={inputMailIcon} alt="" className="w-5 h-5 opacity-60 shrink-0" />
                 <input
                   type="email"
                   required
@@ -131,13 +138,13 @@ export const ForgotPasswordPage: React.FC = () => {
                 className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[17px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-md transition cursor-pointer active:scale-[0.99] mt-2"
               >
                 <span>{loading ? 'Envoi en cours...' : 'Envoyer le lien'}</span>
-                <ArrowRight className="w-5 h-5" />
+                <img src={arrowRightIcon} alt="" className="w-5 h-5" />
               </button>
             </form>
 
             <div className="flex items-center justify-center pt-2">
               <Link to="/login" className="flex items-center gap-2 text-sm text-[#0B2C25]/75 hover:text-[#0B2C25] hover:underline font-medium">
-                <ArrowLeft className="w-4 h-4" />
+                <img src={arrowLeftIcon} alt="" className="w-4 h-4" />
                 <span>Retour à la connexion</span>
               </Link>
             </div>
@@ -147,9 +154,7 @@ export const ForgotPasswordPage: React.FC = () => {
         {/* 18 · Lien de réinitialisation envoyé (Figma 1030:23932) */}
         {step === 'sent' && (
           <div className="text-center flex flex-col items-center gap-5 py-2">
-            <div className="size-16 sm:size-20 rounded-full bg-emerald-500/15 text-[#17664E] flex items-center justify-center border border-emerald-600/20 shadow-inner">
-              <CheckCircle2 className="size-8 sm:size-10" />
-            </div>
+            <img src={mailSentIllustration} alt="" className="w-24 h-24 mx-auto" />
 
             <div className="flex flex-col gap-2">
               <h1 className="text-2xl sm:text-[34px] font-semibold text-[#0B2C25] leading-tight">
@@ -166,7 +171,7 @@ export const ForgotPasswordPage: React.FC = () => {
                 className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2.5 transition shadow-md active:scale-[0.99]"
               >
                 <span>Retour à la connexion</span>
-                <ArrowRight className="w-5 h-5" />
+                <img src={arrowRightIcon} alt="" className="w-5 h-5" />
               </Link>
 
               <button
@@ -195,8 +200,8 @@ export const ForgotPasswordPage: React.FC = () => {
 
             {successReset ? (
               <div className="text-center flex flex-col items-center gap-4 py-4">
-                <div className="size-16 rounded-full bg-emerald-500/20 text-[#17664E] flex items-center justify-center">
-                  <CheckCircle2 className="size-8" />
+                <div className="size-16 rounded-full bg-[#0B2C25] text-white flex items-center justify-center shadow-md">
+                  <img src={checkmarkIcon} alt="" className="w-8 h-8" />
                 </div>
                 <p className="text-sm font-semibold text-[#0B2C25]">
                   Mot de passe mis à jour avec succès !
@@ -211,7 +216,7 @@ export const ForgotPasswordPage: React.FC = () => {
             ) : (
               <form onSubmit={handleResetSubmit} className="flex flex-col gap-4">
                 <div className="relative bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
-                  <Lock className="w-5 h-5 text-[#0B2C25]/50 shrink-0" />
+                  <img src={inputLockIcon} alt="" className="w-5 h-5 opacity-60 shrink-0" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
@@ -226,12 +231,12 @@ export const ForgotPasswordPage: React.FC = () => {
                     className="absolute right-4 text-[#0B2C25]/50 hover:text-[#0B2C25] transition cursor-pointer"
                     aria-label={showPassword ? 'Masquer' : 'Afficher'}
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5 opacity-60" /> : <Eye className="w-5 h-5 opacity-60" />}
+                    <img src={inputEyeIcon} alt="" className="w-5 h-5 opacity-60" />
                   </button>
                 </div>
 
                 <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
-                  <Lock className="w-5 h-5 text-[#0B2C25]/50 shrink-0" />
+                  <img src={inputLockIcon} alt="" className="w-5 h-5 opacity-60 shrink-0" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required

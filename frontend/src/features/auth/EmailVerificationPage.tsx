@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Mail, CheckCircle, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
 import loginBg from '../../assets/login-bg.png';
+import mailSentIllustration from '../../assets/icons/illustration-mail-sent.svg';
+import clockPendingIcon from '../../assets/icons/illustration-clock-pending.svg';
+import checkmarkIcon from '../../assets/icons/checkmark-circle-02.svg';
+import arrowRightIcon from '../../assets/icons/arrow-right.svg';
+import arrowLeftIcon from '../../assets/icons/arrow-left.svg';
 
 export const EmailVerificationPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -105,9 +109,7 @@ export const EmailVerificationPage: React.FC = () => {
         {/* 13 · Vérification de l'e-mail (Figma 1030:23847) */}
         {!checking && status === 'pending' && (
           <>
-            <div className="size-16 sm:size-20 rounded-full bg-emerald-500/15 text-[#17664E] flex items-center justify-center border border-emerald-600/20 shadow-inner">
-              <Mail className="size-8 sm:size-10" />
-            </div>
+            <img src={mailSentIllustration} alt="" className="w-24 h-24 mx-auto" />
 
             <div className="flex flex-col gap-2">
               <h1 className="text-2xl sm:text-[32px] font-semibold text-[#0B2C25] leading-tight">
@@ -130,16 +132,15 @@ export const EmailVerificationPage: React.FC = () => {
                 className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2.5 transition shadow-md cursor-pointer active:scale-[0.99]"
               >
                 <span>Ouvrir ma boîte mail</span>
-                <ArrowRight className="w-5 h-5" />
+                <img src={arrowRightIcon} alt="" className="w-5 h-5" />
               </a>
 
               <button
                 type="button"
                 onClick={handleResend}
                 disabled={resending}
-                className="w-full h-[56px] bg-white/40 hover:bg-white/65 border border-[#0B2C25]/25 text-[#0B2C25] font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.99]"
+                className="w-full h-[56px] bg-white/40 hover:bg-white/65 border border-[#0B2C25]/25 text-[#0B2C25] font-medium text-[16px] rounded-[16px] flex items-center justify-center transition cursor-pointer active:scale-[0.99]"
               >
-                <RefreshCw className={`w-4 h-4 ${resending ? 'animate-spin' : ''}`} />
                 <span>{resending ? 'Renvoi en cours...' : 'Renvoyer l’e-mail'}</span>
               </button>
             </div>
@@ -160,8 +161,8 @@ export const EmailVerificationPage: React.FC = () => {
         {/* 14 · E-mail vérifié (Figma 1030:23863) */}
         {!checking && status === 'verified' && (
           <>
-            <div className="size-16 sm:size-20 rounded-full bg-emerald-500/20 text-[#17664E] flex items-center justify-center border border-emerald-600/30">
-              <CheckCircle className="size-8 sm:size-10" />
+            <div className="size-16 sm:size-20 rounded-full bg-[#0B2C25] text-white flex items-center justify-center shadow-md">
+              <img src={checkmarkIcon} alt="" className="w-8 h-8" />
             </div>
 
             <div className="flex flex-col gap-2">
@@ -178,7 +179,7 @@ export const EmailVerificationPage: React.FC = () => {
               className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2.5 transition shadow-md mt-2 active:scale-[0.99]"
             >
               <span>Continuer</span>
-              <ArrowRight className="w-5 h-5" />
+              <img src={arrowRightIcon} alt="" className="w-5 h-5" />
             </Link>
           </>
         )}
@@ -186,9 +187,7 @@ export const EmailVerificationPage: React.FC = () => {
         {/* 15 · Lien de vérification expiré (Figma 1030:23876) */}
         {!checking && status === 'expired' && (
           <>
-            <div className="size-16 sm:size-20 rounded-full bg-amber-500/20 text-amber-700 flex items-center justify-center border border-amber-600/30">
-              <AlertTriangle className="size-8 sm:size-10" />
-            </div>
+            <img src={clockPendingIcon} alt="" className="w-24 h-24 mx-auto" />
 
             <div className="flex flex-col gap-2">
               <h1 className="text-2xl sm:text-[32px] font-semibold text-[#0B2C25] leading-tight">
@@ -204,17 +203,17 @@ export const EmailVerificationPage: React.FC = () => {
                 type="button"
                 onClick={handleResend}
                 disabled={resending}
-                className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 transition shadow-md cursor-pointer active:scale-[0.99]"
+                className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center transition shadow-md cursor-pointer active:scale-[0.99]"
               >
-                <RefreshCw className={`w-4 h-4 ${resending ? 'animate-spin' : ''}`} />
                 <span>{resending ? 'Envoi en cours...' : 'Renvoyer un lien'}</span>
               </button>
 
               <Link
                 to="/login"
-                className="w-full h-[56px] bg-white/40 hover:bg-white/65 border border-[#0B2C25]/25 text-[#0B2C25] font-medium text-[16px] rounded-[16px] flex items-center justify-center transition cursor-pointer active:scale-[0.99]"
+                className="w-full h-[56px] bg-white/40 hover:bg-white/65 border border-[#0B2C25]/25 text-[#0B2C25] font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.99]"
               >
-                Retour à la connexion
+                <img src={arrowLeftIcon} alt="" className="w-4 h-4" />
+                <span>Retour à la connexion</span>
               </Link>
             </div>
           </>
