@@ -56,13 +56,20 @@ export const RegisterPage: React.FC = () => {
     setLoading(true);
 
     try {
+      const rawPhone = clientData.phone.replace(/[\s.\-()]/g, '');
+      const phoneToSend = rawPhone.startsWith('+213')
+        ? rawPhone
+        : rawPhone.startsWith('0')
+        ? `+213${rawPhone.slice(1)}`
+        : `+213${rawPhone}`;
+
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fullName: clientData.fullName,
           email: clientData.email,
-          phone: clientData.phone,
+          phone: phoneToSend,
           password: clientData.password,
           role: 'CUSTOMER',
         }),
@@ -99,6 +106,13 @@ export const RegisterPage: React.FC = () => {
     setLoading(true);
 
     try {
+      const rawPhone = merchantData.phone.replace(/[\s.\-()]/g, '');
+      const phoneToSend = rawPhone.startsWith('+213')
+        ? rawPhone
+        : rawPhone.startsWith('0')
+        ? `+213${rawPhone.slice(1)}`
+        : `+213${rawPhone}`;
+
       // 1. Inscription du compte utilisateur Commerçant
       const authRes = await fetch('/api/auth/register', {
         method: 'POST',
@@ -106,7 +120,7 @@ export const RegisterPage: React.FC = () => {
         body: JSON.stringify({
           fullName: merchantData.ownerName,
           email: merchantData.email,
-          phone: merchantData.phone,
+          phone: phoneToSend,
           password: merchantData.password,
           role: 'MERCHANT',
         }),
@@ -247,14 +261,17 @@ export const RegisterPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4">
-                <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-3" />
+              <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4 focus-within:border-[#17664E] transition">
+                <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-2.5 shrink-0" />
+                <span className="text-[#0B2C25] font-semibold text-sm sm:text-[15px] select-none mr-2.5 pr-2.5 border-r border-[#0B2C25]/20">
+                  +213
+                </span>
                 <input
                   type="tel"
-                  placeholder="Numéro de téléphone"
+                  placeholder="06 97 93 76 37"
                   value={clientData.phone}
-                  onChange={(e) => setClientData({ ...clientData, phone: e.target.value })}
-                  className="w-full bg-transparent text-[#0B2C25] text-sm sm:text-[15px] focus:outline-none"
+                  onChange={(e) => setClientData({ ...clientData, phone: e.target.value.replace(/[^\d\s]/g, '') })}
+                  className="w-full bg-transparent text-[#0B2C25] text-sm sm:text-[15px] focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
                 />
               </div>
 
@@ -378,15 +395,18 @@ export const RegisterPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4">
-                  <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-3" />
+                <div className="flex items-center bg-white/65 border-[1.2px] border-white/95 rounded-[14px] h-14 px-4 focus-within:border-[#17664E] transition">
+                  <Phone className="w-5 h-5 text-[#0B2C25]/50 mr-2.5 shrink-0" />
+                  <span className="text-[#0B2C25] font-semibold text-sm select-none mr-2.5 pr-2.5 border-r border-[#0B2C25]/20">
+                    +213
+                  </span>
                   <input
                     type="tel"
                     required
-                    placeholder="Téléphone"
+                    placeholder="06 97 93 76 37"
                     value={merchantData.phone}
-                    onChange={(e) => setMerchantData({ ...merchantData, phone: e.target.value })}
-                    className="w-full bg-transparent text-[#0B2C25] text-sm focus:outline-none"
+                    onChange={(e) => setMerchantData({ ...merchantData, phone: e.target.value.replace(/[^\d\s]/g, '') })}
+                    className="w-full bg-transparent text-[#0B2C25] text-sm focus:outline-none placeholder:text-[#0B2C25]/40 font-medium"
                   />
                 </div>
 

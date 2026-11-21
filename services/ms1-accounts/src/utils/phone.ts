@@ -9,6 +9,7 @@ export function normalizePhone(raw: string): string {
   if (p.startsWith('+213')) p = '0' + p.slice(4);
   else if (p.startsWith('00213')) p = '0' + p.slice(5);
   else if (p.startsWith('213') && p.length === 12) p = '0' + p.slice(3);
+  else if (/^[567]\d{8}$/.test(p)) p = '0' + p;
   return p;
 }
 
