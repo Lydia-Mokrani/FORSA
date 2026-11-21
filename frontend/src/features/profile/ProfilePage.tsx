@@ -53,6 +53,9 @@ import {
   figmaSecurityLock,
   figmaHeadsetHelp,
   figmaIllustrationAide,
+  figmaMultiplicationSign,
+  figmaAlertCircle,
+  figmaRefresh,
 } from './figmaAssets';
 
 export const ProfilePage: React.FC = () => {
@@ -783,31 +786,28 @@ export const ProfilePage: React.FC = () => {
             </div>
           )}
 
-          {/* État E-mail non vérifié (Frame 785:20789) */}
+          {/* État E-mail non vérifié (Figma Frame 785:20789 - Bannière Vérifiez votre adresse e-mail) */}
           {!isEmailVerified && (
-            <div className="p-4 rounded-[20px] bg-amber-50 border border-amber-300 text-amber-950 flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-xs flex items-center gap-2">
-                <span className="size-5 rounded-full bg-amber-200 text-amber-900 font-bold flex items-center justify-center shrink-0">✕</span>
-                <div>
-                  <span className="font-bold block text-sm">Adresse e-mail non vérifiée</span>
-                  Un lien de confirmation a été envoyé à <strong>{profile?.email}</strong>. Cliquez dessus pour valider votre compte.
+            <div className="bg-[#fdf3d8] border-[1.5px] border-[#dbf0dd] rounded-[20px] p-[18px] flex items-center justify-between gap-4 w-full flex-wrap">
+              <div className="flex items-center gap-[16px]">
+                <div className="size-[44px] rounded-full bg-[#edbd4d] flex items-center justify-center shrink-0">
+                  <img src={figmaAlertCircle} alt="" className="size-[22px] text-[#0b2c25]" />
+                </div>
+                <div className="flex flex-col gap-[3px] text-[#0b2c25]">
+                  <p className="font-semibold text-[15px]">Vérifiez votre adresse e-mail</p>
+                  <p className="text-[12px] opacity-80">
+                    Un lien d'activation a été envoyé à <strong>{profile?.email}</strong>. Cliquez dessus pour valider votre compte.
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <button
                   type="button"
                   onClick={handleResendEmail}
                   disabled={isResendingEmail}
-                  className="px-3.5 py-1.5 rounded-[10px] bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition"
+                  className="h-[44px] px-5 bg-[#0b2c25] hover:bg-[#17664e] text-white text-[14px] font-semibold rounded-[12px] transition"
                 >
-                  {isResendingEmail ? 'Envoi...' : 'Renvoyer le lien'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/verify-email?email=${encodeURIComponent(profile?.email || '')}`)}
-                  className="px-3.5 py-1.5 rounded-[10px] border border-amber-600 text-amber-800 text-xs font-semibold hover:bg-amber-100 transition"
-                >
-                  Valider par code
+                  {isResendingEmail ? 'Envoi...' : 'Renvoyer l’e-mail'}
                 </button>
               </div>
             </div>
@@ -820,35 +820,42 @@ export const ProfilePage: React.FC = () => {
             </div>
           )}
 
-          {/* État Téléphone non vérifié / non renseigné (Frame 785:21220) */}
+          {/* État Téléphone non vérifié (Figma Frame 785:21220 - Bannière Confirmez votre numéro de téléphone) */}
           {!isPhoneVerified && (
-            <div className="p-4 rounded-[20px] bg-red-50 border border-red-200 text-[#0b2c25] flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-xs flex items-center gap-2">
-                <span className="size-5 rounded-full bg-red-100 text-[#b22222] font-bold flex items-center justify-center shrink-0">✕</span>
-                <div>
-                  <span className="font-bold block text-sm text-[#b22222]">
-                    {hasPhone ? 'Numéro de téléphone non vérifié' : 'Numéro de téléphone non renseigné'}
-                  </span>
-                  {hasPhone
-                    ? `Le numéro +213 ${profile?.phone} n'est pas encore validé. Vérifiez-le pour recevoir vos codes de retrait.`
-                    : 'Renseignez et validez votre numéro pour sécuriser vos réservations anti-gaspillage.'}
+            <div className="bg-[#fdf3d8] border-[1.5px] border-[#dbf0dd] rounded-[20px] p-[18px] flex items-center justify-between gap-4 w-full flex-wrap">
+              <div className="flex items-center gap-[16px]">
+                <div className="size-[44px] rounded-full bg-[#edbd4d] flex items-center justify-center shrink-0">
+                  <img src={figmaAlertCircle} alt="" className="size-[22px] text-[#0b2c25]" />
+                </div>
+                <div className="flex flex-col gap-[3px] text-[#0b2c25]">
+                  <p className="font-semibold text-[15px]">Confirmez votre numéro de téléphone</p>
+                  <p className="text-[12px] opacity-80">
+                    {hasPhone
+                      ? `Pour sécuriser votre compte, saisissez le code reçu par SMS au +213 ${profile?.phone}.`
+                      : 'Pour sécuriser votre compte, renseignez et confirmez votre numéro de téléphone.'}
+                  </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleStartPhoneVerification}
-                className="px-3.5 py-1.5 rounded-[10px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-xs font-semibold transition"
-              >
-                {hasPhone ? 'Vérifier avec Telegram' : 'Ajouter et vérifier le numéro'}
-              </button>
-            </div>
-          )}
-
-          {/* État Profil incomplet (Frame 785:22075) */}
-          {isProfileIncomplete && (
-            <div className="p-3.5 rounded-[12px] bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-center gap-2">
-              <span className="font-bold">ℹ️</span>
-              <span>Complétez votre profil en renseignant votre numéro de téléphone pour une expérience optimale.</span>
+              <div className="flex items-center gap-[10px] shrink-0">
+                <button
+                  type="button"
+                  onClick={handleStartPhoneVerification}
+                  className="h-[44px] px-[20px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-[14px] font-semibold rounded-[12px] flex items-center gap-2 transition"
+                >
+                  <img src={figmaSmartPhone} alt="" className="size-[18px] brightness-0 invert" />
+                  <span>Saisir le code</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMode('edit');
+                    setModalPhoneInput(phone);
+                  }}
+                  className="h-[44px] px-[20px] border border-[#0b2c25] text-[#0b2c25] hover:bg-[#0b2c25]/5 text-[14px] font-semibold rounded-[12px] transition"
+                >
+                  Changer le numéro
+                </button>
+              </div>
             </div>
           )}
 
@@ -923,7 +930,7 @@ export const ProfilePage: React.FC = () => {
                         {isEmailVerified ? (
                           <img src={figmaTickPill} alt="" className="size-[14px] shrink-0" />
                         ) : (
-                          <span className="text-[11px] font-bold text-amber-800">✕</span>
+                          <img src={figmaMultiplicationSign} alt="" className="size-[10px] shrink-0 text-amber-800" />
                         )}
                         <span className="text-[12px] font-semibold">
                           {isEmailVerified ? 'E-mail vérifié' : 'E-mail non vérifié'}
@@ -935,7 +942,7 @@ export const ProfilePage: React.FC = () => {
                         {isPhoneVerified ? (
                           <img src={figmaTickPill} alt="" className="size-[14px] shrink-0" />
                         ) : (
-                          <span className="text-[11px] font-bold text-[#b22222]">✕</span>
+                          <img src={figmaMultiplicationSign} alt="" className="size-[10px] shrink-0 text-[#b22222]" />
                         )}
                         <span className="text-[12px] font-semibold">
                           {isPhoneVerified
@@ -1024,7 +1031,7 @@ export const ProfilePage: React.FC = () => {
                               onClick={handleStartPhoneVerification}
                               className="bg-red-100 hover:bg-red-200 border border-red-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
                             >
-                              <span className="text-[10px] font-bold text-[#b22222]">✕</span>
+                              <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
                               <span className="text-[10px] font-semibold text-[#b22222]">Vérifier</span>
                             </button>
                           ) : (
@@ -1036,7 +1043,7 @@ export const ProfilePage: React.FC = () => {
                               }}
                               className="bg-red-100 hover:bg-red-200 border border-red-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
                             >
-                              <span className="text-[10px] font-bold text-[#b22222]">✕</span>
+                              <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
                               <span className="text-[10px] font-semibold text-[#b22222]">+ Ajouter</span>
                             </button>
                           )}
@@ -1073,7 +1080,7 @@ export const ProfilePage: React.FC = () => {
                               onClick={handleResendEmail}
                               className="bg-amber-100 hover:bg-amber-200 border border-amber-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[2px] rounded-[100px] cursor-pointer transition"
                             >
-                              <span className="text-[10px] font-bold text-amber-800">✕</span>
+                              <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-amber-800" />
                               <span className="text-[10px] font-semibold text-amber-800">Non vérifié · Valider</span>
                             </button>
                           )}
@@ -1449,7 +1456,7 @@ export const ProfilePage: React.FC = () => {
                       </div>
                     ) : (
                       <div className="bg-amber-100 border border-amber-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[3px] rounded-[100px] shrink-0">
-                        <span className="text-[10px] font-bold text-amber-800">✕</span>
+                        <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-amber-800" />
                         <span className="text-[10px] font-semibold text-amber-800">Non vérifié</span>
                       </div>
                     )}
@@ -1497,7 +1504,7 @@ export const ProfilePage: React.FC = () => {
                     ) : (
                       <div className="flex items-center gap-2 shrink-0">
                         <div className="bg-red-100 border border-red-300 flex items-center gap-[3px] pl-[6px] pr-[8px] py-[3px] rounded-[100px]">
-                          <span className="text-[10px] font-bold text-[#b22222]">✕</span>
+                          <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-[#b22222]" />
                           <span className="text-[10px] font-semibold text-[#b22222]">Non vérifié</span>
                         </div>
                         <button
@@ -1694,10 +1701,12 @@ export const ProfilePage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-[24px] bg-white p-7 shadow-2xl relative">
             <button
+              type="button"
               onClick={() => setShowPhoneOtpModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-700 text-lg font-bold"
+              className="absolute top-5 right-5 size-9 rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-black/5 flex items-center justify-center text-[#0b2c25] transition"
+              aria-label="Fermer"
             >
-              ✕
+              <img src={figmaMultiplicationSign} alt="" className="size-3 text-[#0b2c25]" />
             </button>
 
             <div className="flex flex-col items-center text-center mb-5">
@@ -1865,10 +1874,12 @@ export const ProfilePage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-[24px] bg-white p-7 shadow-2xl relative">
             <button
+              type="button"
               onClick={() => setShowEmailModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-700 text-lg font-bold"
+              className="absolute top-5 right-5 size-9 rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-black/5 flex items-center justify-center text-[#0b2c25] transition"
+              aria-label="Fermer"
             >
-              ✕
+              <img src={figmaMultiplicationSign} alt="" className="size-3 text-[#0b2c25]" />
             </button>
 
             <div className="flex flex-col items-center text-center mb-6">
@@ -1925,10 +1936,12 @@ export const ProfilePage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-[24px] bg-white p-7 shadow-2xl relative">
             <button
+              type="button"
               onClick={() => setShowPasswordModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-700 text-lg font-bold"
+              className="absolute top-5 right-5 size-9 rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-black/5 flex items-center justify-center text-[#0b2c25] transition"
+              aria-label="Fermer"
             >
-              ✕
+              <img src={figmaMultiplicationSign} alt="" className="size-3 text-[#0b2c25]" />
             </button>
 
             <div className="flex flex-col items-center text-center mb-6">
@@ -2014,10 +2027,12 @@ export const ProfilePage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-[24px] bg-white p-7 shadow-2xl relative">
             <button
+              type="button"
               onClick={() => setShowLocationModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-700 text-lg font-bold"
+              className="absolute top-5 right-5 size-9 rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-black/5 flex items-center justify-center text-[#0b2c25] transition"
+              aria-label="Fermer"
             >
-              ✕
+              <img src={figmaMultiplicationSign} alt="" className="size-3 text-[#0b2c25]" />
             </button>
 
             <div className="flex flex-col items-center text-center mb-6">

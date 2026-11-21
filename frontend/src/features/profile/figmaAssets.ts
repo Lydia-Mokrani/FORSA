@@ -65,6 +65,11 @@ import figmaSecurityLock from '../../assets/icons/figma/825_imgElements19.svg';
 import figmaHeadsetHelp from '../../assets/icons/figma/825_imgElements20.svg';
 import figmaIllustrationAide from '../../assets/images/figma/825_imgIllustrationAide.png';
 
+// Official Figma Multiplication Sign (X), Alert Circle and Refresh SVGs
+import figmaMultiplicationSign from '../../assets/icons/figma/figmaMultiplicationSign.svg';
+import figmaAlertCircle from '../../assets/icons/figma/figmaAlertCircle.svg';
+import figmaRefresh from '../../assets/icons/figma/figmaRefresh.svg';
+
 export {
   defaultAvatar,
   figmaNavHome,
@@ -122,4 +127,7 @@ export {
   figmaSecurityLock,
   figmaHeadsetHelp,
   figmaIllustrationAide,
+  figmaMultiplicationSign,
+  figmaAlertCircle,
+  figmaRefresh,
 };
