@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import fs from 'fs';
+import bcrypt from 'bcrypt';
 import {
   ApiError,
   BadRequestError,
@@ -12,6 +13,9 @@ import {
 import { prisma } from '../config/prisma';
 import { devDb, isPostgresAlive } from '../services/dev-db.service';
 import { jwtService } from '../services/jwt.service';
+import { createSession } from '../services/session.service';
+import { issueEmailToken } from '../services/email-token.service';
+import { rabbitMQ } from '../services/rabbitmq.service';
 import { sendSms, sendTwilioVerification, checkTwilioVerification } from '../services/sms.service';
 import { registerPendingTelegramOtp, getTelegramDeepLink, getPendingOtpByUserId } from '../services/telegram.service';
 import { mobilePhoneSchema } from '../utils/phone';
@@ -29,8 +33,16 @@ const OTP_MAX_PER_HOUR = 5;               // Envois max par heure
 // ─── Schémas Zod ──────────────────────────────────────────────────────────────
 
 const updateProfileSchema = z.object({
-  fullName: z.string().min(2).optional(),
+  fullName: z.string().min(2, 'Le nom doit comporter au moins 2 caractères').optional(),
+  email: z.string().email('Format email invalide').optional(),
   phone: mobilePhoneSchema.optional(),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Le mot de passe actuel est requis'),
+  newPassword: z.string().min(8, 'Le mot de passe doit contenir au moins 8 caractères')
+    .regex(/[A-Z]/, 'Au moins une lettre majuscule requise')
+    .regex(/[0-9]/, 'Au moins un chiffre requis'),
 });
 
 const verifyPhoneSchema = z.object({
@@ -123,6 +135,34 @@ export class UserController {
         data.phoneVerified = false;
       }
 
+      // Si l'e-mail change, vérifier unicité et repasser en "non vérifié"
+      if (data.email !== undefined) {
+        data.email = data.email.toLowerCase().trim();
+        const current = await findUserWithProfile(userId);
+        if (current && current.email !== data.email) {
+          let existingUser: any;
+          if (await isPostgresAlive()) {
+            existingUser = await prisma.user.findUnique({ where: { email: data.email } });
+          } else {
+            existingUser = [...devDb.users.values()].find((u) => u.email === data.email);
+          }
+          if (existingUser && existingUser.id !== userId) {
+            throw new ApiError(409, 'EMAIL_CONFLICT', 'Cette adresse e-mail est déjà utilisée par un autre compte.');
+          }
+          data.emailVerified = false;
+          try {
+            const { token: verifyToken } = await issueEmailToken(userId, 'VERIFY_EMAIL');
+            await rabbitMQ.publish('user.registered', {
+              userId,
+              email: data.email,
+              fullName: data.fullName || current.fullName,
+              role: current.role,
+              verifyToken,
+            }).catch(() => {});
+          } catch (_) {}
+        }
+      }
+
       try {
         if (await isPostgresAlive()) {
           const updated = await prisma.user.update({
@@ -139,6 +179,10 @@ export class UserController {
         }
       } catch (err: any) {
         if (err.code === 'P2002') {
+          const target = err.meta?.target;
+          if (Array.isArray(target) && target.includes('email')) {
+            throw new ApiError(409, 'EMAIL_CONFLICT', 'Cette adresse e-mail est déjà utilisée par un autre compte.');
+          }
           throw new ApiError(409, 'PHONE_CONFLICT', 'Ce numéro de téléphone est déjà utilisé par un autre compte.');
         }
         throw err;
@@ -425,6 +469,109 @@ export class UserController {
       }
 
       res.json({ message: 'Photo de profil supprimée.' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * PUT /api/users/me/password
+   * Modification du mot de passe avec vérification de l'ancien mot de passe et hashage bcrypt.
+   */
+  public static async changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.sub;
+      if (!userId) throw new UnauthorizedError();
+
+      const parsed = changePasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
+      }
+
+      const { currentPassword, newPassword } = parsed.data;
+
+      let user: any;
+      if (await isPostgresAlive()) {
+        user = await prisma.user.findUnique({ where: { id: userId } });
+      } else {
+        user = devDb.users.get(userId);
+      }
+
+      if (!user) throw new NotFoundError('Utilisateur non trouvé.');
+
+      if (user.passwordHash) {
+        const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+        if (!isMatch) {
+          throw new BadRequestError('Le mot de passe actuel est incorrect.');
+        }
+      }
+
+      const newHash = await bcrypt.hash(newPassword, 12);
+
+      if (await isPostgresAlive()) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { passwordHash: newHash },
+        });
+      } else {
+        user.passwordHash = newHash;
+      }
+
+      res.json({ message: 'Mot de passe modifié avec succès.' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/users/me/switch-mode
+   * Bascule dynamique du rôle entre CLIENT et COMMERÇANT et réémission des tokens JWT.
+   */
+  public static async switchMode(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.sub;
+      if (!userId) throw new UnauthorizedError();
+
+      let user: any;
+      if (await isPostgresAlive()) {
+        user = await prisma.user.findUnique({ where: { id: userId }, include: { shop: true } });
+      } else {
+        user = devDb.users.get(userId);
+      }
+
+      if (!user) throw new NotFoundError('Utilisateur non trouvé.');
+
+      const newRole = user.role === 'CUSTOMER' ? 'MERCHANT' : 'CUSTOMER';
+
+      if (await isPostgresAlive()) {
+        user = await prisma.user.update({
+          where: { id: userId },
+          data: { role: newRole },
+          include: { shop: true },
+        });
+      } else {
+        user.role = newRole;
+      }
+
+      const session = await createSession(user);
+
+      res.json({
+        message: `Mode basculé en ${newRole === 'MERCHANT' ? 'Commerçant' : 'Client'}.`,
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          phone: user.phone,
+          role: user.role,
+          avatarUrl: user.avatarUrl,
+          emailVerified: user.emailVerified,
+          phoneVerified: user.phoneVerified,
+          status: user.status,
+          shop: user.shop,
+        },
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      });
     } catch (err) {
       next(err);
     }

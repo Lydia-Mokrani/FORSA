@@ -27,7 +27,7 @@ const MERCHANT_ITEMS: SidebarItem[] = [
   { label: 'Réservations', icon: CalendarCheck },
   { label: 'Ajouter une offre', icon: Plus, to: '/merchant/create-offer' },
   { label: 'Avis', icon: Star },
-  { label: 'Compte', icon: User },
+  { label: 'Compte', icon: User, to: '/profile' },
 ];
 
 const CLIENT_ITEMS: SidebarItem[] = [
@@ -35,7 +35,7 @@ const CLIENT_ITEMS: SidebarItem[] = [
   { label: 'Carte', icon: MapPin, to: '/map' },
   { label: 'Mes réservations', icon: CalendarCheck },
   { label: 'Notifications', icon: Bell },
-  { label: 'Compte', icon: User },
+  { label: 'Compte', icon: User, to: '/profile' },
 ];
 
 const rowBase =

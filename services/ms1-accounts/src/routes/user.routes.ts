@@ -9,6 +9,8 @@ export const userRouter = Router();
 // Profil
 userRouter.get('/me', authenticate, UserController.getMe);
 userRouter.put('/me', authenticate, UserController.updateMe);
+userRouter.put('/me/password', authenticate, UserController.changePassword);
+userRouter.post('/me/switch-mode', authenticate, UserController.switchMode);
 
 // Avatar
 userRouter.post('/me/avatar', authenticate, handleAvatarUpload, UserController.uploadAvatar);

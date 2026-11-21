@@ -21,6 +21,9 @@ import { MyOffersPage } from './features/catalogue/pages/MyOffersPage';
 import { CreateOfferPage } from './features/catalogue/pages/CreateOfferPage';
 import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
 
+// Profil & Compte MS1 (Sections B, C, D)
+import { ProfilePage } from './features/profile';
+
 // Suite Complète Authentification MS1 (Design Figma - 19 Écrans)
 import {
   WelcomePage,
@@ -67,6 +70,7 @@ export const App: React.FC = () => {
             <Route path="/explore" element={<ExploreOffersPage />} />
             <Route path="/offers/:id" element={<OfferDetailsPage />} />
             <Route path="/map" element={<ShopsMapViewPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Route>
 
           {/* AUTHENTICATION SUITE MS1 (19 Écrans Figma) */}

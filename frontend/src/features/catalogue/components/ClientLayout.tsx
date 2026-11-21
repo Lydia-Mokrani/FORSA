@@ -23,7 +23,9 @@ export const ClientLayout: React.FC = () => {
             <MapPin size={21} />
           </Link>
 
-          <UserRound size={21} />
+          <Link to="/profile" aria-label="Mon Profil">
+            <UserRound size={21} />
+          </Link>
         </div>
       </header>
 
