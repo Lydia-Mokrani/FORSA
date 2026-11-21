@@ -147,12 +147,15 @@ export class AccountController {
       }
 
       const { token: resetToken } = await issueEmailToken(user.id, 'RESET_PASSWORD');
+      const resetLink = `http://localhost:5173/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+      console.log(`[MS1-Accounts] 🔑 Lien de réinitialisation pour ${user.email} : ${resetLink}`);
 
       await rabbitMQ.publish('password.reset_requested', {
         userId: user.id,
         email: user.email,
         fullName: user.fullName,
         resetToken,
+        resetLink,
       });
 
       res.json(genericResponse);

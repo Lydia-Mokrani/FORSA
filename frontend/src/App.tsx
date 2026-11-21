@@ -99,6 +99,7 @@ export const App: React.FC = () => {
           <Route path="/verify-email" element={<EmailVerificationPage />} />
           <Route path="/verify-phone" element={<VerifyPhonePage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ForgotPasswordPage />} />
 
           {/* FALLBACK */}
           <Route path="*" element={<Navigate to="/" replace />} />
