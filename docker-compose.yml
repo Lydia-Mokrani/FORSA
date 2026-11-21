@@ -1,77 +1,25 @@
-version: "3.9"
-
 # FORSA — Full stack docker-compose for local development
-# Runs all infrastructure + MS2 (add MS1/MS3/MS4/MS5 as teammates implement them)
+# MS2 Catalogue & Search service
+# Shared infrastructure (RabbitMQ, Consul, Traefik) is provided centrally by infra/docker-compose.infra.yml
 
 networks:
   forsa-net:
-    driver: bridge
+    name: forsa-net
+    external: true
 
 volumes:
   ms2-db-data:
   ms2-uploads:
-  rabbitmq-data:
-  consul-data:
 
 services:
-
-  # ── Infrastructure ──────────────────────────────────────────────────────────
-
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: forsa-rabbitmq
-    networks: [forsa-net]
-    ports:
-      - "5672:5672"      # AMQP
-      - "15672:15672"    # Management UI
-    environment:
-      RABBITMQ_DEFAULT_USER: forsa
-      RABBITMQ_DEFAULT_PASS: forsa_password
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  consul:
-    image: consul:1.19
-    container_name: forsa-consul
-    networks: [forsa-net]
-    ports:
-      - "8500:8500"      # UI + API
-      - "8600:8600/udp"  # DNS
-    command: agent -server -bootstrap-expect=1 -ui -client=0.0.0.0
-    volumes:
-      - consul-data:/consul/data
-    healthcheck:
-      test: ["CMD", "consul", "members"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  traefik:
-    image: traefik:v3.2
-    container_name: forsa-traefik
-    networks: [forsa-net]
-    ports:
-      - "80:80"          # HTTP
-      - "8080:8080"      # Traefik dashboard
-    command:
-      - --api.insecure=true
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   # ── MS2 database (private — only ms2-catalogue connects) ───────────────────
 
   ms2-db:
     image: postgres:16-alpine
     container_name: forsa-ms2-db
-    networks: [forsa-net]
+    networks:
+      - forsa-net
     environment:
       POSTGRES_DB:       ms2_catalogue
       POSTGRES_USER:     ms2_user
@@ -93,25 +41,26 @@ services:
       context: ./services/ms2-catalogue
       target:  production
     container_name: forsa-ms2
-    networks: [forsa-net]
+    networks:
+      - forsa-net
     depends_on:
       ms2-db:   { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
-      consul:   { condition: service_healthy }
     environment:
-      NODE_ENV:          production
-      PORT:              3002
-      SERVICE_NAME:      ms2-catalogue
-      DATABASE_URL:      postgresql://ms2_user:ms2_password@ms2-db:5432/ms2_catalogue
+      NODE_ENV:           production
+      PORT:               3002
+      SERVICE_NAME:       ms2-catalogue
+      SERVICE_ADDRESS:    ${SERVICE_ADDRESS:-ms2-catalogue}
+      DATABASE_URL:       postgresql://ms2_user:ms2_password@ms2-db:5432/ms2_catalogue
       MS1_JWT_PUBLIC_KEY: ${MS1_JWT_PUBLIC_KEY}
-      INTERNAL_API_KEY:  ${INTERNAL_API_KEY}
-      RABBITMQ_URL:      amqp://forsa:forsa_password@rabbitmq:5672
-      RABBITMQ_EXCHANGE: forsa.events
-      CONSUL_HOST:       consul
-      CONSUL_PORT:       8500
-      MEDIA_BASE_URL:    http://localhost/media
-      UPLOAD_DIR:        /app/uploads
-      LOG_LEVEL:         info
+      MS1_PUBLIC_KEY_URL: ${MS1_PUBLIC_KEY_URL:-http://localhost:3001/api/auth/public-key}
+      INTERNAL_API_KEY:   ${INTERNAL_API_KEY}
+      RABBITMQ_URL:       ${RABBITMQ_URL:-amqp://forsa_user:forsa_password@rabbitmq:5672}
+      RABBITMQ_EXCHANGE:  forsa.events
+      CONSUL_HOST:        ${CONSUL_HOST:-consul}
+      CONSUL_PORT:        ${CONSUL_PORT:-8500}
+      MEDIA_BASE_URL:     http://localhost/media
+      UPLOAD_DIR:         /app/uploads
+      LOG_LEVEL:          info
     volumes:
       - ms2-uploads:/app/uploads
     labels:

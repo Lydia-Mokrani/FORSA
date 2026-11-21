@@ -11,7 +11,7 @@ import { Errors } from '../utils/apiError';
 import { parsePagination, buildPaginatedResponse } from '../utils/pagination';
 import { logger } from '../config/logger';
 import { env } from '../config/env';
-import { AuthenticatedRequest, OfferSearchParams } from '../types';
+import { AuthenticatedRequest, OfferSearchParams, JwtPayload } from '../types';
 import { publishEvent } from '../messaging/publisher';
 import { v4 as uuidv4 } from 'uuid';
 import { Prisma, OfferStatus, ProductType, MovementType, ShopStatus } from '@prisma/client';
@@ -29,6 +29,29 @@ function parseNumberParam(val: unknown, name: string): { value?: number; error?:
   const num = Number(val);
   if (isNaN(num)) return { error: `Invalid numeric value for query parameter '${name}'.` };
   return { value: num };
+}
+
+/**
+ * Robust ownership validation:
+ * Bridges the gap where MS1's shop.created sends merchantId = shop.userId,
+ * while MS1's JWT sets merchantId = shopId and sub = userId.
+ */
+export function isShopOwnedByMerchant(shop: { id: string; merchant_id: string }, user: JwtPayload): boolean {
+  return (
+    shop.merchant_id === user.merchantId ||
+    shop.merchant_id === user.sub ||
+    shop.id === user.shopId ||
+    shop.id === user.merchantId
+  );
+}
+
+export function isOfferOwnedByMerchant(offer: { merchant_id: string; shop_id: string }, user: JwtPayload): boolean {
+  return (
+    offer.merchant_id === user.merchantId ||
+    offer.merchant_id === user.sub ||
+    offer.shop_id === user.shopId ||
+    offer.shop_id === user.merchantId
+  );
 }
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
@@ -314,17 +337,25 @@ export async function getOfferById(req: Request, res: Response): Promise<void> {
 export async function getMyOffers(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const pagination = parsePagination(req.query as Record<string, unknown>);
-    const merchantId = req.user.merchantId;
+    const user = req.user;
+    const merchantIds = Array.from(new Set([user.merchantId, user.sub, user.shopId].filter(Boolean)));
+
+    const where: Prisma.OfferWhereInput = {
+      OR: [
+        { merchant_id: { in: merchantIds } },
+        { shop_id: { in: merchantIds } },
+      ],
+    };
 
     const [offers, total] = await prisma.$transaction([
       prisma.offer.findMany({
-        where:   { merchant_id: merchantId },
+        where,
         include: { photos: { orderBy: { sort_order: 'asc' } }, category: true, shop: true },
         orderBy: [{ created_at: 'desc' }],
         skip:    (pagination.page - 1) * pagination.limit,
         take:    pagination.limit,
       }),
-      prisma.offer.count({ where: { merchant_id: merchantId } }),
+      prisma.offer.count({ where }),
     ]);
 
     res.json(buildPaginatedResponse(offers.map(mapOfferToResponse), total, pagination));
@@ -393,9 +424,9 @@ export async function createOffer(req: AuthenticatedRequest, res: Response): Pro
       }
     }
 
-    // Verify shop belongs to this merchant and is ACTIVE
+    // Verify shop exists and belongs to this merchant (handles both userId and shopId claims)
     const shop = await prisma.shopSnapshot.findUnique({ where: { id: data.shopId } });
-    if (!shop || shop.merchant_id !== req.user.merchantId) {
+    if (!shop || !isShopOwnedByMerchant(shop, req.user)) {
       Errors.forbidden(res, 'You do not own this shop.');
       return;
     }
@@ -416,7 +447,7 @@ export async function createOffer(req: AuthenticatedRequest, res: Response): Pro
     // Offers strictly start as DRAFT
     const offer = await prisma.offer.create({
       data: {
-        merchant_id:         req.user.merchantId,
+        merchant_id:         req.user.merchantId || req.user.sub,
         shop_id:             data.shopId,
         category_id:         data.categoryId,
         name:                data.name,
@@ -460,7 +491,7 @@ export async function uploadDatePhoto(req: AuthenticatedRequest, res: Response):
       Errors.notFound(res, 'Offer not found.');
       return;
     }
-    if (offer.merchant_id !== req.user.merchantId) {
+    if (!isOfferOwnedByMerchant(offer, req.user)) {
       await fs.unlink(file.path).catch(() => {});
       Errors.forbidden(res, 'You do not own this offer.');
       return;
@@ -518,7 +549,7 @@ export async function submitOffer(req: AuthenticatedRequest, res: Response): Pro
       Errors.notFound(res, 'Offer not found.');
       return;
     }
-    if (offer.merchant_id !== req.user.merchantId) {
+    if (!isOfferOwnedByMerchant(offer, req.user)) {
       Errors.forbidden(res, 'You do not own this offer.');
       return;
     }
@@ -567,7 +598,7 @@ export async function submitOffer(req: AuthenticatedRequest, res: Response): Pro
       payload: {
         verificationEventId,
         offerId:           updated.id,
-        merchantId:        req.user.merchantId,
+        merchantId:        req.user.merchantId || req.user.sub,
         productType:       updated.product_type,
         productExpiryDate: updated.product_expiry_date.toISOString(),
         datePhotoUrl:      updated.date_photo_url,
@@ -607,7 +638,7 @@ export async function withdrawOffer(req: AuthenticatedRequest, res: Response): P
       Errors.notFound(res, 'Offer not found.');
       return;
     }
-    if (offer.merchant_id !== req.user.merchantId) {
+    if (!isOfferOwnedByMerchant(offer, req.user)) {
       Errors.forbidden(res, 'You do not own this offer.');
       return;
     }
@@ -635,7 +666,7 @@ export async function withdrawOffer(req: AuthenticatedRequest, res: Response): P
       occurredAt: new Date().toISOString(),
       payload: {
         offerId:    updated.id,
-        merchantId: req.user.merchantId,
+        merchantId: req.user.merchantId || req.user.sub,
       },
     });
 
@@ -675,7 +706,7 @@ export async function adjustStock(req: AuthenticatedRequest, res: Response): Pro
 
       const offer = lockedRows[0];
 
-      if (offer.merchant_id !== req.user.merchantId) {
+      if (!isOfferOwnedByMerchant(offer, req.user)) {
         return { kind: 'forbidden' as const };
       }
       if ([OfferStatus.EXPIRED, OfferStatus.REJECTED, OfferStatus.HIDDEN, OfferStatus.WITHDRAWN].includes(offer.status as any)) {
@@ -796,7 +827,7 @@ export async function adjustStock(req: AuthenticatedRequest, res: Response): Pro
         occurredAt: new Date().toISOString(),
         payload: {
           offerId:    id,
-          merchantId: req.user.merchantId,
+          merchantId: req.user.merchantId || req.user.sub,
         },
       });
     }
@@ -819,7 +850,7 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
       Errors.notFound(res, 'Offer not found.');
       return;
     }
-    if (existing.merchant_id !== req.user.merchantId) {
+    if (!isOfferOwnedByMerchant(existing, req.user)) {
       Errors.forbidden(res, 'You do not own this offer.');
       return;
     }
@@ -894,7 +925,6 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
     const discountPercent = calcDiscount(newOriginal, newDiscounted);
 
     // Lifecycle transitions:
-    // If pending and critical fields change, revert to DRAFT and cancel previous verification_event_id
     let newStatus = existing.status;
     let newVerificationEventId = existing.verification_event_id;
     let needsVerificationPublish = false;
@@ -953,7 +983,7 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
         payload: {
           verificationEventId: newVerificationEventId,
           offerId:           updated.id,
-          merchantId:        req.user.merchantId,
+          merchantId:        req.user.merchantId || req.user.sub,
           productType:       updated.product_type,
           productExpiryDate: updated.product_expiry_date.toISOString(),
           datePhotoUrl:      updated.date_photo_url,
@@ -980,7 +1010,7 @@ export async function deleteOffer(req: AuthenticatedRequest, res: Response): Pro
       Errors.notFound(res, 'Offer not found.');
       return;
     }
-    if (existing.merchant_id !== req.user.merchantId) {
+    if (!isOfferOwnedByMerchant(existing, req.user)) {
       Errors.forbidden(res, 'You do not own this offer.');
       return;
     }
@@ -993,7 +1023,6 @@ export async function deleteOffer(req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
-    // Soft withdrawal replaces hard delete. Existing reservations remain valid for pickup.
     await prisma.offer.update({
       where: { id },
       data:  {
@@ -1006,7 +1035,7 @@ export async function deleteOffer(req: AuthenticatedRequest, res: Response): Pro
       eventId:    uuidv4(),
       type:       'offer.withdrawn',
       occurredAt: new Date().toISOString(),
-      payload:    { offerId: id, merchantId: req.user.merchantId },
+      payload:    { offerId: id, merchantId: req.user.merchantId || req.user.sub },
     });
 
     res.status(204).send();
@@ -1067,7 +1096,7 @@ export async function uploadOfferPhotos(req: AuthenticatedRequest, res: Response
     // Concurrency-safe: lock the offer row in a transaction to serialize concurrent uploads
     const result = await prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<any[]>`
-        SELECT id, merchant_id, status FROM offers WHERE id = ${id} FOR UPDATE
+        SELECT id, merchant_id, shop_id, status FROM offers WHERE id = ${id} FOR UPDATE
       `;
 
       if (!locked || locked.length === 0) {
@@ -1075,7 +1104,7 @@ export async function uploadOfferPhotos(req: AuthenticatedRequest, res: Response
       }
 
       const offer = locked[0];
-      if (offer.merchant_id !== req.user.merchantId) {
+      if (!isOfferOwnedByMerchant(offer, req.user)) {
         return { kind: 'forbidden' as const };
       }
       if (offer.status !== OfferStatus.DRAFT && offer.status !== OfferStatus.REJECTED) {

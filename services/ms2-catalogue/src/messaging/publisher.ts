@@ -1,5 +1,6 @@
 // src/messaging/publisher.ts
 // Publishes domain events from MS2 to the RabbitMQ topic exchange using publisher confirms.
+// Emits both 'payload' and 'data' fields for full backward/forward compatibility across services.
 
 import { getChannel } from './connection';
 import { env } from '../config/env';
@@ -7,7 +8,13 @@ import { logger } from '../config/logger';
 import { DomainEvent } from '../types';
 
 export async function publishEvent(event: DomainEvent, maxRetries = 2): Promise<boolean> {
-  const buffer = Buffer.from(JSON.stringify(event));
+  const payloadData = event.payload ?? (event as any).data;
+  const wirePayload = {
+    ...event,
+    payload: payloadData,
+    data:    payloadData, // Ensures @forsa/common consumers reading event.data get the exact payload
+  };
+  const buffer = Buffer.from(JSON.stringify(wirePayload));
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {

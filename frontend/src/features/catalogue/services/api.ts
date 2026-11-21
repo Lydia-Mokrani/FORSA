@@ -1,7 +1,7 @@
 ﻿// frontend/src/features/catalogue/services/api.ts
 import { Category, Offer, OfferFilterParams, PaginatedResponse, MerchantDashboardData } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost';
 
 // In-memory mock fallback data for UI preview if backend is not currently running
 const MOCK_CATEGORIES: Category[] = [

@@ -13,17 +13,19 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import { Server } from 'http';
 
 import { logger } from './config/logger';
 import { prisma } from './config/prisma';
 import { router } from './routes';
-import { connectRabbitMQ } from './messaging/connection';
+import { connectRabbitMQ, closeRabbitMQ, isRabbitMQConnected } from './messaging/connection';
 import { startConsumers } from './messaging/consumers';
 import { startExpirationJob } from './jobs/expirationJob';
-import { registerWithConsul } from './services/consulService';
+import { registerWithConsul, deregisterFromConsul, isConsulRegistered } from './services/consulService';
 import { loadMs1PublicKey } from './middleware/auth';
 
 const app = express();
+let server: Server | null = null;
 
 // ── Security middleware ───────────────────────────────────────────────────────
 app.use(helmet());
@@ -32,6 +34,31 @@ app.use(cors({
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Internal-Api-Key'],
 }));
+
+// ── Health check (placed BEFORE rate limiting so Consul / Traefik checks are never blocked) ─
+app.get('/health', async (_req: Request, res: Response) => {
+  let dbStatus = 'disconnected';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch {
+    dbStatus = 'disconnected';
+  }
+
+  const mqStatus = isRabbitMQConnected() ? 'connected' : 'disconnected';
+  const consulStatus = isConsulRegistered() ? 'registered' : 'unregistered';
+  const isHealthy = dbStatus === 'connected';
+
+  res.status(isHealthy ? 200 : 503).json({
+    status:    isHealthy ? 'healthy' : 'unhealthy',
+    service:   env.SERVICE_NAME,
+    version:   '1.0.0',
+    timestamp: new Date().toISOString(),
+    database:  dbStatus,
+    rabbitmq:  mqStatus,
+    consul:    consulStatus,
+  });
+});
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 app.use(rateLimit({
@@ -49,27 +76,6 @@ app.use(express.urlencoded({ extended: true }));
 // ── Static media files (uploaded images) ─────────────────────────────────────
 // Accessible at /media/:filename
 app.use('/media', express.static(path.resolve(env.UPLOAD_DIR)));
-
-// ── Health check ──────────────────────────────────────────────────────────────
-app.get('/health', async (_req: Request, res: Response) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({
-      status:    'healthy',
-      service:   env.SERVICE_NAME,
-      version:   '1.0.0',
-      timestamp: new Date().toISOString(),
-      database:  'connected',
-    });
-  } catch {
-    res.status(503).json({
-      status:    'unhealthy',
-      service:   env.SERVICE_NAME,
-      database:  'disconnected',
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
 
 // ── API routes ────────────────────────────────────────────────────────────────
 app.use(router);
@@ -89,7 +95,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 async function bootstrap(): Promise<void> {
   try {
     // 1. Start the HTTP server first so the service is reachable
-    app.listen(env.PORT, () => {
+    server = app.listen(env.PORT, () => {
       logger.info(`MS2 Catalogue & Search running on port ${env.PORT} [${env.NODE_ENV}]`);
     });
 
@@ -131,18 +137,27 @@ async function bootstrap(): Promise<void> {
 }
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received. Shutting down gracefully...');
+async function gracefulShutdown(signal: string): Promise<void> {
+  logger.info(`${signal} received. Shutting down gracefully...`);
+  if (server) {
+    await new Promise<void>((resolve) => {
+      server!.close((err) => {
+        if (err) logger.error('Error closing HTTP server', { err });
+        resolve();
+      });
+    });
+  }
+  await deregisterFromConsul();
+  await closeRabbitMQ();
   await prisma.$disconnect();
   process.exit(0);
-});
+}
 
-process.on('SIGINT', async () => {
-  logger.info('SIGINT received. Shutting down gracefully...');
-  await prisma.$disconnect();
-  process.exit(0);
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-bootstrap();
+if (process.env.NODE_ENV !== 'test') {
+  bootstrap();
+}
 
 export { app }; // exported for tests

@@ -118,4 +118,12 @@ export async function closeRabbitMQ(): Promise<void> {
     if (channel) await channel.close();
     if (connection) await connection.close();
   } catch { /* ignore close errors */ }
+  finally {
+    channel = null;
+    connection = null;
+  }
+}
+
+export function isRabbitMQConnected(): boolean {
+  return connection !== null && channel !== null;
 }

@@ -1,6 +1,9 @@
 // tests/setup.ts
 // Global test setup — sets required env variables before any test runs
 
+import os from 'os';
+import path from 'path';
+
 process.env.NODE_ENV        = 'test';
 process.env.PORT            = '3099';
 process.env.SERVICE_NAME    = 'ms2-catalogue-test';
@@ -14,6 +17,6 @@ process.env.RABBITMQ_URL    = 'amqp://localhost';
 process.env.RABBITMQ_EXCHANGE = 'forsa.events.test';
 process.env.CONSUL_HOST     = 'localhost';
 process.env.CONSUL_PORT     = '8500';
-process.env.UPLOAD_DIR      = '/tmp/ms2-test-uploads';
+process.env.UPLOAD_DIR      = path.join(os.tmpdir(), 'ms2-test-uploads');
 process.env.MEDIA_BASE_URL  = 'http://localhost:3099/media';
 process.env.LOG_LEVEL       = 'silent';

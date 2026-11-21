@@ -13,6 +13,7 @@ export interface JwtPayload {
   fullName:       string;
   emailVerified:  boolean;
   merchantStatus: MerchantStatus;
+  iss?:           string;
   iat?:           number;
   exp?:           number;
 }
