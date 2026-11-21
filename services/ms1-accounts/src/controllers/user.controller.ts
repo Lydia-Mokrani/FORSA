@@ -13,7 +13,7 @@ import { prisma } from '../config/prisma';
 import { devDb, isPostgresAlive } from '../services/dev-db.service';
 import { jwtService } from '../services/jwt.service';
 import { sendSms, sendTwilioVerification, checkTwilioVerification } from '../services/sms.service';
-import { registerPendingTelegramOtp, getTelegramDeepLink } from '../services/telegram.service';
+import { registerPendingTelegramOtp, getTelegramDeepLink, getPendingOtpByUserId } from '../services/telegram.service';
 import { mobilePhoneSchema } from '../utils/phone';
 import { avatarFilePath, hasImageSignature } from '../middleware/avatar-upload.middleware';
 import { config } from '../config/env';
@@ -257,8 +257,12 @@ export class UserController {
       const user = await findUserWithProfile(userId);
       if (!user) throw new NotFoundError('Utilisateur non trouvé.');
 
+      const pending = getPendingOtpByUserId(userId);
+
       res.json({
         phoneVerified: !!user.phoneVerified,
+        telegramMismatch: !!pending?.telegramMismatch,
+        mismatchPhone: pending?.mismatchPhone,
       });
     } catch (err) {
       next(err);

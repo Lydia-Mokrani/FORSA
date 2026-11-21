@@ -11,6 +11,8 @@ export interface PendingOtpInfo {
   fullName?: string;
   expiresAt: Date;
   telegramVerified?: boolean;
+  telegramMismatch?: boolean;
+  mismatchPhone?: string;
 }
 
 // Map token -> PendingOtpInfo
@@ -48,6 +50,12 @@ export async function markUserPhoneVerified(userId: string): Promise<boolean> {
     console.error('[TelegramService] Erreur markUserPhoneVerified:', err);
     return false;
   }
+}
+
+export function getPendingOtpByUserId(userId: string): PendingOtpInfo | undefined {
+  const token = userTokenMap.get(userId);
+  if (!token) return undefined;
+  return pendingOtpsByToken.get(token);
 }
 
 /**
@@ -177,6 +185,24 @@ export function getTelegramDeepLink(token: string): string {
  * Traite les messages Telegram reçus (texte /start ou contact partagé).
  */
 async function handleTelegramUpdate(update: any): Promise<void> {
+  // ─── Répondre aux boutons cliqués (callbacks Telegram) ──────────────────────
+  if (update.callback_query) {
+    const callbackQueryId = update.callback_query.id;
+    const token = config.telegramBotToken;
+    if (token) {
+      await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          callback_query_id: callbackQueryId,
+          text: '❌ Ce compte Telegram ne correspond pas au numéro saisi sur FORSA.',
+          show_alert: true,
+        }),
+      }).catch(() => {});
+    }
+    return;
+  }
+
   const message = update.message;
   if (!message || !message.chat) return;
 
@@ -216,12 +242,37 @@ async function handleTelegramUpdate(update: any): Promise<void> {
 
     // Contrôle strict : Numéro Telegram == Numéro FORSA
     if (contactPhone !== registeredPhone) {
-      const errorMsg = `❌ *Numéro faux / non valide !*\n\n` +
-        `• 📱 *Compte Telegram :* \`${contactPhone}\`\n` +
-        `• 📝 *Saisi sur FORSA :* \`${registeredPhone}\`\n\n` +
-        `⛔ *Le numéro ne correspond pas.* Ce compte Telegram n'utilise pas le même numéro que votre inscription FORSA.`;
+      targetOtp.telegramMismatch = true;
+      targetOtp.mismatchPhone = contactPhone;
 
-      await sendTelegramMessage(chatId, errorMsg, { remove_keyboard: true });
+      const htmlErrorMsg = `❌ <b>Numéro non valide</b>\n\n` +
+        `<pre><code>Numéro non concordant</code></pre>\n` +
+        `• 📱 <b>Votre Telegram :</b> <code>${contactPhone}</code>\n` +
+        `• 📝 <b>Saisi sur FORSA :</b> <code>${registeredPhone}</code>\n\n` +
+        `⛔ <i>Ce compte Telegram ne correspond pas au numéro inscrit sur FORSA.</i>`;
+
+      const token = config.telegramBotToken;
+      if (token) {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: htmlErrorMsg,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: '❌ Numéro de téléphone incorrect',
+                    callback_data: 'phone_mismatch',
+                  },
+                ],
+              ],
+            },
+          }),
+        }).catch(() => {});
+      }
       console.warn(`[TelegramSecurity] ⛔ Rejet vérification : Telegram (${contactPhone}) != FORSA (${registeredPhone})`);
       return;
     }

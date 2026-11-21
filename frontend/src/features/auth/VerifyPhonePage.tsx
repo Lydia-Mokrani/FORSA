@@ -77,6 +77,8 @@ export const VerifyPhonePage: React.FC = () => {
           if (data.phoneVerified) {
             setSuccess(true);
             setTimeout(() => navigate('/'), 1800);
+          } else if (data.telegramMismatch) {
+            setErrorMessage(`❌ Numéro non valide : Votre Telegram (${data.mismatchPhone || ''}) ne correspond pas au numéro inscrit.`);
           }
         }
       } catch {
