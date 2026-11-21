@@ -70,6 +70,24 @@ export const App: React.FC = () => {
             <Route path="/explore" element={<ExploreOffersPage />} />
             <Route path="/offers/:id" element={<OfferDetailsPage />} />
             <Route path="/map" element={<ShopsMapViewPage />} />
+            <Route
+              path="/reservations"
+              element={
+                <div className="p-8 max-w-4xl mx-auto">
+                  <h1 className="text-2xl font-bold text-[#0B2C25]">Mes réservations</h1>
+                  <p className="text-stone-500 mt-2">Vous n'avez aucune réservation en cours pour le moment.</p>
+                </div>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                <div className="p-8 max-w-4xl mx-auto">
+                  <h1 className="text-2xl font-bold text-[#0B2C25]">Notifications</h1>
+                  <p className="text-stone-500 mt-2">Vous n'avez aucune nouvelle notification pour le moment.</p>
+                </div>
+              }
+            />
             <Route path="/profile" element={<ProfilePage />} />
           </Route>
 
