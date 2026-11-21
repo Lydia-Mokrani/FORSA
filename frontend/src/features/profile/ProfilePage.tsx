@@ -2065,7 +2065,7 @@ export const ProfilePage: React.FC = () => {
                   <div className="w-full flex flex-col items-center gap-3">
                     {/* Alerte Numéro Discordant (Telegram Mismatch) */}
                     {telegramMismatch && (
-                      <div className="w-full p-3.5 rounded-[16px] bg-[#fff5f5] border border-[#b22222]/30 text-center space-y-2">
+                      <div className="w-full p-3 rounded-[16px] bg-[#fff5f5] border border-[#b22222]/30 text-center space-y-1.5">
                         <div className="flex items-center justify-center gap-1.5 text-[#b22222] font-bold text-xs">
                           <img src={figmaAlertCircle} alt="" className="size-4 shrink-0 text-[#b22222]" />
                           <span>Numéro Telegram non concordant</span>
@@ -2073,17 +2073,6 @@ export const ProfilePage: React.FC = () => {
                         <p className="text-[11px] text-[#0b2c25]/80 leading-relaxed">
                           Votre compte Telegram utilise le numéro <strong className="text-[#b22222]">{mismatchPhone}</strong>, différent du numéro saisi (+213 {formatAlgerianMobileDisplay(modalPhoneInput || phone)}).
                         </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTelegramMismatch(false);
-                            setOtpSent(false);
-                            setOtpError(null);
-                          }}
-                          className="px-3 py-1.5 rounded-[8px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-[11px] font-semibold transition cursor-pointer"
-                        >
-                          Modifier mon numéro et recommencer
-                        </button>
                       </div>
                     )}
 
