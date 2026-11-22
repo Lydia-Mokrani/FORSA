@@ -1,13 +1,12 @@
-import { RabbitMQClient } from '@forsa/common';
-import { config } from '../config/env';
+import { eventBus } from './event-bus';
 import { prisma } from '../config/prisma';
 
-export const rabbitMQ = new RabbitMQClient(config.rabbitmqUrl, 'ms1-accounts');
+export const rabbitMQ = eventBus;
 
 export async function initRabbitMQ(): Promise<void> {
   try {
     await rabbitMQ.connect();
-    console.log('[MS1-RabbitMQ] Connecté au bus RabbitMQ sur', config.rabbitmqUrl);
+    console.log('[MS1-RabbitMQ] Bus initialisé');
 
     // Écoute de l'événement merchant.suspended (émis par MS4 si seuil de signalements atteint)
     await rabbitMQ.subscribe('merchant.suspended', async (event) => {

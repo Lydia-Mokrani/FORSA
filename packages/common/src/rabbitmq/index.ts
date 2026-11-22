@@ -1,5 +1,9 @@
 import amqp, { Channel, ChannelModel } from 'amqplib';
 import { v4 as uuidv4 } from 'uuid';
+import type { IEventBus, EventHandler } from './event-bus.interface';
+
+export type { IEventBus, EventHandler } from './event-bus.interface';
+export { InMemoryEventBus } from './in-memory-event-bus';
 
 export interface EventEnvelope<T = any> {
   eventId: string;
@@ -9,7 +13,7 @@ export interface EventEnvelope<T = any> {
   payload?: T;
 }
 
-export class RabbitMQClient {
+export class RabbitMQClient implements IEventBus {
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
   private exchange: string = 'forsa.events';
