@@ -3,7 +3,7 @@
 **Responsable :** Mokrani May Lydia (Personne 2 — GitHub : `@Lydia-Mokrani`)  
 **Serveur de déploiement :** S2 (`10.0.0.12`)  
 **Port HTTP :** `3002`  
-**Base de données :** `forsa_ms2_catalogue` (PostgreSQL 16 - Port 5432 sur S2)  
+**Base de données :** `forsa_ms2_catalogue` (PostgreSQL 16 - Port 5432 sur S2 / 5433 local)  
 **Routage Traefik :** `/api/offers`, `/api/categories`  
 **Branche Git dédiée :** `feature/ms2-catalogue`  
 
@@ -14,6 +14,8 @@
 - Gestion des catégories de produits.
 - Moteur de recherche et filtrage par géolocalisation (distance, rayon en km) et statut.
 - **Gestion atomique du stock :** Exposition de l'endpoint synchrone interne `POST /internal/offers/:id/reserve` (sécurisé par `x-internal-api-key`) pour réserver immédiatement la quantité demandée par MS3.
+- Expiration automatique des offres via tâche cron (`expirationJob.ts`).
+- Téléversement et compression d'images produits (Sharp + Multer).
 
 ---
 
@@ -29,9 +31,33 @@
 
 ---
 
-## 📦 Bibliothèque partagée `@forsa/common`
-Pour valider les tokens ou RabbitMQ, utilise directement :
-```typescript
-import { requireAuth, requireRole, RabbitMQClient, ConsulRegistry, errorHandler } from '@forsa/common';
+## 🛠 Routes de l'API (MS2)
+
+### Publiques
+* `GET /api/categories` : Liste de toutes les catégories
+* `GET /api/offers` : Recherche et filtres des offres
+* `GET /api/offers/:id` : Détails d'une offre
+
+### Commerçant (Authentification requise)
+* `GET /api/offers/mine` : Mes offres publiées
+* `POST /api/offers` : Créer une offre
+* `PATCH /api/offers/:id` : Mettre à jour une offre
+* `DELETE /api/offers/:id` : Supprimer une offre
+* `POST /api/offers/:id/photos` : Téléverser les photos produits
+* `GET /api/merchant/dashboard` : Statistiques de ventes commerçant
+
+### Internes (Sécurisé par `X-Internal-Api-Key` — Non exposé par Traefik)
+* `POST /internal/offers/:id/reserve` : Réserver du stock (appelé par MS3)
+* `POST /internal/offers/:id/release` : Libérer du stock (appelé par MS3)
+
+---
+
+## 🚀 Démarrage Rapide
+
+```bash
+cd services/ms2-catalogue
+cp .env.example .env
+npm install
+npx prisma generate
+npm run dev
 ```
-*(Aucun appel HTTP vers MS1 pour vérifier un token, le middleware valide la signature RS256 localement !)*

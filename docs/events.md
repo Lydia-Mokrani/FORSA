@@ -20,7 +20,7 @@ interface EventEnvelope<T> {
 
 ---
 
-## 2. Événements émis par MS1 (Accounts & Shops)
+## 2. Événements émis par MS1 (Accounts & Shops — Hambli Hiba)
 
 ### `user.registered`
 * **Rôle :** Informe MS5 pour l'envoi de l'e-mail de confirmation et la mise à jour du carnet de contacts.
@@ -71,7 +71,7 @@ interface EventEnvelope<T> {
 
 ---
 
-## 3. Événements émis par MS2 (Catalogue & Search)
+## 3. Événements émis par MS2 (Catalogue & Search — Mokrani May Lydia)
 
 ### `offer.needs_verification`
 * **Rôle :** Envoie l'image de la date de péremption d'un produit emballé à MS4 pour analyse OCR.
@@ -108,7 +108,7 @@ interface EventEnvelope<T> {
 
 ### `offer.expired`
 * **Rôle :** Informe que l'offre a dépassé sa date/heure de validité et a été retirée du catalogue.
-* **Consommateurs :** MS5 (Notifications)
+* **Consommateurs :** MS3 (annule réservations en attente), MS5 (Notifications)
 * **Payload :**
 ```json
 {
@@ -119,7 +119,7 @@ interface EventEnvelope<T> {
 
 ---
 
-## 4. Événements émis par MS3 (Reservations)
+## 4. Événements émis par MS3 (Reservations — Rebahi Doua)
 
 ### `reservation.created`
 * **Rôle :** Informe MS4 (pour l'éligibilité future d'avis/signalement) et MS5 (envoi e-mail de confirmation + notification commerçant).
@@ -155,9 +155,9 @@ interface EventEnvelope<T> {
 }
 ```
 
-### `reservation.expired` / `reservation.cancelled` / `reservation.refused`
+### `reservation.expired` / `reservation.cancelled`
 * **Rôle :** Notifie l'annulation ou l'échéance non honorée (libère le stock et trace le no-show).
-* **Consommateurs :** MS5 (Notifications)
+* **Consommateurs :** MS2 (remise en stock), MS5 (Notifications)
 * **Payload :**
 ```json
 {
@@ -171,7 +171,7 @@ interface EventEnvelope<T> {
 
 ---
 
-## 5. Événements émis par MS4 (Trust & Moderation)
+## 5. Événements émis par MS4 (Trust & Moderation — Rafes Maroua)
 
 ### `merchant.approved`
 * **Rôle :** Autorise le commerçant à créer et publier des offres.

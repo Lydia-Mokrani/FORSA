@@ -1,0 +1,499 @@
+openapi: 3.0.3
+info:
+  title: FORSA — MS2 Catalogue & Search API
+  version: 1.0.0
+  description: |
+    API documentation for MS2 (Catalogue & Search microservice) of FORSA (فرصة).
+    Handles offers, categories, product photos, search & filtering, merchant dashboard,
+    and internal stock reservation/release.
+servers:
+  - url: http://localhost:3002
+    description: Local MS2 Direct Port
+  - url: http://localhost/api
+    description: Via Traefik Reverse Proxy
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 JWT issued by MS1
+    InternalApiKey:
+      type: apiKey
+      in: header
+      name: X-Internal-Api-Key
+      description: Shared internal key for service-to-service communication
+
+  schemas:
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        nameFr:
+          type: string
+        nameAr:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        sortOrder:
+          type: integer
+
+    OfferPhoto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        sortOrder:
+          type: integer
+
+    ShopSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        address:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        averageRating:
+          type: number
+        salesCount:
+          type: integer
+
+    Offer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        shopId:
+          type: string
+          format: uuid
+        categoryId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        originalPrice:
+          type: number
+        discountedPrice:
+          type: number
+        discountPercent:
+          type: integer
+        quantityAvailable:
+          type: integer
+        quantityInitial:
+          type: integer
+        expiresAt:
+          type: string
+          format: date-time
+        productExpiryDate:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [DRAFT, PENDING_VERIFICATION, ACTIVE, EXPIRED, SOLD_OUT, REJECTED, HIDDEN]
+        datePhotoUrl:
+          type: string
+          nullable: true
+        rejectionReason:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/OfferPhoto'
+        category:
+          $ref: '#/components/schemas/Category'
+        shop:
+          $ref: '#/components/schemas/ShopSnapshot'
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+        '503':
+          description: Service is unhealthy
+
+  /api/categories:
+    get:
+      summary: List all categories
+      tags: [Categories]
+      responses:
+        '200':
+          description: List of active categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+
+  /api/offers:
+    get:
+      summary: Search and filter offers
+      tags: [Offers - Public]
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+          description: Search by offer name
+        - in: query
+          name: category
+          schema: { type: string }
+          description: Category slug
+        - in: query
+          name: minPrice
+          schema: { type: number }
+        - in: query
+          name: maxPrice
+          schema: { type: number }
+        - in: query
+          name: minDiscount
+          schema: { type: integer }
+        - in: query
+          name: available
+          schema: { type: boolean }
+        - in: query
+          name: lat
+          schema: { type: number }
+        - in: query
+          name: lng
+          schema: { type: number }
+        - in: query
+          name: radius
+          schema: { type: number }
+          description: Radius in kilometers
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [distance, price, deadline, discount]
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Paginated offers list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Offer'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      summary: Create a new offer
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopId, categoryId, name, description, originalPrice, discountedPrice, quantityAvailable, expiresAt]
+              properties:
+                shopId:
+                  type: string
+                  format: uuid
+                categoryId:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                description:
+                  type: string
+                originalPrice:
+                  type: number
+                discountedPrice:
+                  type: number
+                quantityAvailable:
+                  type: integer
+                expiresAt:
+                  type: string
+                  format: date-time
+                productExpiryDate:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Offer created
+        '400':
+          $ref: '#/components/responses/400Error'
+        '401':
+          $ref: '#/components/responses/401Error'
+        '403':
+          $ref: '#/components/responses/403Error'
+
+  /api/offers/mine:
+    get:
+      summary: List offers belonging to authenticated merchant
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Merchant's offers
+        '401':
+          $ref: '#/components/responses/401Error'
+
+  /api/offers/{id}:
+    get:
+      summary: Get offer details
+      tags: [Offers - Public]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Offer detail
+        '404':
+          $ref: '#/components/responses/404Error'
+
+    patch:
+      summary: Update existing offer
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                originalPrice: { type: number }
+                discountedPrice: { type: number }
+                quantityAvailable: { type: integer }
+                expiresAt: { type: string, format: date-time }
+                productExpiryDate: { type: string, format: date-time }
+                categoryId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Updated offer
+        '400':
+          $ref: '#/components/responses/400Error'
+        '403':
+          $ref: '#/components/responses/403Error'
+        '404':
+          $ref: '#/components/responses/404Error'
+
+    delete:
+      summary: Delete an offer
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Offer deleted
+        '403':
+          $ref: '#/components/responses/403Error'
+        '409':
+          description: Cannot delete offer with active reservations
+
+  /api/offers/{id}/photos:
+    post:
+      summary: Upload photos for an offer
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photos:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '201':
+          description: Photos uploaded and compressed successfully
+
+  /api/merchant/dashboard:
+    get:
+      summary: Get merchant statistics & dashboard summary
+      tags: [Offers - Merchant]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Real dashboard stats
+
+  /internal/offers/{id}/reserve:
+    post:
+      summary: Atomically reserve stock for a reservation
+      tags: [Internal Service-to-Service]
+      security:
+        - InternalApiKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity, reservationId]
+              properties:
+                quantity: { type: integer, minimum: 1 }
+                reservationId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Stock reserved
+        '409':
+          description: Insufficient stock or offer not active
+
+  /internal/offers/{id}/release:
+    post:
+      summary: Release previously reserved stock
+      tags: [Internal Service-to-Service]
+      security:
+        - InternalApiKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity, reservationId]
+              properties:
+                quantity: { type: integer, minimum: 1 }
+                reservationId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Stock released
+
+responses:
+  400Error:
+    description: Bad Request
+    content:
+      application/json:
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+  401Error:
+    description: Unauthorized
+    content:
+      application/json:
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+  403Error:
+    description: Forbidden
+    content:
+      application/json:
+        schema: { $ref: '#/components/schemas/ErrorResponse' }
+  404Error:
+    description: Not Found
+    content:
+      application/json:
+        schema: { $ref: '#/components/schemas/ErrorResponse' }

@@ -1,4 +1,4 @@
-﻿/** @type {import('tailwindcss').Config} */
+/** @type {import('tailwindcss').Config} */
 export default {
   content: [
     "./index.html",
@@ -8,13 +8,24 @@ export default {
     extend: {
       colors: {
         forsa: {
-          dark: '#0B2C25',
-          leaf: '#84B140',
-          emerald: '#17664E',
-          cream: '#FFFDF0',
-          sand: '#C0B49B',
-          muted: '#4A5B55',
+          // Palette Officielle FORSA
+          dark: '#0B2C25',       // Vert forêt profond
+          leaf: '#84B140',       // Vert feuille vif
+          emerald: '#17664E',    // Vert émeraude
+          cream: '#FFFDF0',      // Fond crème chaud
+          sand: '#C0B49B',       // Taupe / sable chaleureux
+          muted: '#4A5B55',      // Gris vert atténué
           border: 'rgba(11, 44, 37, 0.12)',
+          
+          // Compatibilité composants catalogue
+          primary: '#10B981',
+          primaryHover: '#059669',
+          secondary: '#F59E0B',
+          light: '#F8FAFC',
+          card: '#FFFFFF',
+          accent: '#EC4899',
+
+          // Statuts fonctionnels
           success: '#10B981',
           warning: '#F59E0B',
           danger: '#EF4444',
@@ -59,4 +70,4 @@ export default {
     },
   },
   plugins: [],
-};
+}
