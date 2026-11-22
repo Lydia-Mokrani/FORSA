@@ -110,7 +110,8 @@ export const ProfilePage: React.FC = () => {
       if (cached) {
         const parsed = JSON.parse(cached);
         const u = parsed.user || parsed;
-        if (u.preferredLocation) return u.preferredLocation;
+        const loc = u.preferences?.preferredLocation || u.preferredLocation;
+        if (loc) return loc;
       }
       const locSaved = localStorage.getItem('forsa_user_location');
       if (locSaved) {
@@ -225,7 +226,8 @@ export const ProfilePage: React.FC = () => {
                     setPhone(clean);
                     setModalPhoneInput('');
                     setAvatarPreview(u.avatarUrl || null);
-                    if (u.preferredLocation) setPreferredLocation(u.preferredLocation);
+                    const loc = u.preferences?.preferredLocation || u.preferredLocation;
+                    if (loc) setPreferredLocation(loc);
                     return;
                   }
                 }
@@ -249,7 +251,8 @@ export const ProfilePage: React.FC = () => {
               setModalPhoneInput('');
               setModalPhoneInput(clean);
               setAvatarPreview(u.avatarUrl || null);
-              if (u.preferredLocation) setPreferredLocation(u.preferredLocation);
+              const loc = u.preferences?.preferredLocation || u.preferredLocation;
+              if (loc) setPreferredLocation(loc);
               return;
             } catch {
               // ignore
@@ -271,8 +274,9 @@ export const ProfilePage: React.FC = () => {
       setPhone(cleanPhone);
       setModalPhoneInput(cleanPhone);
       setAvatarPreview(user.avatarUrl || null);
-      if (user.preferredLocation) {
-        setPreferredLocation(user.preferredLocation);
+      const userLoc = user.preferences?.preferredLocation || user.preferredLocation;
+      if (userLoc) {
+        setPreferredLocation(userLoc);
       } else {
         const locSaved = localStorage.getItem('forsa_user_location');
         if (locSaved) {

@@ -15,6 +15,10 @@ export interface ProfileCardProps {
     emailVerified?: boolean;
     phoneVerified?: boolean;
     preferredLocation?: string | null;
+    preferences?: {
+      preferredLocation?: string | null;
+      searchRadiusKm?: number;
+    } | null;
     [key: string]: any;
   };
   className?: string;
@@ -35,7 +39,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   preferredLocation,
 }) => {
   const displayName = user?.fullName || (user?.phone ? user.phone : user?.email ? user.email.split('@')[0] : 'Mon Compte');
-  const displayLocation = preferredLocation || user?.preferredLocation || 'Bab Ezzouar, Alger';
+  const displayLocation = preferredLocation || user?.preferences?.preferredLocation || user?.preferredLocation || 'Bab Ezzouar, Alger';
   const isEmailVerified = user?.emailVerified !== false;
   const isPhoneVerified = user?.phoneVerified !== false;
   const initials = displayName

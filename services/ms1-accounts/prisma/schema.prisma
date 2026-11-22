@@ -16,8 +16,23 @@ enum Role {
 
 enum UserStatus {
   ACTIVE
+  DEACTIVATED
   SUSPENDED
   DELETED
+}
+
+enum ChallengePurpose {
+  LOGIN
+  REGISTER
+  CHANGE_PHONE
+  CONFIRM_SENSITIVE
+}
+
+enum ChallengeStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  FAILED
 }
 
 enum ShopStatus {
@@ -39,101 +54,110 @@ enum DocumentStatus {
   REJECTED
 }
 
-enum EmailTokenType {
-  VERIFY_EMAIL
-  RESET_PASSWORD
-}
-
 enum SocialProvider {
   GOOGLE
   APPLE
 }
 
 model User {
-  id             String          @id @default(uuid())
-  email          String          @unique
-  passwordHash   String?
-  fullName       String
-  phone          String?         @unique
-  avatarUrl      String?
-  role           Role            @default(CUSTOMER)
-  emailVerified  Boolean         @default(false)
-  phoneVerified  Boolean         @default(false)
-  status         UserStatus      @default(ACTIVE)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id              String            @id @default(uuid())
+  phoneE164       String?           @unique @map("phone_e164")
+  telegramUserId  String?           @unique @map("telegram_user_id")
+  telegramChatId  String?           @map("telegram_chat_id")
+  telegramBlocked Boolean           @default(false) @map("telegram_blocked")
+  roles           Role[]            @default([CUSTOMER])
+  activeMode      String            @default("customer") @map("active_mode")
+  status          UserStatus        @default(ACTIVE)
+  email           String?           @unique
+  fullName        String?           @map("full_name")
+  avatarUrl       String?           @map("avatar_url")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deletedAt       DateTime?         @map("deleted_at")
 
-  shop           Shop?
-  refreshTokens  RefreshToken[]
-  phoneOtps      PhoneOtp[]
-  emailTokens    EmailToken[]
-  socialAccounts SocialAccount[]
+  shop            Shop?
+  preferences     UserPreferences?
+  challenges      AuthChallenge[]
+  sessions        RefreshToken[]
+  auditLogs       AuditLog[]
+  socialAccounts  SocialAccount[]
 
   @@map("users")
 }
 
-model PhoneOtp {
+model UserPreferences {
+  id                    String   @id @default(uuid())
+  userId                String   @unique @map("user_id")
+  preferredLocation     String?  @map("preferred_location")
+  searchRadiusKm        Int      @default(10) @map("search_radius_km")
+  pushEnabled           Boolean  @default(true) @map("push_enabled")
+  telegramNotifications Boolean  @default(true) @map("telegram_notifications")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model AuthChallenge {
+  id        String           @id @default(uuid())
+  phone     String
+  purpose   ChallengePurpose
+  nonceHash String           @map("nonce_hash")
+  codeHash  String?          @map("code_hash")
+  expiresAt DateTime         @map("expires_at")
+  attempts  Int              @default(0)
+  status    ChallengeStatus  @default(PENDING)
+  userId    String?          @map("user_id")
+  newPhone  String?          @map("new_phone")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([phone, purpose])
+  @@index([nonceHash])
+  @@map("auth_challenges")
+}
+
+model AuditLog {
   id        String   @id @default(uuid())
-  userId    String
-  codeHash  String
-  attempts  Int      @default(0)
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  userId    String?  @map("user_id")
+  action    String
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
-  @@map("phone_otps")
-}
-
-model EmailToken {
-  id        String         @id @default(uuid())
-  userId    String
-  type      EmailTokenType
-  tokenHash String         @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime       @default(now())
-
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, type])
-  @@map("email_tokens")
-}
-
-model SocialAccount {
-  id             String         @id @default(uuid())
-  provider       SocialProvider
-  providerUserId String
-  userId         String
-  createdAt      DateTime       @default(now())
-
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerUserId])
-  @@index([userId])
-  @@map("social_accounts")
+  @@index([action])
+  @@map("audit_logs")
 }
 
 model Shop {
-  id               String         @id @default(uuid())
-  userId           String         @unique
-  name             String
-  description      String?
-  address          String
-  latitude         Float
-  longitude        Float
-  phone            String
-  openingHours     Json?
-  logoUrl          String?
-  status           ShopStatus     @default(PENDING)
-  suspensionReason String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id                 String         @id @default(uuid())
+  userId             String         @unique @map("user_id")
+  name               String
+  description        String?
+  category           String?
+  registryNumber     String?        @map("registry_number")
+  address            String
+  latitude           Float?
+  longitude          Float?
+  phone              String
+  openingHours       Json?          @map("opening_hours")
+  logoUrl            String?        @map("logo_url")
+  verificationStatus ShopStatus     @default(PENDING) @map("verification_status")
+  rejectReason       String?        @map("reject_reason")
+  suspensionReason   String?        @map("suspension_reason")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
 
-  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documents        ShopDocument[]
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents          ShopDocument[]
 
   @@index([latitude, longitude])
   @@map("shops")
@@ -141,15 +165,18 @@ model Shop {
 
 model ShopDocument {
   id           String         @id @default(uuid())
-  shopId       String
+  shopId       String         @map("shop_id")
   type         DocumentType
   filename     String
-  originalName String
-  mimeType     String
+  originalName String         @map("original_name")
+  mimeType     String         @map("mime_type")
   size         Int
-  fileUrl      String
+  fileUrl      String         @map("file_url")
+  storagePath  String?        @map("storage_path")
   status       DocumentStatus @default(SUBMITTED)
-  createdAt    DateTime       @default(now())
+  reason       String?
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
 
   shop         Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
@@ -159,14 +186,31 @@ model ShopDocument {
 
 model RefreshToken {
   id        String   @id @default(uuid())
-  tokenHash String   @unique
-  userId    String
+  tokenHash String   @unique @map("token_hash")
+  userId    String   @map("user_id")
+  device    String?
+  userAgent String?  @map("user_agent")
+  ipAddress String?  @map("ip_address")
   revoked   Boolean  @default(false)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model SocialAccount {
+  id             String         @id @default(uuid())
+  provider       SocialProvider
+  providerUserId String         @map("provider_user_id")
+  userId         String         @map("user_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@map("social_accounts")
 }
