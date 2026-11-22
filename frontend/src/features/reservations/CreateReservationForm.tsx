@@ -1,77 +1,58 @@
 import React, { useState } from 'react';
+import { ReservationDialog, type OfferDetail } from './ReservationDialog';
+import type { Reservation } from './types';
 
 interface CreateReservationFormProps {
-  onSuccess: () => void;
+  offer?: OfferDetail;
+  onSuccess: (reservation?: Reservation) => void;
   onCancel: () => void;
 }
 
-export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({ onSuccess, onCancel }) => {
-  const [name, setName] = useState('');
-  const [date, setDate] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const DEFAULT_OFFER: OfferDetail = {
+  id: 'off-bakery-01',
+  name: 'Panier Surprise Viennoiseries & Pains',
+  categoryName: 'Boulangerie & Pâtisserie',
+  photoUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&auto=format&fit=crop&q=80',
+  discountedPrice: 450,
+  originalPrice: 1200,
+  quantityAvailable: 4,
+  description: 'Composé de baguettes artisanales, croissants au beurre et pains au chocolat dorés du jour, invendus mais préparés avec soin le matin même.',
+  pickupStart: '18:00',
+  pickupEnd: '19:30',
+  shopId: 'shop-01',
+  shopName: 'Le Moulin Doré',
+  shopAddress: '14 Rue Didouche Mourad, Alger',
+  shopDistance: '350m',
+  shopRating: 4.8,
+  shopReviewCount: 142,
+};
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      // Replace with real endpoint
-      await fetch('/api/reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, date }),
-      });
-      onSuccess();
-    } catch (e: any) {
-      setError(e.message || 'Erreur lors de la création');
-    } finally {
-      setLoading(false);
-    }
+export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({
+  offer = DEFAULT_OFFER,
+  onSuccess,
+  onCancel,
+}) => {
+  const [isOpen, setIsOpen] = useState(true);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    onCancel();
+  };
+
+  const handleSuccess = (reservation: Reservation) => {
+    onSuccess(reservation);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <h2 className="font-poppins font-medium text-lg">Créer une réservation</h2>
-      <div>
-        <label className="block mb-1" htmlFor="name">Nom</label>
-        <input
-          id="name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full border rounded p-2"
-          required
-        />
-      </div>
-      <div>
-        <label className="block mb-1" htmlFor="date">Date</label>
-        <input
-          id="date"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="w-full border rounded p-2"
-          required
-        />
-      </div>
-      {error && <p className="text-red-500">{error}</p>}
-      <div className="flex space-x-2">
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-4 py-2 bg-blue-500 text-white rounded"
-        >
-          {loading ? 'En cours...' : 'Confirmer'}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 bg-gray-300 rounded"
-        >
-          Annuler
-        </button>
-      </div>
-    </form>
+    <ReservationDialog
+      isOpen={isOpen}
+      offer={offer}
+      onClose={handleClose}
+      onSuccess={handleSuccess}
+      onViewReceipt={handleSuccess}
+      onNavigateToReservations={handleClose}
+    />
   );
 };
+
+export default CreateReservationForm;

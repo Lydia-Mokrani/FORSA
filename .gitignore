@@ -44,3 +44,5 @@ lerna-debug.log*
 
 # Docker
 *.local
+
+/.agents/mcp_config.json

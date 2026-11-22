@@ -23,6 +23,7 @@ import { MyOffersPage } from './features/catalogue/pages/MyOffersPage';
 import { CreateOfferPage } from './features/catalogue/pages/CreateOfferPage';
 import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
 import { LoginPage } from './features/auth/LoginPage';
+import { ReservationScreen } from './features/reservations/ReservationScreen';
 
 export const App: React.FC = () => {
   return (
@@ -64,6 +65,7 @@ export const App: React.FC = () => {
             <Route path="/explore" element={<ExploreOffersPage />} />
             <Route path="/offers/:id" element={<OfferDetailsPage />} />
             <Route path="/map" element={<ShopsMapViewPage />} />
+            <Route path="/my-reservations" element={<ReservationScreen />} />
           </Route>
 
           {/* AUTHENTICATION */}
