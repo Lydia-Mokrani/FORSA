@@ -10,6 +10,9 @@ import {
   figmaHeaderBell,
   figmaUnreadIndicator,
   figmaCamera,
+  figmaCameraWhite,
+  figmaCrossPill,
+  figmaEditBtnWhite,
   figmaCheckmarkBadge,
   figmaLocationPin,
   figmaTickPill,
@@ -1105,9 +1108,9 @@ export const ProfilePage: React.FC = () => {
           <div className="flex flex-col lg:flex-row gap-[24px] items-start w-full">
             {/* ── COLONNE PRINCIPALE (758px) ─────────────────────────────────── */}
             <div className="flex-1 w-full space-y-[24px]">
-              {/* 1. CARTE PROFIL (FRAME 756:21199) */}
-              <div className="w-full bg-gradient-to-r from-white to-[#eef7ec] border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[28px] shadow-sm flex flex-col sm:flex-row items-center sm:items-start justify-between gap-[28px]">
-                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-[28px] text-center sm:text-left flex-1 min-w-0">
+              {/* 1. CARTE PROFIL (FRAME 994:13581) */}
+              <div className="w-full bg-gradient-to-r from-white to-[#eef7ec] border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[28px] shadow-sm flex flex-col sm:flex-row items-center justify-between gap-[28px]">
+                <div className="flex flex-col sm:flex-row items-center gap-[28px] text-center sm:text-left flex-1 min-w-0">
                   {/* Photo de profil (128x128) + bouton caméra */}
                   <div className="relative size-[128px] shrink-0">
                     <div className="size-[120px] rounded-full overflow-hidden bg-[#0B2C25] text-white flex items-center justify-center font-bold text-3xl border-3 border-white shadow-md">
@@ -1130,7 +1133,7 @@ export const ProfilePage: React.FC = () => {
                       className="absolute left-[88px] top-[88px] size-[38px] rounded-full bg-[#0b2c25] border-3 border-white flex items-center justify-center text-white shadow-md hover:bg-[#17664e] transition cursor-pointer"
                       title="Changer la photo"
                     >
-                      <img src={figmaCamera} alt="" className="size-[18px]" />
+                      <img src={figmaCameraWhite} alt="" className="size-[18px]" />
                     </button>
                   </div>
 
@@ -1157,13 +1160,13 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     {/* Pastilles de vérification (756:21222) */}
-                    <div className="flex items-center gap-[8px] flex-wrap pt-1 justify-center sm:justify-start">
+                    <div className="flex items-center gap-[8px] flex-wrap sm:flex-nowrap pt-1 justify-center sm:justify-start">
                       {/* E-mail vérifié / non vérifié */}
-                      <div className={`${isEmailVerified ? 'bg-[#dbf0dd] text-[#17664e]' : 'bg-amber-100 text-amber-900 border border-amber-300'} flex items-center gap-[6px] pl-[10px] pr-[12px] py-[5px] rounded-[100px] shrink-0`}>
+                      <div className={`${isEmailVerified ? 'bg-[#dbf0dd] text-[#17664e]' : 'bg-[#f7dcd8] text-[#b13b3b]'} flex items-center gap-[6px] pl-[10px] pr-[12px] py-[5px] rounded-[100px] shrink-0`}>
                         {isEmailVerified ? (
                           <img src={figmaTickPill} alt="" className="size-[14px] shrink-0" />
                         ) : (
-                          <img src={figmaMultiplicationSign} alt="" className="size-[10px] shrink-0 text-amber-800" />
+                          <img src={figmaCrossPill} alt="" className="size-[12px] shrink-0" />
                         )}
                         <span className="text-[12px] font-semibold">
                           {isEmailVerified ? 'E-mail vérifié' : 'E-mail non vérifié'}
@@ -1171,11 +1174,11 @@ export const ProfilePage: React.FC = () => {
                       </div>
 
                       {/* Téléphone vérifié / non vérifié */}
-                      <div className={`${isPhoneVerified ? 'bg-[#dbf0dd] text-[#17664e]' : 'bg-red-100 text-[#b22222] border border-red-300'} flex items-center gap-[6px] pl-[10px] pr-[12px] py-[5px] rounded-[100px] shrink-0`}>
+                      <div className={`${isPhoneVerified ? 'bg-[#dbf0dd] text-[#17664e]' : 'bg-[#f7dcd8] text-[#b13b3b]'} flex items-center gap-[6px] pl-[10px] pr-[12px] py-[5px] rounded-[100px] shrink-0`}>
                         {isPhoneVerified ? (
                           <img src={figmaTickPill} alt="" className="size-[14px] shrink-0" />
                         ) : (
-                          <img src={figmaMultiplicationSign} alt="" className="size-[10px] shrink-0 text-[#b22222]" />
+                          <img src={figmaCrossPill} alt="" className="size-[12px] shrink-0" />
                         )}
                         <span className="text-[12px] font-semibold">
                           {isPhoneVerified
@@ -1196,13 +1199,13 @@ export const ProfilePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Bouton Modifier le profil (756:21235) */}
+                {/* Bouton Modifier le profil (994:13602) */}
                 <button
                   type="button"
                   onClick={() => setViewMode('edit')}
-                  className="bg-[#0b2c25] hover:bg-[#17664e] flex items-center justify-center gap-[8px] pl-[18px] pr-[20px] py-[12px] rounded-[12px] text-white text-[14px] font-semibold transition cursor-pointer shadow-sm shrink-0 self-center sm:self-start"
+                  className="bg-[#0b2c25] hover:bg-[#17664e] flex items-center justify-center gap-[8px] pl-[18px] pr-[20px] py-[12px] rounded-[12px] text-white text-[14px] font-semibold transition cursor-pointer shadow-sm shrink-0 self-center"
                 >
-                  <img src={figmaEditBtn} alt="" className="size-[18px] shrink-0" />
+                  <img src={figmaEditBtnWhite} alt="" className="size-[18px] shrink-0" />
                   <span>Modifier le profil</span>
                 </button>
               </div>
@@ -1263,10 +1266,10 @@ export const ProfilePage: React.FC = () => {
                             <button
                               type="button"
                               onClick={handleStartPhoneVerification}
-                              className="bg-amber-100 hover:bg-amber-200 border border-amber-300 flex items-center gap-[4px] px-[8px] py-[2px] rounded-full cursor-pointer transition"
+                              className="bg-[#f7dcd8] hover:bg-[#fad4cf] flex items-center gap-[4px] px-[8px] py-[2px] rounded-full cursor-pointer transition"
                             >
-                              <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-amber-800" />
-                              <span className="text-[10px] font-semibold text-amber-800">Non vérifié</span>
+                              <img src={figmaCrossPill} alt="" className="size-[9px] shrink-0" />
+                              <span className="text-[10px] font-semibold text-[#b13b3b]">Non vérifié</span>
                             </button>
                           ) : (
                             <div className="bg-[#ebeee1] flex items-center gap-[4px] px-[8px] py-[2px] rounded-full">
@@ -1306,10 +1309,10 @@ export const ProfilePage: React.FC = () => {
                             <button
                               type="button"
                               onClick={handleResendEmail}
-                              className="bg-amber-100 hover:bg-amber-200 border border-amber-300 flex items-center gap-[4px] px-[8px] py-[2px] rounded-full cursor-pointer transition"
+                              className="bg-[#f7dcd8] hover:bg-[#fad4cf] flex items-center gap-[4px] px-[8px] py-[2px] rounded-full cursor-pointer transition"
                             >
-                              <img src={figmaMultiplicationSign} alt="" className="size-[9px] shrink-0 text-amber-800" />
-                              <span className="text-[10px] font-semibold text-amber-800">Non vérifié</span>
+                              <img src={figmaCrossPill} alt="" className="size-[9px] shrink-0" />
+                              <span className="text-[10px] font-semibold text-[#b13b3b]">Non vérifié</span>
                             </button>
                           )}
                         </div>

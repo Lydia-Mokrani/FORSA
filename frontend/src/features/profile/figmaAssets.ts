@@ -15,25 +15,28 @@ import figmaLogout from '../../assets/icons/figma/logout-01.svg';
 
 // Official Figma Header SVGs
 import figmaHeaderGear from '../../assets/icons/figma/icone-gear.svg';
-import figmaHeaderLocation from '../../assets/icons/figma/icone-pin.svg';
+import figmaHeaderLocation from '../../assets/icons/figma/icone-location-01.svg';
 import figmaHeaderBell from '../../assets/icons/figma/icone-bell.svg';
 import figmaUnreadIndicator from '../../assets/icons/figma/unread-indicator.svg';
 
 // Official Figma Carte Profil SVGs
 import figmaCamera from '../../assets/icons/figma/icone-camera-01.svg';
+import figmaCameraWhite from '../../assets/icons/figma/icone-camera-01-white.svg';
 import figmaCheckmarkBadge from '../../assets/icons/figma/icone-checkmark-badge-01.svg';
-import figmaLocationPin from '../../assets/icons/figma/icone-pin.svg';
-import figmaTickPill from '../../assets/icons/figma/icone-tick-02.svg';
+import figmaLocationPin from '../../assets/icons/figma/icone-location-01.svg';
+import figmaTickPill from '../../assets/icons/figma/icone-tick-pill.svg';
+import figmaCrossPill from '../../assets/icons/figma/icone-cross-pill.svg';
 import figmaEditBtn from '../../assets/icons/figma/icone-edit-02.svg';
+import figmaEditBtnWhite from '../../assets/icons/figma/icone-edit-02-white.svg';
 
 // Official Figma Carte Informations Personnelles SVGs
 import figmaUserCircle from '../../assets/icons/figma/icone-user-circle.svg';
 import figmaEditSmall from '../../assets/icons/figma/icone-edit-02.svg';
 import figmaSmartPhone from '../../assets/icons/figma/icone-smart-phone-01.svg';
 import figmaSmartPhone01 from '../../assets/icons/figma/icone-smart-phone-01.svg';
-import figmaTickSmall from '../../assets/icons/figma/icone-tick-02.svg';
+import figmaTickSmall from '../../assets/icons/figma/icone-tick-pill.svg';
 import figmaMail from '../../assets/icons/figma/icone-mail-01.svg';
-import figmaLocationTile from '../../assets/icons/figma/icone-pin.svg';
+import figmaLocationTile from '../../assets/icons/figma/icone-location-01.svg';
 
 // Official Figma Carte Zone de Recherche SVGs
 import figmaFondDeCarte from '../../assets/icons/figma/811_imgFondDeCarte.svg';
@@ -44,13 +47,13 @@ import figmaPoignee from '../../assets/icons/figma/poignee.svg';
 import figmaCalendar03 from '../../assets/icons/figma/icone-calendar-03.svg';
 import figmaCalendarCheckIn from '../../assets/icons/figma/icone-calendar-check-in-01.svg';
 import figmaCalendarWarning from '../../assets/icons/figma/icone-alert-circle.svg';
-import figmaTickActivity from '../../assets/icons/figma/icone-tick-02.svg';
+import figmaTickActivity from '../../assets/icons/figma/icone-tick-pill.svg';
 import figmaSparkles from '../../assets/icons/figma/icone-sparkles.svg';
 import figmaCardGear from '../../assets/icons/figma/icone-gear.svg';
 import figmaShield from '../../assets/icons/figma/icone-shield.svg';
 import figmaChevronRight from '../../assets/icons/figma/icone-chev.svg';
 import figmaCardBell from '../../assets/icons/figma/icone-bell.svg';
-import figmaCardPin from '../../assets/icons/figma/icone-pin.svg';
+import figmaCardPin from '../../assets/icons/figma/icone-location-01.svg';
 import figmaArrowRight from '../../assets/icons/figma/icone-arrow.svg';
 
 // Images (Product photos, etc.)
@@ -64,11 +67,11 @@ import figmaCameraEdit from '../../assets/icons/figma/icone-camera-01.svg';
 import figmaDeleteTrash from '../../assets/icons/figma/icone-delete-02.svg';
 import figmaUserCircleInput from '../../assets/icons/figma/icone-user-circle.svg';
 import figmaMailInput from '../../assets/icons/figma/icone-mail-01.svg';
-import figmaTickVerified from '../../assets/icons/figma/icone-tick-02.svg';
+import figmaTickVerified from '../../assets/icons/figma/icone-tick-pill.svg';
 import figmaPhoneInput from '../../assets/icons/figma/icone-smart-phone-01.svg';
-import figmaLocationInput from '../../assets/icons/figma/icone-pin.svg';
+import figmaLocationInput from '../../assets/icons/figma/icone-location-01.svg';
 import figmaLockInput from '../../assets/icons/figma/icone-square-lock-01.svg';
-import figmaTickSave from '../../assets/icons/figma/icone-tick-02.svg';
+import figmaTickSave from '../../assets/icons/figma/icone-tick-pill.svg';
 import figmaSecurityCheck from '../../assets/icons/figma/icone-security-check.svg';
 import figmaSecurityMail from '../../assets/icons/figma/icone-mail-01.svg';
 import figmaSecurityPhone from '../../assets/icons/figma/icone-smart-phone-01.svg';
@@ -96,10 +99,13 @@ export {
   figmaHeaderBell,
   figmaUnreadIndicator,
   figmaCamera,
+  figmaCameraWhite,
   figmaCheckmarkBadge,
   figmaLocationPin,
   figmaTickPill,
+  figmaCrossPill,
   figmaEditBtn,
+  figmaEditBtnWhite,
   figmaUserCircle,
   figmaEditSmall,
   figmaSmartPhone,
