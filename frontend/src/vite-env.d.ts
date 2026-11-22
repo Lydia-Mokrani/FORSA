@@ -1,0 +1,1 @@
+/// <reference types="vite/client" />\n\ndeclare module \"*.svg\" {\n  const src: string;\n  export default src;\n}\n

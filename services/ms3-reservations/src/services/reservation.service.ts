@@ -161,7 +161,7 @@ export class ReservationService {
             offerId,
             quantity,
           });
-        } catch (_) {}
+        } catch (_) { }
         return reservation;
       } catch (e: any) {
         if (e?.code === 'P2002' && e?.meta?.target?.includes('pickupCode')) {
@@ -172,7 +172,7 @@ export class ReservationService {
         // Other DB error – roll back stock
         try {
           await MS2Service.releaseStock(offerId, reservationId, quantity);
-        } catch (_) {}
+        } catch (_) { }
         throw new ApiError(500, 'INTERNAL_SERVER_ERROR', 'Database error while creating reservation');
       }
     }
@@ -258,7 +258,7 @@ export class ReservationService {
     // Emit event (best‑effort) after the transaction has committed
     try {
       await rabbitMQ.publish(`reservation.${toStatus.toLowerCase()}`, { reservationId, status: toStatus });
-    } catch (_) {}
+    } catch (_) { }
 
     // Release stock for terminal states – retry up to 3 times (idempotent).
     // Persistent failures are bubbled; we cannot guarantee eventual release without an outbox.
@@ -279,6 +279,27 @@ export class ReservationService {
 
     return true;
   }
+  // Validate pickup using the QR code / pickup code
+  static async pickupByCode(pickupCode: string, merchantId: string) {
+    if (!pickupCode || typeof pickupCode !== 'string') {
+      throw new BadRequestError('Pickup code is required');
+    }
+
+    const reservation = await prisma.reservation.findUnique({
+      where: { pickupCode },
+    });
+
+    if (!reservation) {
+      throw new BadRequestError('Invalid pickup code');
+    }
+
+    if (reservation.shopId !== merchantId) {
+      throw new ForbiddenError('Reservation does not belong to this shop');
+    }
+
+    return this.pickup(reservation.id, merchantId);
+  }
+
 
   // ---------------------------------------------------------------------------
   // Pick‑up endpoint – only ACCEPTED reservations may be picked up.

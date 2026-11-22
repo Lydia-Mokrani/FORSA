@@ -197,25 +197,31 @@ export const createReservationRouter = (publicKey: string) => {
     },
   );
 
-  // Compatibility endpoint – reservationId in body
+  // Merchant pickup using QR code / pickup code
   reservationRouter.post(
     '/pickup',
     requireAuth(publicKey),
     requireRole('MERCHANT'),
     async (req: Request, res: Response, next) => {
       try {
-        const { reservationId } = req.body;
-        if (!reservationId) throw new BadRequestError('reservationId required');
-        const reservation = await prisma.reservation.findUnique({ where: { id: reservationId } });
-        if (!reservation) throw new NotFoundError('Reservation not found');
-        if (reservation.shopId !== req.user!.shopId) throw new ForbiddenError('Reservation does not belong to this shop');
-        await ReservationService.pickup(reservation.id, req.user!.shopId!);
+        const { pickupCode } = req.body;
+
+        if (!pickupCode) {
+          throw new BadRequestError('pickupCode required');
+        }
+
+        const shopId = req.user!.shopId;
+        if (!shopId) {
+          throw new BadRequestError('Merchant has no shopId');
+        }
+
+        await ReservationService.pickupByCode(pickupCode, shopId);
         res.sendStatus(204);
       } catch (err) {
         next(err);
       }
     },
   );
+
   return reservationRouter;
 };
-
