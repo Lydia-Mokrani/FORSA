@@ -10,6 +10,7 @@ export interface UserProfile {
   status: 'ACTIVE' | 'SUSPENDED' | 'DELETED';
   emailVerified: boolean;
   phoneVerified: boolean;
+  preferredLocation?: string | null;
   createdAt: string;
   shop?: {
     id: string;
