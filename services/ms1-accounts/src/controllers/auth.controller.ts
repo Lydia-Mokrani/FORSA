@@ -1,0 +1,423 @@
+import { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcrypt';
+import { z } from 'zod';
+import {
+  BadRequestError,
+  UnauthorizedError,
+  ConflictError,
+  ForbiddenError,
+} from '@forsa/common';
+import { prisma } from '../config/prisma';
+import { jwtService } from '../services/jwt.service';
+import { rabbitMQ } from '../services/rabbitmq.service';
+import { devDb, isPostgresAlive } from '../services/dev-db.service';
+import { issueEmailToken } from '../services/email-token.service';
+import { isDemoPhone, normalizePhone } from '../utils/phone';
+
+const registerSchema = z.object({
+  email: z.string().email('Format email invalide'),
+  password: z.string().min(8, 'Le mot de passe doit contenir au moins 8 caractères'),
+  fullName: z.string().min(2, 'Le nom complet est requis'),
+  phone: z.string().optional(),
+  role: z.enum(['CUSTOMER', 'MERCHANT']).default('CUSTOMER'),
+});
+
+const loginSchema = z.object({
+  email: z.string().min(1, 'L’identifiant (adresse e-mail ou numéro de téléphone) est requis'),
+  password: z.string().min(1, 'Le mot de passe est requis'),
+});
+
+const refreshSchema = z.object({
+  refreshToken: z.string().min(10, 'Refresh token invalide'),
+});
+
+export class AuthController {
+  public static async register(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parsed = registerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
+      }
+
+      const { email, password, fullName, phone, role } = parsed.data;
+
+      const usePrisma = await isPostgresAlive();
+      let existingUser: any = null;
+
+      if (usePrisma) {
+        try {
+          existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+        } catch {
+          existingUser = await devDb.findByEmail(email);
+        }
+      } else {
+        existingUser = await devDb.findByEmail(email);
+      }
+
+      if (existingUser) {
+        throw new ConflictError('Un compte existe déjà avec cette adresse email.');
+      }
+
+      let normalizedPhone: string | null = null;
+      if (phone && phone.trim()) {
+        normalizedPhone = normalizePhone(phone);
+        // Exception exclusive pour le numéro de démo : autorisé à créer plusieurs comptes pour tests
+        if (!isDemoPhone(normalizedPhone)) {
+          let existingPhoneUser: any = null;
+          if (usePrisma) {
+            try {
+              existingPhoneUser = await prisma.user.findFirst({ where: { phone: normalizedPhone } });
+            } catch {
+              existingPhoneUser = [...devDb.users.values()].find((u) => u.phone === normalizedPhone);
+            }
+          } else {
+            existingPhoneUser = [...devDb.users.values()].find((u) => u.phone === normalizedPhone);
+          }
+          if (existingPhoneUser) {
+            throw new ConflictError('Ce numéro de téléphone est déjà associé à un autre compte.');
+          }
+        }
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      let user: any = null;
+
+      if (usePrisma) {
+        try {
+          user = await prisma.user.create({
+            data: {
+              email: email.toLowerCase(),
+              passwordHash,
+              fullName,
+              phone: normalizedPhone,
+              role,
+            },
+          });
+        } catch (err: any) {
+          console.error('[PrismaUserCreateError]:', err);
+          user = await devDb.createUser({
+            id: `usr_dev_${Date.now()}`,
+            email: email.toLowerCase(),
+            passwordHash,
+            fullName,
+            phone: normalizedPhone,
+            role,
+            status: 'ACTIVE',
+            emailVerified: false,
+            phoneVerified: false,
+            shop: null,
+          });
+        }
+      } else {
+        user = await devDb.createUser({
+          id: `usr_dev_${Date.now()}`,
+          email: email.toLowerCase(),
+          passwordHash,
+          fullName,
+          phone: normalizedPhone,
+          role,
+          status: 'ACTIVE',
+          emailVerified: false,
+          phoneVerified: false,
+          shop: null,
+        });
+      }
+
+      // Émission de l'événement user.registered sur RabbitMQ avec verificationToken
+      let verificationToken: string | undefined;
+      let verificationLink: string | undefined;
+      try {
+        const result = await issueEmailToken(user.id, 'VERIFY_EMAIL');
+        verificationToken = result.token;
+        verificationLink = `http://localhost:5173/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
+        console.log(`[MS1-Accounts] ✉️ Lien de vérification pour ${user.email} : ${verificationLink}`);
+      } catch {
+        // Non bloquant : le token sera régénéré au prochain renvoi
+      }
+
+      await rabbitMQ.publish('user.registered', {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        fullName: user.fullName,
+        verificationToken,
+        verificationLink,
+      }).catch((err) => console.warn('[MS1-Auth] RabbitMQ publish user.registered warning:', err.message));
+
+      // Génération des tokens
+      const accessToken = jwtService.generateAccessToken({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        fullName: user.fullName,
+        emailVerified: user.emailVerified,
+        phoneVerified: user.phoneVerified,
+        shopId: null,
+        merchantId: user.role === 'MERCHANT' ? user.id : null,
+        shopStatus: null,
+        merchantStatus: user.role === 'MERCHANT' ? 'PENDING' : null,
+      });
+
+      const { token: rawRefreshToken, hash: refreshHash } = jwtService.generateRefreshToken();
+      const expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 100); // Session à vie (100 ans)
+
+      try {
+        await prisma.refreshToken.create({
+          data: {
+            userId: user.id,
+            tokenHash: refreshHash,
+            expiresAt,
+          },
+        });
+      } catch {
+        // Fallback sans stockage persistant refresh token en local
+      }
+
+      res.status(201).json({
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          phone: user.phone,
+          role: user.role,
+          status: user.status,
+          phoneVerified: user.phoneVerified,
+          emailVerified: user.emailVerified,
+        },
+        accessToken,
+        refreshToken: rawRefreshToken,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static async login(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parsed = loginSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
+      }
+
+      const { email: identifier, password } = parsed.data;
+      const cleanIdent = identifier.trim();
+      const isEmail = cleanIdent.includes('@');
+      const usePrisma = await isPostgresAlive();
+      let user: any = null;
+
+      if (usePrisma) {
+        try {
+          if (isEmail) {
+            user = await prisma.user.findUnique({
+              where: { email: cleanIdent.toLowerCase() },
+              include: { shop: true },
+            });
+          } else {
+            let normPhone: string | null = null;
+            try {
+              normPhone = normalizePhone(cleanIdent);
+            } catch {
+              normPhone = cleanIdent.replace(/\D/g, '');
+            }
+            const phoneVariants = [
+              normPhone,
+              cleanIdent,
+              normPhone ? `+213${normPhone.replace(/^0/, '')}` : null,
+              normPhone ? normPhone.replace(/^0/, '') : null,
+              cleanIdent.replace(/\D/g, ''),
+            ].filter(Boolean) as string[];
+
+            user = await prisma.user.findFirst({
+              where: { phone: { in: phoneVariants } },
+              include: { shop: true },
+            });
+          }
+        } catch {
+          user = isEmail ? await devDb.findByEmail(cleanIdent) : null;
+        }
+      } else {
+        user = isEmail ? await devDb.findByEmail(cleanIdent) : null;
+        if (!user && !isEmail) {
+          const digits = cleanIdent.replace(/\D/g, '');
+          user = [...devDb.users.values()].find((u) => u.phone && u.phone.replace(/\D/g, '').includes(digits));
+        }
+      }
+
+      if (!user) {
+        throw new UnauthorizedError('Identifiants invalides.');
+      }
+
+      if (user.status === 'SUSPENDED') {
+        throw new ForbiddenError('Ce compte a été suspendu pour non-respect des règles de la plateforme.');
+      }
+
+      // Vérifier que le compte a un mot de passe (compte Google sans mot de passe)
+      if (!user.passwordHash) {
+        throw new UnauthorizedError(`Ce compte (${user.email}) utilise la connexion Google. Veuillez vous connecter avec le bouton "Continuer avec Google".`);
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      if (!isPasswordValid) {
+        throw new UnauthorizedError('Identifiants invalides.');
+      }
+
+      const shopId = user.shop?.id || null;
+      const shopStatus = user.shop?.status || null;
+      const merchantId = user.role === 'MERCHANT' ? user.id : (user.shop ? user.id : null);
+      const merchantStatus = shopStatus || (user.role === 'MERCHANT' ? 'PENDING' : null);
+
+      const accessToken = jwtService.generateAccessToken({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        fullName: user.fullName,
+        emailVerified: user.emailVerified,
+        phoneVerified: user.phoneVerified,
+        shopId,
+        merchantId,
+        shopStatus,
+        merchantStatus,
+      });
+
+      const { token: rawRefreshToken, hash: refreshHash } = jwtService.generateRefreshToken();
+      const expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 100); // Session à vie (100 ans)
+
+      try {
+        await prisma.refreshToken.create({
+          data: {
+            userId: user.id,
+            tokenHash: refreshHash,
+            expiresAt,
+          },
+        });
+      } catch {
+        // Fallback sans stockage persistant refresh token
+      }
+
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          phone: user.phone,
+          role: user.role,
+          status: user.status,
+          phoneVerified: user.phoneVerified,
+          emailVerified: user.emailVerified,
+          merchantId,
+          merchantStatus,
+          shopId: user.shop?.id,
+          shopStatus: user.shop?.status,
+        },
+        accessToken,
+        refreshToken: rawRefreshToken,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static async refresh(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parsed = refreshSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new BadRequestError('Le paramètre refreshToken est obligatoire.');
+      }
+
+      const tokenHash = jwtService.hashToken(parsed.data.refreshToken);
+
+      const savedToken = await prisma.refreshToken.findUnique({
+        where: { tokenHash },
+        include: { user: { include: { shop: true } } },
+      });
+
+      if (!savedToken || savedToken.revoked || savedToken.expiresAt < new Date()) {
+        throw new UnauthorizedError('Session expirée ou refresh token invalide. Veuillez vous reconnecter.');
+      }
+
+      // Révocation de l'ancien token (rotation sécurisée)
+      await prisma.refreshToken.update({
+        where: { id: savedToken.id },
+        data: { revoked: true },
+      });
+
+      const { user } = savedToken;
+      const shopId = user.shop?.id || null;
+      const shopStatus = user.shop?.status || null;
+      const merchantId = user.role === 'MERCHANT' ? user.id : (user.shop ? user.id : null);
+      const merchantStatus = shopStatus || (user.role === 'MERCHANT' ? 'PENDING' : null);
+
+      const newAccessToken = jwtService.generateAccessToken({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        fullName: user.fullName,
+        emailVerified: user.emailVerified,
+        phoneVerified: user.phoneVerified,
+        shopId,
+        merchantId,
+        shopStatus,
+        merchantStatus,
+      });
+
+      const { token: newRawRefreshToken, hash: newRefreshHash } = jwtService.generateRefreshToken();
+      const newExpiresAt = new Date();
+      newExpiresAt.setFullYear(newExpiresAt.getFullYear() + 100); // Session à vie (100 ans)
+
+      await prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: newRefreshHash,
+          expiresAt: newExpiresAt,
+        },
+      });
+
+      res.json({
+        accessToken: newAccessToken,
+        refreshToken: newRawRefreshToken,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { refreshToken } = req.body;
+      if (refreshToken) {
+        const tokenHash = jwtService.hashToken(refreshToken);
+        try {
+          await prisma.refreshToken.updateMany({
+            where: { tokenHash },
+            data: { revoked: true },
+          });
+        } catch {
+          // Fallback
+        }
+      }
+      res.json({ message: 'Déconnexion réussie.' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static getPublicKey(req: Request, res: Response): void {
+    if (
+      req.query.format === 'pem' ||
+      req.query.format === 'raw' ||
+      req.headers.accept?.includes('text/plain')
+    ) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.send(jwtService.getPublicKey());
+      return;
+    }
+
+    res.json({
+      algorithm: 'RS256',
+      issuer: 'forsa-ms1-accounts',
+      publicKey: jwtService.getPublicKey(),
+    });
+  }
+}

@@ -1,0 +1,407 @@
+{
+  "info": {
+    "name": "FORSA — MS1 Accounts & Shops API",
+    "description": "Collection Postman officielle et complète pour tester tous les endpoints de MS1 (Auth RS256, Profils, OTP SMS, Boutiques, Upload documents et Administration).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "shopId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otpCode",
+      "value": "1234",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Système & Clé Publique RS256",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Get Public Key (JWKS / RS256 pour MS2..MS5)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/auth/public-key"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Authentification (JWT RS256)",
+      "item": [
+        {
+          "name": "1.1 Inscription — Client (Customer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('token', jsonData.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "    console.log('Token Client sauvegardé');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"client.test@forsa.dz\",\n  \"password\": \"Password123!\",\n  \"fullName\": \"Karim Benali\",\n  \"phone\": \"0550123456\",\n  \"role\": \"CUSTOMER\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          }
+        },
+        {
+          "name": "1.2 Inscription — Commerçant (Merchant)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('token', jsonData.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "    console.log('Token Commerçant sauvegardé');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"boulangerie.rose@forsa.dz\",\n  \"password\": \"Commercant123!\",\n  \"fullName\": \"Ahmed Boulanger\",\n  \"phone\": \"0550987654\",\n  \"role\": \"MERCHANT\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          }
+        },
+        {
+          "name": "1.3 Connexion — Client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('token', jsonData.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "    console.log('Connexion réussie, tokens mis à jour');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"client.test@forsa.dz\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "1.4 Connexion — Commerçant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('token', jsonData.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "    if (jsonData.user.shopId) {",
+                  "        pm.collectionVariables.set('shopId', jsonData.user.shopId);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"boulangerie.rose@forsa.dz\",\n  \"password\": \"Commercant123!\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "1.5 Rafraîchir le token (Rotation Refresh Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('token', jsonData.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/refresh"
+          }
+        },
+        {
+          "name": "1.6 Déconnexion (Révocation de session)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Profil & Vérification Téléphone OTP",
+      "item": [
+        {
+          "name": "2.1 Consulter mon profil (/api/users/me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/users/me"
+          }
+        },
+        {
+          "name": "2.2 Mettre à jour mon profil",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Karim Benali (Modifié)\",\n  \"phone\": \"0550123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users/me"
+          }
+        },
+        {
+          "name": "2.3 Demander un code OTP SMS (Simulé)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.simulatedCode) {",
+                  "    pm.collectionVariables.set('otpCode', jsonData.simulatedCode);",
+                  "    console.log('Code OTP récupéré : ' + jsonData.simulatedCode);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/users/verify-phone/request"
+          }
+        },
+        {
+          "name": "2.4 Valider le code OTP SMS",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{otpCode}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users/verify-phone/confirm"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Gestion des Boutiques (Commerçant)",
+      "item": [
+        {
+          "name": "3.1 Créer ma boutique (Commerçant)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.shop && jsonData.shop.id) {",
+                  "    pm.collectionVariables.set('shopId', jsonData.shop.id);",
+                  "    console.log('Boutique créée, shopId: ' + jsonData.shop.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Boulangerie La Rose\",\n  \"description\": \"Boulangerie artisanale traditionnelle et viennoiseries fraîches.\",\n  \"address\": \"12 Rue des Frères Boumerdès\",\n  \"latitude\": 36.7588,\n  \"longitude\": 3.4756,\n  \"phone\": \"024819283\",\n  \"openingHours\": {\n    \"lundi\": \"07:00 - 20:00\",\n    \"mardi\": \"07:00 - 20:00\",\n    \"mercredi\": \"07:00 - 20:00\",\n    \"jeudi\": \"07:00 - 20:00\",\n    \"vendredi\": \"07:00 - 12:00, 14:00 - 20:00\",\n    \"samedi\": \"07:00 - 20:00\",\n    \"dimanche\": \"07:00 - 20:00\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/shops"
+          }
+        },
+        {
+          "name": "3.2 Consulter ma boutique",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/shops/my"
+          }
+        },
+        {
+          "name": "3.3 Mettre à jour ma boutique",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Boulangerie artisanale - Paniers anti-gaspi tous les soirs à partir de 18h !\"\n}"
+            },
+            "url": "{{baseUrl}}/api/shops/my"
+          }
+        },
+        {
+          "name": "3.4 Téléverser les 3 documents légaux (Multipart)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "commercial_register",
+                  "type": "file",
+                  "description": "Extrait du Registre de Commerce (PDF ou Image)"
+                },
+                {
+                  "key": "tax_id",
+                  "type": "file",
+                  "description": "Justificatif NIF (PDF ou Image)"
+                },
+                {
+                  "key": "storefront",
+                  "type": "file",
+                  "description": "Photo de la devanture du magasin"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/shops/my/documents"
+          }
+        },
+        {
+          "name": "3.5 Consultation publique d'une boutique par ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/shops/{{shopId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Administration (Modération des Commerçants)",
+      "item": [
+        {
+          "name": "4.1 Consulter les documents d'un commerçant (Admin only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/shops/{{shopId}}/documents"
+          }
+        }
+      ]
+    }
+  ]
+}

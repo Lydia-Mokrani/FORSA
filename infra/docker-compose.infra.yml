@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # ============================================================
+  # 1. Reverse Proxy & Load Balancer : Traefik v3
+  # ============================================================
+  traefik:
+    image: traefik:v3.1
+    container_name: forsa-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.consulcatalog=true"
+      - "--providers.consulcatalog.endpoint.address=consul:8500"
+      - "--providers.consulcatalog.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--accesslog=true"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"       # Port d'accès public web
+      - "8080:8080"   # Dashboard Traefik (preuve pour le tuteur)
+    depends_on:
+      - consul
+    networks:
+      - forsa-network
+
+  # ============================================================
+  # 2. Service Registry & Discovery : Consul
+  # ============================================================
+  consul:
+    image: hashicorp/consul:1.19
+    container_name: forsa-consul
+    restart: unless-stopped
+    command: "agent -dev -client=0.0.0.0 -ui"
+    ports:
+      - "8500:8500"   # UI Consul & API HTTP
+      - "8600:8600/udp"
+    networks:
+      - forsa-network
+
+  # ============================================================
+  # 3. Message Broker Asynchrone : RabbitMQ
+  # ============================================================
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: forsa-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: forsa_user
+      RABBITMQ_DEFAULT_PASS: forsa_password
+    ports:
+      - "5672:5672"   # Protocole AMQP pour les microservices
+      - "15672:15672" # Dashboard Web RabbitMQ (preuve pour le tuteur)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - forsa-network
+
+networks:
+  forsa-network:
+    driver: bridge
+
+volumes:
+  rabbitmq_data:
