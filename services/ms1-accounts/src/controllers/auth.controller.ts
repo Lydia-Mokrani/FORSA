@@ -145,16 +145,8 @@ export class AuthController {
           throw new ForbiddenError('Ce compte a été suspendu ou supprimé.');
         }
 
-        // Si le rôle commerçant est demandé et pas encore présent
-        if (requestedRole === Role.MERCHANT && !user.roles.includes(Role.MERCHANT)) {
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              roles: { set: [...user.roles, Role.MERCHANT] },
-            },
-            include: { shop: true, preferences: true },
-          });
-        }
+        // Sécurité rôle : un utilisateur existant ne peut pas s'auto-attribuer le rôle MERCHANT via /verify
+        // L'accès au rôle commerçant nécessite le flux dédié de création de boutique (POST /shops)
       } else {
         isNewUser = true;
         const initialRoles = requestedRole === Role.MERCHANT ? [Role.CUSTOMER, Role.MERCHANT] : [Role.CUSTOMER];

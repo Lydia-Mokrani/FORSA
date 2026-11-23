@@ -4,6 +4,8 @@ import { rotateRefreshToken } from '../../src/services/session.service';
 import { jwtService } from '../../src/services/jwt.service';
 import { prisma } from '../../src/config/prisma';
 import { ChallengeStatus } from '@prisma/client';
+import { AuthController } from '../../src/controllers/auth.controller';
+import { BadRequestError } from '@forsa/common';
 
 // Mock du client Prisma pour tests unitaires isolés
 jest.mock('../../src/config/prisma', () => ({
@@ -352,6 +354,114 @@ describe('Lot 2A — Authentification Telegram & Sécurité (Unit Tests)', () =>
         where: { userId: 'user-victim-123' },
         data: { revoked: true },
       });
+    });
+  });
+
+  // ─── 7. SÉCURITÉ DES RÔLES & AUTORISATIONS (/auth/telegram/verify) ────────
+  describe('7. Sécurité des Rôles & Autorisations (/auth/telegram/verify)', () => {
+    it('doit refuser explicitement l attribution du rôle ADMIN via /verify (400 Bad Request)', async () => {
+      const req: any = {
+        body: {
+          challengeId: '11111111-1111-1111-1111-111111111111',
+          code: '123456',
+          role: 'ADMIN',
+        },
+        headers: {},
+      };
+      const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      await AuthController.telegramVerify(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(BadRequestError));
+    });
+
+    it('doit refuser d auto-attribuer le rôle MERCHANT à un utilisateur existant lors de la connexion', async () => {
+      const challengeId = '22222222-2222-2222-2222-222222222222';
+      const existingUser: any = {
+        id: 'user-client-1',
+        phoneE164: '+213555123456',
+        roles: ['CUSTOMER'],
+        status: 'ACTIVE',
+        activeMode: 'customer',
+        shop: null,
+      };
+
+      (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
+        id: challengeId,
+        phone: '+213555123456',
+        codeHash: hashString('654321'),
+        status: ChallengeStatus.PENDING,
+        expiresAt: new Date(Date.now() + 60000),
+        attempts: 0,
+      });
+
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(existingUser);
+
+      const req: any = {
+        body: {
+          challengeId,
+          code: '654321',
+          role: 'MERCHANT', // tentative d'escalade de privilège
+        },
+        headers: {},
+      };
+      const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      await AuthController.telegramVerify(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(200);
+      // L'utilisateur ne doit PAS avoir été mis à jour avec le rôle MERCHANT
+      expect(prisma.user.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            roles: expect.anything(),
+          }),
+        })
+      );
+    });
+
+    it('doit attribuer les rôles CUSTOMER et MERCHANT lors d une première inscription avec role=MERCHANT', async () => {
+      const challengeId = '33333333-3333-3333-3333-333333333333';
+      (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
+        id: challengeId,
+        phone: '+213777889900',
+        codeHash: hashString('112233'),
+        status: ChallengeStatus.PENDING,
+        expiresAt: new Date(Date.now() + 60000),
+        attempts: 0,
+      });
+
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null); // Nouveau user
+      (prisma.user.create as jest.Mock).mockResolvedValue({
+        id: 'new-merchant-id',
+        phoneE164: '+213777889900',
+        roles: ['CUSTOMER', 'MERCHANT'],
+        status: 'ACTIVE',
+        activeMode: 'merchant',
+        shop: null,
+      });
+
+      const req: any = {
+        body: {
+          challengeId,
+          code: '112233',
+          role: 'MERCHANT',
+        },
+        headers: {},
+      };
+      const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const next = jest.fn();
+
+      await AuthController.telegramVerify(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            roles: ['CUSTOMER', 'MERCHANT'],
+            activeMode: 'merchant',
+          }),
+        })
+      );
     });
   });
 });

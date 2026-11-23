@@ -252,7 +252,9 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
         data: { status: ChallengeStatus.FAILED },
       }).catch(() => {});
 
-      console.warn(`[TelegramSecurity] Mismatch : Contact (${contactPhone}) != Attendu (${expectedPhone})`);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[TelegramSecurity] Mismatch : Contact (${contactPhone}) != Attendu (${expectedPhone})`);
+      }
       await sendTelegramMessage(
         chatId,
         `❌ *Numéro non concordant*\n\n` +
