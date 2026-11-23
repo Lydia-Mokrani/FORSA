@@ -32,50 +32,97 @@ export async function initAuthEventListeners(): Promise<void> {
         const oldPhone = currentUser?.phoneE164 || null;
         const oldTelegramUserId = currentUser?.telegramUserId || null;
 
-        // Transaction atomique Prisma : utilisateur, défi et journal d'audit
-        await prisma.$transaction([
-          // 1. Mise à jour de l'utilisateur (même compte ou nouveau compte Telegram)
-          prisma.user.update({
-            where: { id: challenge.userId },
-            data: {
-              phoneE164: payload.phone,
-              telegramUserId: String(payload.telegramUserId),
-              telegramChatId: String(payload.chatId),
-              telegramBlocked: false,
-            },
-          }),
-          // 2. Défi validé
-          prisma.authChallenge.update({
+        try {
+          // Transaction atomique Prisma : utilisateur, défi et journal d'audit
+          await prisma.$transaction([
+            // 1. Mise à jour de l'utilisateur (même compte ou nouveau compte Telegram)
+            prisma.user.update({
+              where: { id: challenge.userId },
+              data: {
+                phoneE164: payload.phone,
+                telegramUserId: String(payload.telegramUserId),
+                telegramChatId: String(payload.chatId),
+                telegramBlocked: false,
+              },
+            }),
+            // 2. Défi validé
+            prisma.authChallenge.update({
+              where: { id: challenge.id },
+              data: { status: ChallengeStatus.VERIFIED },
+            }),
+            // 3. Journal d'audit
+            prisma.auditLog.create({
+              data: {
+                userId: challenge.userId,
+                action: 'USER_PHONE_CHANGED',
+                metadata: {
+                  oldPhone,
+                  newPhone: payload.phone,
+                  oldTelegramUserId,
+                  newTelegramUserId: String(payload.telegramUserId),
+                  chatId: String(payload.chatId),
+                },
+              },
+            }),
+          ]);
+
+          console.log(
+            `[AuthEventListener] ✅ Numéro mis à jour avec succès pour userId=${challenge.userId} (${oldPhone} -> ${payload.phone})`
+          );
+
+          // Confirmation au bot Telegram
+          await eventBus.publish('telegram.send.message', {
+            chatId: String(payload.chatId),
+            text: `✅ *Votre numéro a été mis à jour avec succès !*\n\nVotre compte FORSA est désormais associé au numéro \`${payload.phone}\`.`,
+          });
+
+          return;
+        } catch (txError: any) {
+          // Détection précise des violations de contraintes uniques (Cas A: Telegram lié, Cas B: Numéro lié)
+          const isUniqueConstraint = txError.code === 'P2002' || txError.message?.includes('Unique constraint');
+          const targetStr = JSON.stringify(txError.meta?.target || txError.message || '');
+          const isTelegramConflict = targetStr.includes('telegram_user_id') || targetStr.includes('telegramUserId');
+
+          const failReason = isTelegramConflict
+            ? 'TELEGRAM_ACCOUNT_ALREADY_LINKED'
+            : (isUniqueConstraint ? 'PHONE_ALREADY_IN_USE' : 'TRANSACTION_ERROR');
+
+          const userMessage = isTelegramConflict
+            ? '❌ *Action refusée :* Ce compte Telegram est déjà lié à un autre compte FORSA.'
+            : '❌ *Action refusée :* Ce numéro de téléphone est déjà associé à un autre compte FORSA.';
+
+          // 1. Le défi de changement de numéro passe au statut FAILED
+          await prisma.authChallenge.update({
             where: { id: challenge.id },
-            data: { status: ChallengeStatus.VERIFIED },
-          }),
-          // 3. Journal d'audit
-          prisma.auditLog.create({
+            data: { status: ChallengeStatus.FAILED },
+          }).catch(() => {});
+
+          // 2. Événement correspondant enregistré dans audit_logs
+          await prisma.auditLog.create({
             data: {
               userId: challenge.userId,
-              action: 'USER_PHONE_CHANGED',
+              action: 'PHONE_CHANGE_FAILED',
               metadata: {
-                oldPhone,
-                newPhone: payload.phone,
-                oldTelegramUserId,
-                newTelegramUserId: String(payload.telegramUserId),
-                chatId: String(payload.chatId),
+                reason: failReason,
+                target: txError.meta?.target || null,
+                attemptedPhone: payload.phone,
+                attemptedTelegramUserId: payload.telegramUserId,
               },
             },
-          }),
-        ]);
+          }).catch(() => {});
 
-        console.log(
-          `[AuthEventListener] ✅ Numéro mis à jour avec succès pour userId=${challenge.userId} (${oldPhone} -> ${payload.phone})`
-        );
+          // 3. Message explicite envoyé via le bot Telegram
+          await eventBus.publish('telegram.send.message', {
+            chatId: String(payload.chatId),
+            text: userMessage,
+          });
 
-        // Confirmation au bot Telegram
-        await eventBus.publish('telegram.send.message', {
-          chatId: String(payload.chatId),
-          text: `✅ *Votre numéro a été mis à jour avec succès !*\n\nVotre compte FORSA est désormais associé au numéro \`${payload.phone}\`.`,
-        });
-
-        return;
+          console.warn(
+            `[AuthEventListener] Conflit de contrainte unique lors du changement de numéro (userId=${challenge.userId}, raison=${failReason}):`,
+            txError.message
+          );
+          return;
+        }
       }
 
       // ─── CAS 2 : CONNEXION / INSCRIPTION / CONFIRMATION ────────────────────
@@ -101,7 +148,7 @@ export async function initAuthEventListeners(): Promise<void> {
         },
       });
 
-      if (process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV === 'development') {
         console.log(`[AuthEventListener] 🔑 Code OTP généré pour ${payload.phone}: ${code}`);
       }
 

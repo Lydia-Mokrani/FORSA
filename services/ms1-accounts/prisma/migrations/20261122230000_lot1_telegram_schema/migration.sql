@@ -131,7 +131,34 @@ DO $$ BEGIN
     SET "phone_e164" = '+213' || SUBSTRING("phone_e164" FROM 2)
     WHERE "phone_e164" ~ '^0[567][0-9]{8}$';
 
-    -- Déduplication sécurisée des numéros de test doublons avant application de la contrainte UNIQUE
+    -- Création préalable de la table audit_logs si nécessaire pour archiver les anciens numéros
+    CREATE TABLE IF NOT EXISTS "audit_logs" (
+        "id" TEXT NOT NULL,
+        "user_id" TEXT,
+        "action" TEXT NOT NULL,
+        "ip_address" TEXT,
+        "user_agent" TEXT,
+        "metadata" JSONB,
+        "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id"),
+        CONSTRAINT "audit_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE
+    );
+
+    -- Déduplication sécurisée : conserver le numéro sur le compte le plus récent,
+    -- passer à NULL sur les doublons antérieurs et tracer l'ancien numéro dans audit_logs
+    WITH duplicates AS (
+        SELECT "id", "phone_e164",
+               ROW_NUMBER() OVER (PARTITION BY "phone_e164" ORDER BY "created_at" DESC) as rn
+        FROM "users"
+        WHERE "phone_e164" IS NOT NULL
+    )
+    INSERT INTO "audit_logs" ("id", "user_id", "action", "metadata", "created_at")
+    SELECT gen_random_uuid()::text, d."id", 'PHONE_DUPLICATE_NULLIFIED',
+           jsonb_build_object('former_phone', d."phone_e164", 'reason', 'deduplication_migration_lot1'),
+           CURRENT_TIMESTAMP
+    FROM duplicates d
+    WHERE d.rn > 1;
+
     WITH duplicates AS (
         SELECT "id", "phone_e164",
                ROW_NUMBER() OVER (PARTITION BY "phone_e164" ORDER BY "created_at" DESC) as rn
@@ -139,7 +166,7 @@ DO $$ BEGIN
         WHERE "phone_e164" IS NOT NULL
     )
     UPDATE "users" u
-    SET "phone_e164" = u."phone_e164" || '_dup' || (d.rn - 1)
+    SET "phone_e164" = NULL
     FROM duplicates d
     WHERE u."id" = d."id" AND d.rn > 1;
 END $$;

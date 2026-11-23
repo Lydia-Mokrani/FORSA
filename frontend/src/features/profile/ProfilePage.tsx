@@ -1,8 +1,14 @@
 // frontend/src/features/profile/ProfilePage.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { UserProfile } from './types';
 import { useLocation } from '../catalogue/context/LocationContext';
+import {
+  startPhoneChange,
+  verifyPhoneChange,
+  getTelegramChallengeStatus,
+} from '../auth/services/authService';
 import {
   defaultAvatar,
   figmaHeaderGear,
@@ -133,36 +139,27 @@ export const ProfilePage: React.FC = () => {
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
-  // Phone OTP & Telegram Flow State
+  // Phone Change 2-Step Telegram Flow State
   const [showPhoneOtpModal, setShowPhoneOtpModal] = useState(false);
+  const [phoneChangeStep, setPhoneChangeStep] = useState<1 | 2 | 3>(1); // 1: OTP Telegram actuel, 2: saisie nouveau numéro, 3: lien Telegram
+  const [phoneChangeChallengeId, setPhoneChangeChallengeId] = useState<string | null>(null);
+  const [phoneChangeStep2Id, setPhoneChangeStep2Id] = useState<string | null>(null);
+  const [phoneChangeDeepLink, setPhoneChangeDeepLink] = useState<string | null>(null);
+  const [newPhoneInput, setNewPhoneInput] = useState('');
   const [modalPhoneInput, setModalPhoneInput] = useState('');
-  const [telegramLink, setTelegramLink] = useState('https://t.me/forsa_auth_bot');
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
-  const [otpSecondsLeft, setOtpSecondsLeft] = useState(300); // 5 minutes
-  const [otpAttemptsLeft, setOtpAttemptsLeft] = useState(5);
-  const [otpError, setOtpError] = useState<string | null>(null);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [telegramSuccess, setTelegramSuccess] = useState(false);
-  const [telegramMismatch, setTelegramMismatch] = useState(false);
-  const [mismatchPhone, setMismatchPhone] = useState('');
-  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [phoneChangeOtp, setPhoneChangeOtp] = useState(['', '', '', '', '', '']);
+  const [phoneChangeSecondsLeft, setPhoneChangeSecondsLeft] = useState(300);
+  const [phoneChangeError, setPhoneChangeError] = useState<string | null>(null);
+  const [phoneChangeLoading, setPhoneChangeLoading] = useState(false);
+  const [phoneChangeSuccess, setPhoneChangeSuccess] = useState(false);
+  const phoneOtpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const phoneChangePollRef = useRef<any>(null);
 
   // Email Change Modal State
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [newEmailInput, setNewEmailInput] = useState('');
   const [emailModalError, setEmailModalError] = useState<string | null>(null);
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
-
-  // Password Modal State (Paramètres — Mot de passe)
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Location Modal State (Zone de recherche)
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -297,71 +294,62 @@ export const ProfilePage: React.FC = () => {
     fetchProfile();
   }, []);
 
-  // OTP Countdown Timer
+  // Timer pour la modale de changement de numéro
   useEffect(() => {
-    if (!showPhoneOtpModal || !otpSent) return;
-    const interval = setInterval(() => {
-      setOtpSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [showPhoneOtpModal, otpSent]);
+    let timer: any = null;
+    if (showPhoneOtpModal && phoneChangeStep === 1 && phoneChangeSecondsLeft > 0) {
+      timer = setInterval(() => {
+        setPhoneChangeSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [showPhoneOtpModal, phoneChangeStep, phoneChangeSecondsLeft]);
 
-  // Polling pour détecter la transmission du code sur Telegram ou un numéro discordant
-  const [telegramCodeSent, setTelegramCodeSent] = useState(false);
-
+  // Polling Étape 3 (Liaison du nouveau Telegram)
   useEffect(() => {
-    if (!showPhoneOtpModal || !otpSent) return;
-    const token =
-      localStorage.getItem('forsa_access_token') ||
-      localStorage.getItem('token') ||
-      localStorage.getItem('forsa_auth_token');
-    if (!token) return;
+    if (!showPhoneOtpModal || phoneChangeStep !== 3 || !phoneChangeStep2Id) return;
 
-    const poll = setInterval(async () => {
+    if (phoneChangePollRef.current) clearInterval(phoneChangePollRef.current);
+
+    phoneChangePollRef.current = setInterval(async () => {
       try {
-        const res = await fetch('/api/users/verify-phone/status', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.telegramVerified || (data.phoneVerified && otpSent)) {
-            setTelegramSuccess(true);
-            const verifiedPhone = data.phone || modalPhoneInput || profile?.phone || null;
-            if (profile) {
-              const updated = { ...profile, phone: verifiedPhone, phoneVerified: true };
-              setProfile(updated);
-              localStorage.setItem('forsa_user', JSON.stringify(updated));
-            }
-            setTimeout(() => {
-              setShowPhoneOtpModal(false);
-              setTelegramSuccess(false);
-              setSaveSuccess('Numéro de téléphone vérifié avec succès via Telegram !');
-              setTimeout(() => setSaveSuccess(null), 4000);
-            }, 1800);
-            return;
+        const res = await getTelegramChallengeStatus(phoneChangeStep2Id);
+        if (res.status === 'VERIFIED') {
+          if (phoneChangePollRef.current) clearInterval(phoneChangePollRef.current);
+          setPhoneChangeSuccess(true);
+
+          if (profile) {
+            const updated = {
+              ...profile,
+              phone: newPhoneInput,
+              phoneVerified: true,
+            };
+            setProfile(updated);
+            setPhone(newPhoneInput);
+            localStorage.setItem('forsa_user', JSON.stringify(updated));
           }
-          if (data.telegramSent) {
-            setTelegramCodeSent(true);
-          }
-          if (data.telegramMismatch) {
-            setTelegramMismatch(true);
-            setMismatchPhone(data.mismatchPhone || '');
-            setOtpError(`Numéro Telegram (${data.mismatchPhone || ''}) non concordant avec le numéro saisi sur FORSA.`);
-          }
+
+          setTimeout(() => {
+            setShowPhoneOtpModal(false);
+            setPhoneChangeSuccess(false);
+            setSaveSuccess('Votre numéro de téléphone a été mis à jour avec succès !');
+            setTimeout(() => setSaveSuccess(null), 4000);
+          }, 1500);
+        } else if (res.status === 'FAILED') {
+          if (phoneChangePollRef.current) clearInterval(phoneChangePollRef.current);
+          setPhoneChangeError('La confirmation Telegram a échoué (contact non concordant ou compte déjà lié).');
         }
       } catch {
-        // silencieux
+        // Ignorer les erreurs réseau temporaires
       }
     }, 2000);
 
-    return () => clearInterval(poll);
-  }, [showPhoneOtpModal, otpSent]);
+    return () => {
+      if (phoneChangePollRef.current) clearInterval(phoneChangePollRef.current);
+    };
+  }, [showPhoneOtpModal, phoneChangeStep, phoneChangeStep2Id, newPhoneInput, profile]);
 
   const formatOtpTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -566,266 +554,109 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
-  // Ouvrir la modale en mode saisie de NOUVEAU numéro
-  const handleOpenChangePhoneModal = () => {
-    setModalPhoneInput('');
-    setOtpSent(false);
-    setOtpError(null);
-    setTelegramMismatch(false);
-    setTelegramSuccess(false);
+  // Ouvrir la modale en 2 étapes pour changer de numéro de téléphone
+  const handleOpenChangePhoneModal = async () => {
+    setPhoneChangeStep(1);
+    setPhoneChangeOtp(['', '', '', '', '', '']);
+    setNewPhoneInput('');
+    setPhoneChangeError(null);
+    setPhoneChangeSuccess(false);
+    setPhoneChangeSecondsLeft(300);
+    setPhoneChangeLoading(true);
     setShowPhoneOtpModal(true);
-  };
-
-  // Lancement du flux de vérification Téléphone (Telegram Bot + SMS)
-  const handleStartPhoneVerification = async () => {
-    const rawTarget = modalPhoneInput.trim() || phone.trim();
-    const targetPhone = extractAlgerianMobile9(rawTarget);
-    if (!targetPhone) {
-      setShowPhoneOtpModal(true);
-      setOtpSent(false);
-      setOtpError('Veuillez renseigner votre numéro de mobile algérien à 9 chiffres.');
-      return;
-    }
-
-    if (!validatePhone(targetPhone)) {
-      setShowPhoneOtpModal(true);
-      setOtpSent(false);
-      setOtpError('Numéro invalide. Il doit commencer par 5, 6 ou 7 et comporter 9 chiffres.');
-      return;
-    }
-
-    if (profile?.phoneVerified && targetPhone === extractAlgerianMobile9(profile?.phone)) {
-      setShowPhoneOtpModal(true);
-      setOtpError('Ce numéro est déjà votre numéro de mobile vérifié.');
-      setOtpSent(false);
-      return;
-    }
-
-    setShowPhoneOtpModal(true);
-    setIsSendingOtp(true);
-    setOtpError(null);
-    setTelegramSuccess(false);
-
-    const token =
-      localStorage.getItem('forsa_access_token') ||
-      localStorage.getItem('token') ||
-      localStorage.getItem('forsa_auth_token');
-    if (!token) return;
 
     try {
-      const res = await fetch('/api/users/verify-phone/request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ phone: targetPhone }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        const errCode = data?.error?.code || data?.code;
-        if (errCode === 'PHONE_ALREADY_VERIFIED') {
-          if (extractAlgerianMobile9(modalPhoneInput) === extractAlgerianMobile9(profile?.phone)) {
-            setOtpError('Ce numéro est déjà votre numéro vérifié.');
-            setOtpSent(false);
-            return;
-          }
-          if (profile) {
-            const updated = { ...profile, phoneVerified: true };
-            setProfile(updated);
-            localStorage.setItem('forsa_user', JSON.stringify(updated));
-          }
-          setShowPhoneOtpModal(false);
-          setSaveSuccess('Ce numéro est déjà vérifié !');
-          return;
-        }
-        if (errCode === 'PHONE_CONFLICT') {
-          throw new Error('Ce numéro de téléphone est déjà associé à un autre compte FORSA.');
-        }
-        throw new Error(data?.error?.message || data?.message || 'Impossible d’envoyer le code.');
-      }
-
-      setOtpSent(true);
-      setOtpDigits(['', '', '', '', '', '']);
-      setOtpSecondsLeft(data.expiresInSeconds || 300);
-      setOtpAttemptsLeft(5);
-      if (data.telegramLink) {
-        setTelegramLink(data.telegramLink);
-      }
+      const data = await startPhoneChange();
+      setPhoneChangeChallengeId(data.challengeId);
     } catch (err: any) {
-      setOtpError(err.message || 'Erreur lors de la demande de vérification.');
+      setPhoneChangeError(err.message || 'Impossible d’envoyer le code de confirmation sur votre Telegram actuel.');
     } finally {
-      setIsSendingOtp(false);
+      setPhoneChangeLoading(false);
     }
   };
 
-  const submitOtpCode = async (codeToVerify: string) => {
-    if (codeToVerify.length !== 6) {
-      setOtpError('Veuillez saisir les 6 chiffres du code.');
-      return;
-    }
-
-    const token =
-      localStorage.getItem('forsa_access_token') ||
-      localStorage.getItem('token') ||
-      localStorage.getItem('forsa_auth_token');
-    if (!token) return;
-
-    setIsVerifyingOtp(true);
-    setOtpError(null);
-    try {
-      const res = await fetch('/api/users/verify-phone/confirm', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ code: codeToVerify }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        const remaining = data?.error?.details?.[0]?.attemptsLeft ?? otpAttemptsLeft - 1;
-        setOtpAttemptsLeft(Math.max(0, remaining));
-        setOtpError(`Code incorrect. Il vous reste ${Math.max(0, remaining)} essai(s).`);
-        return;
-      }
-
-      setTelegramSuccess(true);
-      const verifiedPhone = extractAlgerianMobile9(modalPhoneInput) || profile?.phone || null;
-      if (profile) {
-        const updated = {
-          ...profile,
-          phone: verifiedPhone,
-          phoneVerified: true,
-        };
-        setProfile(updated);
-        if (verifiedPhone) setPhone(verifiedPhone);
-        localStorage.setItem('forsa_user', JSON.stringify(updated));
-      }
-
-      setTimeout(() => {
-        setShowPhoneOtpModal(false);
-        setTelegramSuccess(false);
-        setSaveSuccess('Numéro de téléphone vérifié avec succès !');
-        setTimeout(() => setSaveSuccess(null), 4000);
-      }, 1600);
-    } catch (err: any) {
-      setOtpError(err.message || 'Erreur lors de la validation du code.');
-    } finally {
-      setIsVerifyingOtp(false);
-    }
-  };
-
-  const handleOtpDigitChange = (index: number, val: string) => {
-    if (otpError) setOtpError(null);
+  const handlePhoneChangeOtpChange = (index: number, val: string) => {
+    if (phoneChangeError) setPhoneChangeError(null);
     const cleaned = val.replace(/\D/g, '').slice(-1);
-    const nextDigits = [...otpDigits];
+    const nextDigits = [...phoneChangeOtp];
     nextDigits[index] = cleaned;
-    setOtpDigits(nextDigits);
+    setPhoneChangeOtp(nextDigits);
 
     if (cleaned && index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-soumission dès que les 6 chiffres sont saisis
-    if (cleaned && nextDigits.every((d) => d !== '')) {
-      submitOtpCode(nextDigits.join(''));
+      phoneOtpInputRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpInputRefs.current[index - 1]?.focus();
+  const handlePhoneChangeOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !phoneChangeOtp[index] && index > 0) {
+      phoneOtpInputRefs.current[index - 1]?.focus();
     }
   };
 
-  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handlePhoneChangeOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    if (otpError) setOtpError(null);
+    if (phoneChangeError) setPhoneChangeError(null);
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
     if (!pasted) return;
     const nextDigits = ['', '', '', '', '', ''];
     pasted.split('').forEach((d, i) => {
       if (i < 6) nextDigits[i] = d;
     });
-    setOtpDigits(nextDigits);
+    setPhoneChangeOtp(nextDigits);
     const targetIdx = Math.min(pasted.length, 5);
-    otpInputRefs.current[targetIdx]?.focus();
+    phoneOtpInputRefs.current[targetIdx]?.focus();
+  };
 
-    // Auto-soumission immédiate si 6 chiffres collés
-    if (pasted.length === 6) {
-      submitOtpCode(pasted);
+  // Validation Étape 1 : Passer à la saisie du nouveau numéro
+  const handleConfirmStep1 = () => {
+    const code = phoneChangeOtp.join('');
+    if (code.length !== 6) {
+      setPhoneChangeError('Veuillez saisir les 6 chiffres du code reçu sur Telegram.');
+      return;
     }
+    setPhoneChangeError(null);
+    setPhoneChangeStep(2);
   };
 
-  const handleConfirmOtp = () => {
-    submitOtpCode(otpDigits.join(''));
-  };
-
-  // Change Password
-  const handleChangePassword = async (e: React.FormEvent) => {
+  // Validation Étape 2 : Vérifier le code et le nouveau numéro
+  const handleConfirmStep2 = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPasswordError(null);
-    setPasswordSuccess(false);
+    setPhoneChangeError(null);
 
-    if (!currentPassword) {
-      setPasswordError('Veuillez renseigner votre mot de passe actuel.');
+    const raw = newPhoneInput.replace(/[\s.\-()]/g, '');
+    const match = raw.match(/^(?:\+213|00213|0)?([567]\d{8})$/);
+    if (!match) {
+      setPhoneChangeError('Nouveau numéro de mobile algérien invalide (+213 5/6/7 xx xx xx).');
       return;
     }
 
-    if (newPassword.length < 8) {
-      setPasswordError('Le nouveau mot de passe doit comporter au moins 8 caractères.');
+    const normalizedNewPhone = `+213${match[1]}`;
+    if (normalizedNewPhone === profile?.phone) {
+      setPhoneChangeError('Le nouveau numéro doit être différent de votre numéro actuel.');
       return;
     }
 
-    if (!/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-      setPasswordError('Le mot de passe doit contenir au moins une lettre majuscule et un chiffre.');
+    if (!phoneChangeChallengeId) {
+      setPhoneChangeError('Session expirée. Veuillez recommencer.');
       return;
     }
 
-    if (newPassword !== confirmPassword) {
-      setPasswordError('Les mots de passe ne correspondent pas.');
-      return;
-    }
+    setPhoneChangeLoading(true);
 
-    const token =
-      localStorage.getItem('forsa_access_token') ||
-      localStorage.getItem('token') ||
-      localStorage.getItem('forsa_auth_token');
-    if (!token) return;
-
-    setIsChangingPassword(true);
     try {
-      const res = await fetch('/api/users/me/password', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error?.message || data?.message || 'Mot de passe actuel incorrect.');
-      }
-
-      setPasswordSuccess(true);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => {
-        setPasswordSuccess(false);
-        setShowPasswordModal(false);
-      }, 2000);
+      const code = phoneChangeOtp.join('');
+      const data = await verifyPhoneChange(phoneChangeChallengeId, code, normalizedNewPhone);
+      setPhoneChangeStep2Id(data.step2ChallengeId);
+      setPhoneChangeDeepLink(data.deepLink);
+      setPhoneChangeStep(3);
     } catch (err: any) {
-      setPasswordError(err.message || 'Échec du changement de mot de passe.');
+      if (err.status === 409 || err.code === 'CONFLICT') {
+        setPhoneChangeError('Ce numéro de téléphone est déjà associé à un autre compte FORSA.');
+      } else {
+        setPhoneChangeError(err.message || 'Code de confirmation invalide ou expiré.');
+      }
     } finally {
-      setIsChangingPassword(false);
+      setPhoneChangeLoading(false);
     }
   };
 
@@ -1066,7 +897,7 @@ export const ProfilePage: React.FC = () => {
                   <>
                     <button
                       type="button"
-                      onClick={handleStartPhoneVerification}
+                      onClick={handleOpenChangePhoneModal}
                       className="h-[44px] px-[20px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-[14px] font-semibold rounded-[12px] flex items-center gap-2 transition cursor-pointer"
                     >
                       <img src={figmaSmartPhone} alt="" className="size-[18px] brightness-0 invert" />
@@ -1269,7 +1100,7 @@ export const ProfilePage: React.FC = () => {
                           ) : hasPhone ? (
                             <button
                               type="button"
-                              onClick={handleStartPhoneVerification}
+                              onClick={handleOpenChangePhoneModal}
                               className="bg-[#f7dcd8] hover:bg-[#fad4cf] flex items-center gap-[4px] px-[8px] py-[2px] rounded-full cursor-pointer transition"
                             >
                               <img src={figmaCrossPill} alt="" className="size-[9px] shrink-0" />
@@ -1531,7 +1362,7 @@ export const ProfilePage: React.FC = () => {
                   </div>
                   <div className="flex flex-col gap-px flex-1 min-w-0">
                     <p className="text-[14px] font-semibold text-[#0b2c25]">Sécurité du compte</p>
-                    <p className="text-[11px] font-normal text-[#0b2c25]/70">Mot de passe, appareils</p>
+                    <p className="text-[11px] font-normal text-[#0b2c25]/70">Liaison Telegram, sécurité</p>
                   </div>
                   <img src={figmaChevronRight} alt="" className="size-[16px] shrink-0" />
                 </div>
@@ -1755,10 +1586,7 @@ export const ProfilePage: React.FC = () => {
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
-                            setModalPhoneInput(phone);
-                            handleStartPhoneVerification();
-                          }}
+                          onClick={handleOpenChangePhoneModal}
                           className="text-[12px] font-semibold text-[#17664e] hover:underline cursor-pointer"
                         >
                           Vérifier
@@ -1793,24 +1621,7 @@ export const ProfilePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Champ Mot de passe (797:29416) */}
-                <div className="flex flex-col gap-[6px] w-full">
-                  <label className="text-[12px] font-semibold text-[#0b2c25]">Mot de passe</label>
-                  <div className="w-full h-[48px] bg-[#fffaf0] border-[1.5px] border-[#78847f] rounded-[12px] px-[14px] flex items-center gap-[10px]">
-                    <img src={figmaLockInput} alt="" className="size-[18px] shrink-0" />
-                    <span className="flex-1 text-[14px] font-medium text-[#0b2c25]">••••••••••</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowPasswordModal(true)}
-                      className="text-[12px] font-semibold text-[#17664e] hover:underline shrink-0 cursor-pointer"
-                    >
-                      Changer
-                    </button>
-                  </div>
-                  <p className="text-[11px] font-normal text-[#0b2c25]/70">
-                    Dernière modification il y a 2 mois.
-                  </p>
-                </div>
+
 
                 {/* Pied de formulaire (797:29424) */}
                 <div className="flex items-center justify-end gap-[12px] pt-[16px]">
@@ -1880,26 +1691,7 @@ export const ProfilePage: React.FC = () => {
                   <div className="flex flex-col gap-px flex-1 min-w-0">
                     <p className="text-[14px] font-semibold text-[#0b2c25]">Changer le téléphone</p>
                     <p className="text-[11px] font-normal text-[#0b2c25]/70">
-                      Code via Telegram & SMS
-                    </p>
-                  </div>
-                  <span className="text-[18px] font-semibold text-[#0b2c25]">›</span>
-                </div>
-
-                <div className="w-full h-px bg-[#ebeee1]" />
-
-                {/* Changer le mot de passe */}
-                <div
-                  onClick={() => setShowPasswordModal(true)}
-                  className="flex items-center gap-[12px] py-[12px] w-full cursor-pointer hover:bg-gray-50/60 rounded-[12px] px-1 transition"
-                >
-                  <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
-                    <img src={figmaSecurityLock} alt="" className="size-[20px]" />
-                  </div>
-                  <div className="flex flex-col gap-px flex-1 min-w-0">
-                    <p className="text-[14px] font-semibold text-[#0b2c25]">Changer le mot de passe</p>
-                    <p className="text-[11px] font-normal text-[#0b2c25]/70">
-                      Choisissez un mot de passe fort
+                      Validation sécurisée en 2 étapes via Telegram
                     </p>
                   </div>
                   <span className="text-[18px] font-semibold text-[#0b2c25]">›</span>
@@ -1942,17 +1734,18 @@ export const ProfilePage: React.FC = () => {
         )}
       </div>
 
-      {/* ── MODALE VALIDATION TÉLÉPHONE (CARTE CODE FIGMA 994:58330) ───────── */}
+      {/* ── MODALE CHANGEMENT DE NUMÉRO EN 2 ÉTAPES VIA TELEGRAM ───────────────── */}
       {showPhoneOtpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="w-full max-w-[500px] rounded-[24px] bg-white border border-[#e6ece7] p-8 sm:p-10 shadow-[0px_16px_40px_rgba(0,0,0,0.12)] relative font-poppins flex flex-col items-center gap-[16px]">
-            {/* Bouton Fermer Figma */}
+            {/* Bouton Fermer */}
             <button
               type="button"
               onClick={() => {
                 setShowPhoneOtpModal(false);
-                setTelegramSuccess(false);
-                setTelegramMismatch(false);
+                setPhoneChangeSuccess(false);
+                setPhoneChangeError(null);
+                if (phoneChangePollRef.current) clearInterval(phoneChangePollRef.current);
               }}
               className="absolute top-5 right-5 size-9 rounded-full border border-[#dbf0dd] bg-white hover:bg-[#FAF6ED] flex items-center justify-center text-[#0b2c25] transition shadow-xs cursor-pointer"
               aria-label="Fermer"
@@ -1960,383 +1753,229 @@ export const ProfilePage: React.FC = () => {
               <img src={figmaMultiplicationSign} alt="" className="size-3 text-[#0b2c25]" />
             </button>
 
-            {/* ÉTAT 1 : SUCCÈS VÉRIFIÉ (Auto-synchronisation Telegram ou validation code) */}
-            {telegramSuccess ? (
+            {/* ÉTAT SUCCÈS */}
+            {phoneChangeSuccess ? (
               <div className="flex flex-col items-center justify-center text-center py-4 space-y-3">
                 <div className="size-[80px] rounded-[22px] bg-[#dbf0dd] border border-[#17664e]/20 flex items-center justify-center shadow-xs">
                   <img src={figmaTickVerified} alt="" className="size-9" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-[20px] font-semibold text-[#0b2c25]">Numéro vérifié !</h3>
+                  <h3 className="text-[20px] font-semibold text-[#0b2c25]">Numéro mis à jour !</h3>
                   <p className="text-[13px] font-semibold text-[#17664e]">
-                    ✓ Votre compte est désormais certifié et sécurisé.
+                    ✓ Votre nouveau numéro est validé et lié à votre profil.
                   </p>
                   <p className="text-[12px] text-[#0b2c25]/70 max-w-xs mt-1">
-                    Numéro validé : <strong>+213 {formatAlgerianMobileDisplay(modalPhoneInput || phone || profile?.phone)}</strong>
+                    Nouveau numéro actif : <strong>{newPhoneInput}</strong>
                   </p>
-                </div>
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPhoneOtpModal(false);
-                      setTelegramSuccess(false);
-                    }}
-                    className="bg-[#0b2c25] hover:bg-[#17664e] h-[44px] px-[28px] rounded-[10px] text-[13px] font-semibold text-white transition cursor-pointer shadow-sm"
-                  >
-                    Continuer
-                  </button>
                 </div>
               </div>
             ) : (
               <>
-                {/* Icône Smartphone Figma 994:58331 */}
-                <div className="bg-[#ebeee1] rounded-[22px] size-[80px] flex items-center justify-center shrink-0">
-                  <img src={figmaSmartPhone01} alt="" className="size-[28px]" />
-                </div>
+                {/* ÉTAPE 1 : Code envoyé sur l'ancien Telegram */}
+                {phoneChangeStep === 1 && (
+                  <div className="w-full flex flex-col items-center gap-4 text-center">
+                    <div className="bg-[#ebeee1] rounded-[22px] size-[72px] flex items-center justify-center shrink-0">
+                      <img src={figmaSecurityPhone} alt="" className="size-[28px]" />
+                    </div>
 
-                {/* Titre & Description Figma 994:58333 & 994:58334 */}
-                <div className="flex flex-col items-center text-center gap-1">
-                  <h3 className="text-[20px] font-semibold text-[#0b2c25] leading-tight">
-                    {otpSent ? 'Entrez le code reçu' : 'Vérifiez votre numéro'}
-                  </h3>
-                  <p className="text-[13px] text-[#0b2c25]/70 text-center max-w-[380px] leading-relaxed">
-                    {otpSent
-                      ? `Nous avons envoyé un code à 6 chiffres au +213 ${formatAlgerianMobileDisplay(modalPhoneInput || phone || profile?.phone)}.`
-                      : 'Renseignez votre numéro de mobile algérien pour recevoir le code de sécurité.'}
-                  </p>
-                </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[11px] font-bold text-[#17664E] uppercase tracking-wider">
+                        Étape 1 sur 2 · Sécurité
+                      </span>
+                      <h3 className="text-[20px] font-semibold text-[#0b2c25] leading-tight">
+                        Confirmez votre identité
+                      </h3>
+                      <p className="text-[13px] text-[#0b2c25]/70 max-w-[380px] leading-relaxed">
+                        Un code à 6 chiffres a été envoyé par le bot FORSA sur votre compte Telegram actuel ({profile?.phone || 'associé'}).
+                      </p>
+                    </div>
 
-                {/* Étape 1 : Saisir le numéro si pas encore envoyé */}
-                {!otpSent ? (
-                  <div className="w-full flex flex-col items-center gap-4">
-                    <div className="w-full max-w-[380px] space-y-1.5">
-                      <label className="block text-[12px] font-semibold text-[#0b2c25]">
-                        Numéro de téléphone algérien
+                    {phoneChangeError && (
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-[#fff5f5] border border-[#b22222]/30 text-[#b22222] text-xs font-medium w-full text-left">
+                        <img src={figmaAlertCircle} alt="" className="size-4 shrink-0" />
+                        <span>{phoneChangeError}</span>
+                      </div>
+                    )}
+
+                    {phoneChangeLoading ? (
+                      <div className="py-6 flex flex-col items-center gap-2">
+                        <div className="size-6 border-2 border-[#17664e] border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs text-[#0b2c25]/70">Génération du code de sécurité...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-[10px] items-center justify-center my-1">
+                          {phoneChangeOtp.map((digit, idx) => (
+                            <input
+                              key={idx}
+                              ref={(el) => { phoneOtpInputRefs.current[idx] = el; }}
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={1}
+                              value={digit}
+                              onChange={(e) => handlePhoneChangeOtpChange(idx, e.target.value)}
+                              onKeyDown={(e) => handlePhoneChangeOtpKeyDown(idx, e)}
+                              onPaste={handlePhoneChangeOtpPaste}
+                              className="w-[46px] sm:w-[52px] h-[58px] sm:h-[62px] text-center text-[22px] font-semibold rounded-[14px] border border-black/15 bg-white focus:border-2 focus:border-[#0b2c25] focus:outline-none transition"
+                            />
+                          ))}
+                        </div>
+
+                        <div className="flex items-center justify-center gap-1.5 text-xs text-[#0b2c25]/70">
+                          <img src={figmaClock} alt="" className="size-3.5 opacity-60" />
+                          <span>Code valide pendant : <strong>{formatOtpTimer(phoneChangeSecondsLeft)}</strong></span>
+                        </div>
+
+                        <div className="flex items-center gap-3 pt-2 w-full">
+                          <button
+                            type="button"
+                            onClick={() => setShowPhoneOtpModal(false)}
+                            className="flex-1 h-11 rounded-[12px] border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
+                          >
+                            Annuler
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleConfirmStep1}
+                            disabled={phoneChangeOtp.join('').length !== 6}
+                            className="flex-1 h-11 rounded-[12px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+                          >
+                            Suivant
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ÉTAPE 2 : Saisie du nouveau numéro */}
+                {phoneChangeStep === 2 && (
+                  <form onSubmit={handleConfirmStep2} className="w-full flex flex-col items-center gap-4 text-center">
+                    <div className="bg-[#ebeee1] rounded-[22px] size-[72px] flex items-center justify-center shrink-0">
+                      <img src={figmaSmartPhone01} alt="" className="size-[28px]" />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[11px] font-bold text-[#17664E] uppercase tracking-wider">
+                        Étape 2 sur 2 · Nouveau numéro
+                      </span>
+                      <h3 className="text-[20px] font-semibold text-[#0b2c25] leading-tight">
+                        Votre nouveau mobile
+                      </h3>
+                      <p className="text-[13px] text-[#0b2c25]/70 max-w-[380px] leading-relaxed">
+                        Entrez votre nouveau numéro mobile algérien. Vous le confirmerez ensuite dans Telegram.
+                      </p>
+                    </div>
+
+                    {phoneChangeError && (
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-[#fff5f5] border border-[#b22222]/30 text-[#b22222] text-xs font-medium w-full text-left">
+                        <img src={figmaAlertCircle} alt="" className="size-4 shrink-0" />
+                        <span>{phoneChangeError}</span>
+                      </div>
+                    )}
+
+                    <div className="w-full max-w-[360px] space-y-1.5 text-left">
+                      <label className="block text-xs font-semibold text-[#0b2c25]">
+                        Nouveau numéro de téléphone
                       </label>
-                      <div className={`flex items-center h-12 rounded-[12px] border ${phoneError ? 'border-[#b22222] bg-[#fff5f5]' : 'border-[#dbf0dd] bg-white focus-within:border-[#0b2c25]'} px-3.5 transition`}>
-                        <img src={figmaPhoneInput} alt="" className="size-4 mr-2.5 opacity-80" />
-                        <span className="text-xs font-bold text-[#0b2c25] mr-2 select-none">🇩🇿 +213</span>
+                      <div className="flex items-center h-12 rounded-[12px] border border-[#dbf0dd] bg-white focus-within:border-[#0b2c25] px-3.5 transition">
+                        <img src={figmaPhoneInput} alt="" className="size-4 mr-2 opacity-80" />
+                        <span className="text-xs font-bold text-[#0b2c25] mr-2 select-none">+213</span>
                         <input
                           type="tel"
-                          value={formatAlgerianMobileDisplay(modalPhoneInput)}
+                          required
+                          value={newPhoneInput}
                           onChange={(e) => {
-                            const raw = extractAlgerianMobile9(e.target.value);
-                            setModalPhoneInput(raw);
-                            setPhone(raw);
-                            if (otpError) setOtpError(null);
-                            if (phoneError) setPhoneError(null);
+                            setNewPhoneInput(e.target.value);
+                            if (phoneChangeError) setPhoneChangeError(null);
                           }}
-                          placeholder="6 97 93 76 37"
+                          placeholder="05 / 06 / 07 XX XX XX XX"
                           className="flex-1 h-full text-sm font-semibold text-[#0b2c25] focus:outline-none bg-transparent placeholder:font-normal placeholder:text-gray-400"
                         />
                       </div>
                       <p className="text-[11px] text-[#0b2c25]/60">
-                        9 chiffres commençant par 5, 6 ou 7 (ex : 6 97 93 76 37).
+                        Format mobile algérien valide requis.
                       </p>
                     </div>
 
-                    {otpError && (
-                      <p className="text-xs text-[#b22222] font-semibold text-center">
-                        {otpError}
-                      </p>
-                    )}
-
-                    <div className="flex items-center justify-center gap-[12px] pt-1 w-full">
+                    <div className="flex items-center gap-3 pt-2 w-full">
                       <button
                         type="button"
-                        onClick={() => setShowPhoneOtpModal(false)}
-                        className="border border-black/30 hover:bg-black/5 h-[44px] px-[20px] rounded-[10px] text-[13px] font-semibold text-[#0b2c25]/75 transition cursor-pointer"
+                        onClick={() => setPhoneChangeStep(1)}
+                        className="flex-1 h-11 rounded-[12px] border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
                       >
-                        Annuler
+                        Retour
                       </button>
                       <button
-                        type="button"
-                        onClick={handleStartPhoneVerification}
-                        disabled={isSendingOtp}
-                        className="bg-[#0b2c25] hover:bg-[#17664e] h-[44px] px-[24px] rounded-[10px] text-[13px] font-semibold text-white transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                        type="submit"
+                        disabled={phoneChangeLoading || !newPhoneInput.trim()}
+                        className="flex-1 h-11 rounded-[12px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
                       >
-                        {isSendingOtp ? (
-                          <>
-                            <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Envoi...</span>
-                          </>
-                        ) : (
-                          <span>Recevoir le code</span>
-                        )}
+                        {phoneChangeLoading ? 'Validation...' : 'Continuer vers Telegram'}
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  /* Étape 2 : Saisie du code à 6 chiffres (Figma 994:58335) */
-                  <div className="w-full flex flex-col items-center gap-3">
-                    {/* Alerte Numéro Discordant (Telegram Mismatch) */}
-                    {telegramMismatch && (
-                      <div className="w-full p-3 rounded-[16px] bg-[#fff5f5] border border-[#b22222]/30 text-center space-y-1.5">
-                        <div className="flex items-center justify-center gap-1.5 text-[#b22222] font-bold text-xs">
-                          <img src={figmaAlertCircle} alt="" className="size-4 shrink-0 text-[#b22222]" />
-                          <span>Numéro Telegram non concordant</span>
-                        </div>
-                        <p className="text-[11px] text-[#0b2c25]/80 leading-relaxed">
-                          Votre compte Telegram utilise le numéro <strong className="text-[#b22222]">{mismatchPhone}</strong>, différent du numéro saisi (+213 {formatAlgerianMobileDisplay(modalPhoneInput || phone)}).
-                        </p>
+                  </form>
+                )}
+
+                {/* ÉTAPE 3 : Liaison Telegram avec le nouveau numéro */}
+                {phoneChangeStep === 3 && (
+                  <div className="w-full flex flex-col items-center gap-4 text-center">
+                    <div className="flex flex-col gap-1">
+                      <h3 className="text-[20px] font-semibold text-[#0b2c25] leading-tight">
+                        Confirmez sur votre Telegram
+                      </h3>
+                      <p className="text-[13px] text-[#0b2c25]/70 max-w-[380px] leading-relaxed">
+                        Ouvrez le lien ci-dessous ou scannez le QR code avec le compte Telegram associé à votre nouveau numéro.
+                      </p>
+                    </div>
+
+                    {phoneChangeError && (
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-[#fff5f5] border border-[#b22222]/30 text-[#b22222] text-xs font-medium w-full text-left">
+                        <img src={figmaAlertCircle} alt="" className="size-4 shrink-0" />
+                        <span>{phoneChangeError}</span>
                       </div>
                     )}
 
-                    {/* 6 Cases de code (Figma Frame 994:58335 : 56x64px, rounded 14px, font 24px) */}
-                    <div className="flex gap-[10px] sm:gap-[12px] items-center justify-center my-1" data-name="Code">
-                      {otpDigits.map((digit, idx) => (
-                        <input
-                          key={idx}
-                          ref={(el) => {
-                            otpInputRefs.current[idx] = el;
-                          }}
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={1}
-                          value={digit}
-                          disabled={otpSecondsLeft === 0 || isVerifyingOtp}
-                          onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
-                          onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                          onPaste={handleOtpPaste}
-                          className={`w-[48px] sm:w-[56px] h-[60px] sm:h-[64px] text-center text-[24px] font-semibold rounded-[14px] border transition focus:outline-none ${
-                            otpError
-                              ? 'border-2 border-[#b22222] bg-[#fff5f5] text-[#b22222]'
-                              : digit
-                                ? 'bg-[#ebeee1] border-black/10 text-[#0b2c25]'
-                                : 'bg-white border-black/15 focus:border-2 focus:border-[#0b2c25] text-[#0b2c25]'
-                          }`}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Message d'erreur OTP */}
-                    {otpError && (
-                      <p className="text-xs text-[#b22222] font-semibold text-center animate-shake">
-                        {otpError}
-                      </p>
-                    )}
-
-                    {/* Minuteur Figma 994:58346 avec icône clock-01 */}
-                    <div className="flex items-center justify-center gap-[6px] text-[13px] text-[#0b2c25]/70">
-                      <img src={figmaClock} alt="" className="size-[14px] shrink-0" />
-                      {otpSecondsLeft > 0 ? (
-                        <span>
-                          Renvoyer le code dans <strong className="font-semibold text-[#0b2c25]">{formatOtpTimer(otpSecondsLeft)}</strong>
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleStartPhoneVerification}
-                          className="text-[#17664e] font-semibold hover:underline cursor-pointer"
-                        >
-                          Renvoyer un nouveau code
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Boutons d'actions Figma 994:58349 (Annuler + Vérifier mon numéro) */}
-                    <div className="flex items-center justify-center gap-[12px] pt-2 w-full">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOtpSent(false);
-                          setOtpError(null);
-                          setTelegramMismatch(false);
-                        }}
-                        className="border border-black/30 hover:bg-black/5 h-[44px] px-[20px] rounded-[10px] text-[13px] font-semibold text-[#0b2c25]/75 transition cursor-pointer"
-                      >
-                        Changer de numéro
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleConfirmOtp}
-                        disabled={isVerifyingOtp || otpSecondsLeft === 0}
-                        className="bg-[#0b2c25] hover:bg-[#17664e] h-[44px] px-[24px] rounded-[10px] text-[13px] font-semibold text-white transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {isVerifyingOtp ? (
-                          <>
-                            <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Vérification...</span>
-                          </>
-                        ) : (
-                          <span>Vérifier mon numéro</span>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Option Telegram intégrée en toute élégance (discrète et épurée) */}
-                    <div className="flex flex-col items-center gap-1 pt-2 mt-1 border-t border-[#f0f3eb] w-full">
+                    {phoneChangeDeepLink && (
                       <a
-                        href={telegramLink}
+                        href={phoneChangeDeepLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#f4f7f2] hover:bg-[#e7eee4] border border-[#dbf0dd] text-[12px] font-medium text-[#0b2c25] transition cursor-pointer"
+                        className="w-full h-11 bg-[#229ED9] hover:bg-[#1E88BE] text-white text-xs font-semibold rounded-[12px] flex items-center justify-center gap-2 shadow-sm transition"
                       >
-                        <svg className="size-3.5 fill-[#229ED9]" viewBox="0 0 24 24">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z" />
-                        </svg>
-                        <span>Valider aussi via le bot Telegram <strong>@forsa_auth_bot</strong></span>
+                        <span>Ouvrir dans Telegram</span>
                       </a>
-                      <span className="text-[11px] text-[#0b2c25]/50">Validation automatique en direct dès réception</span>
+                    )}
+
+                    {phoneChangeDeepLink && (
+                      <div className="bg-white/90 p-3 rounded-2xl border border-black/10 shadow-sm flex flex-col items-center gap-1.5">
+                        <QRCodeSVG value={phoneChangeDeepLink} size={140} level="M" />
+                        <span className="text-[11px] text-[#0b2c25]/60">Scannez pour valider la liaison</span>
+                      </div>
+                    )}
+
+                    <div className="inline-flex items-center gap-2 text-xs font-medium text-[#0b2c25]/80 bg-[#f4f7f2] px-3.5 py-1.5 rounded-full border border-[#dbf0dd]">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#17664E] opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#17664E]" />
+                      </span>
+                      <span>En attente de partage de contact dans Telegram...</span>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPhoneOtpModal(false);
+                        if (phoneChangePollRef.current) clearInterval(phoneChangePollRef.current);
+                      }}
+                      className="text-xs text-gray-500 hover:text-gray-800 hover:underline pt-1"
+                    >
+                      Fermer
+                    </button>
                   </div>
                 )}
               </>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ── MODALE CHANGER L'E-MAIL ────────────────────────────────────────── */}
-      {showEmailModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-[24px] bg-white p-7 shadow-2xl relative">
-            <button
-              type="button"
-              onClick={() => setShowEmailModal(false)}
-              className="absolute top-5 right-5 size-9 rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-black/5 flex items-center justify-center text-[#0b2c25] transition"
-              aria-label="Fermer"
-            >
-              <img src={figmaMultiplicationSign} alt="" className="size-3 text-[#0b2c25]" />
-            </button>
-
-            <div className="flex flex-col items-center text-center mb-6">
-              <div className="size-12 rounded-full bg-[#FAF6ED] text-[#0B2C25] flex items-center justify-center mb-3">
-                <img src={figmaMail} alt="" className="size-6" />
-              </div>
-              <h3 className="text-lg font-bold text-[#0B2C25]">Modifier l'adresse e-mail</h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Un lien de vérification sera automatiquement envoyé à la nouvelle adresse pour la valider.
-              </p>
-            </div>
-
-            <form onSubmit={handleSaveNewEmail} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-[#0B2C25]">Nouvel e-mail</label>
-                <input
-                  type="email"
-                  value={newEmailInput}
-                  onChange={(e) => {
-                    setNewEmailInput(e.target.value);
-                    if (emailModalError) setEmailModalError(null);
-                  }}
-                  className="w-full h-12 px-4 rounded-[12px] border border-[#78847F] text-sm focus:outline-none focus:border-[#17664E]"
-                  required
-                />
-                {emailModalError && (
-                  <p className="text-xs text-[#B22222] font-semibold">{emailModalError}</p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowEmailModal(false)}
-                  className="flex-1 h-11 rounded-[12px] border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdatingEmail}
-                  className="flex-1 h-11 rounded-[12px] bg-[#0B2C25] hover:bg-[#17664E] text-white text-xs font-bold transition shadow-sm cursor-pointer"
-                >
-                  {isUpdatingEmail ? 'Mise à jour...' : 'Confirmer'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODALE CHANGER LE MOT DE PASSE ─────────────────────────────────── */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-[24px] bg-white p-7 shadow-2xl relative">
-            <button
-              type="button"
-              onClick={() => setShowPasswordModal(false)}
-              className="absolute top-5 right-5 size-9 rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-black/5 flex items-center justify-center text-[#0b2c25] transition"
-              aria-label="Fermer"
-            >
-              <img src={figmaMultiplicationSign} alt="" className="size-3 text-[#0b2c25]" />
-            </button>
-
-            <div className="flex flex-col items-center text-center mb-6">
-              <div className="size-12 rounded-full bg-[#FAF6ED] text-[#0B2C25] flex items-center justify-center mb-3">
-                <img src={figmaShield} alt="" className="size-6" />
-              </div>
-              <h3 className="text-lg font-bold text-[#0B2C25]">Modifier le mot de passe</h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Choisissez un mot de passe robuste d'au moins 8 caractères.
-              </p>
-            </div>
-
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-[#0B2C25]">Mot de passe actuel</label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full h-11 px-4 rounded-[12px] border border-[#78847F] text-sm focus:outline-none focus:border-[#17664E]"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-[#0B2C25]">Nouveau mot de passe</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full h-11 px-4 rounded-[12px] border border-[#78847F] text-sm focus:outline-none focus:border-[#17664E]"
-                  required
-                />
-                <p className="text-[10px] text-gray-400">
-                  Au moins 8 caractères, 1 lettre majuscule et 1 chiffre.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-[#0B2C25]">Confirmer le mot de passe</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full h-11 px-4 rounded-[12px] border border-[#78847F] text-sm focus:outline-none focus:border-[#17664E]"
-                  required
-                />
-              </div>
-
-              {passwordError && (
-                <p className="text-xs text-[#B22222] font-semibold">{passwordError}</p>
-              )}
-
-              {passwordSuccess && (
-                <p className="text-xs text-emerald-700 font-semibold">
-                  Mot de passe modifié avec succès !
-                </p>
-              )}
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  className="flex-1 h-11 rounded-[12px] border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={isChangingPassword}
-                  className="flex-1 h-11 rounded-[12px] bg-[#0B2C25] hover:bg-[#17664E] text-white text-xs font-bold transition shadow-sm"
-                >
-                  {isChangingPassword ? 'Enregistrement...' : 'Enregistrer'}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

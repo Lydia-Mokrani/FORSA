@@ -46,7 +46,7 @@ export const config = {
 
   // Telegram OTP Bot
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
+  telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'forsa_auth_bot',
 
   // Répertoire de stockage des avatars
   avatarDir: process.env.AVATAR_DIR || path.join(__dirname, '..', '..', 'uploads', 'avatars'),

@@ -336,6 +336,126 @@ describe('Lot 2B — Bot Telegram, Changement de numéro, Profil & Horaires Bout
         })
       ).resolves.not.toThrow();
     });
+
+    it('Cas A — doit marquer FAILED, avertir et logger en audit si telegramUserId est déjà lié à un autre compte', async () => {
+      await initAuthEventListeners();
+
+      const p2002Error: any = new Error('Unique constraint failed on the fields: (`telegram_user_id`)');
+      p2002Error.code = 'P2002';
+      p2002Error.meta = { target: ['users_telegram_user_id_key'] };
+
+      (prisma.$transaction as jest.Mock).mockRejectedValueOnce(p2002Error);
+
+      const challengeId = 'chal-tg-conflict';
+      const userId = 'user-test-tg-conflict';
+
+      (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
+        id: challengeId,
+        userId,
+        purpose: ChallengePurpose.CHANGE_PHONE,
+        phone: '+213666001122',
+        status: ChallengeStatus.PENDING,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        user: { id: userId, phoneE164: '+213555000000' },
+      });
+
+      await eventBus.publish('telegram.contact.received', {
+        challengeId,
+        phone: '+213666001122',
+        telegramUserId: 'already-linked-tg-id',
+        chatId: 'chat-conflict-1',
+      });
+
+      // Le défi doit passer au statut FAILED
+      expect(prisma.authChallenge.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: challengeId },
+          data: { status: ChallengeStatus.FAILED },
+        })
+      );
+
+      // Audit log de l'échec
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId,
+            action: 'PHONE_CHANGE_FAILED',
+            metadata: expect.objectContaining({
+              reason: 'TELEGRAM_ACCOUNT_ALREADY_LINKED',
+            }),
+          }),
+        })
+      );
+
+      // Message d'erreur explicite envoyé via Telegram
+      expect(eventBus.publish).toHaveBeenCalledWith(
+        'telegram.send.message',
+        expect.objectContaining({
+          chatId: 'chat-conflict-1',
+          text: expect.stringContaining('Ce compte Telegram est déjà lié à un autre compte FORSA'),
+        })
+      );
+    });
+
+    it('Cas B — doit marquer FAILED, avertir et logger en audit si le nouveau numéro est déjà utilisé par un autre compte', async () => {
+      await initAuthEventListeners();
+
+      const p2002Error: any = new Error('Unique constraint failed on the fields: (`phone_e164`)');
+      p2002Error.code = 'P2002';
+      p2002Error.meta = { target: ['users_phone_e164_key'] };
+
+      (prisma.$transaction as jest.Mock).mockRejectedValueOnce(p2002Error);
+
+      const challengeId = 'chal-phone-conflict';
+      const userId = 'user-test-phone-conflict';
+
+      (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
+        id: challengeId,
+        userId,
+        purpose: ChallengePurpose.CHANGE_PHONE,
+        phone: '+213666001122',
+        status: ChallengeStatus.PENDING,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        user: { id: userId, phoneE164: '+213555000000' },
+      });
+
+      await eventBus.publish('telegram.contact.received', {
+        challengeId,
+        phone: '+213666001122',
+        telegramUserId: 'tg-phone-conflict',
+        chatId: 'chat-conflict-2',
+      });
+
+      // Le défi doit passer au statut FAILED
+      expect(prisma.authChallenge.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: challengeId },
+          data: { status: ChallengeStatus.FAILED },
+        })
+      );
+
+      // Audit log de l'échec
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId,
+            action: 'PHONE_CHANGE_FAILED',
+            metadata: expect.objectContaining({
+              reason: 'PHONE_ALREADY_IN_USE',
+            }),
+          }),
+        })
+      );
+
+      // Message d'erreur explicite envoyé via Telegram
+      expect(eventBus.publish).toHaveBeenCalledWith(
+        'telegram.send.message',
+        expect.objectContaining({
+          chatId: 'chat-conflict-2',
+          text: expect.stringContaining('Ce numéro de téléphone est déjà associé à un autre compte FORSA'),
+        })
+      );
+    });
   });
 
   // ─── 4. BOT BLOQUÉ PAR L'UTILISATEUR ──────────────────────────────────────────

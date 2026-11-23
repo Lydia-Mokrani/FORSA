@@ -1,196 +1,353 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, AlertTriangle } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import loginBg from '../../assets/login-bg.png';
-import googleSvg from '../../assets/icons/google.svg';
-import appleSvg from '../../assets/icons/apple.svg';
-import inputMailIcon from '../../assets/icons/input-mail.svg';
-import inputLockIcon from '../../assets/icons/input-lock.svg';
-import inputEyeIcon from '../../assets/icons/input-eye.svg';
 import arrowRightIcon from '../../assets/icons/arrow-right.svg';
+import arrowLeftIcon from '../../assets/icons/arrow-left.svg';
 import badgeRoleIcon from '../../assets/icons/badge-role-icon.svg';
 import infoCircleIcon from '../../assets/icons/information-circle.svg';
 import checkmarkIcon from '../../assets/icons/checkmark-circle-02.svg';
+import inputPhoneIcon from '../../assets/icons/input-phone.svg';
+import figmaAlertCircle from '../../assets/icons/figma/icone-alert-circle.svg';
+import figmaClock from '../../assets/icons/figma/icone-clock-01.svg';
+import figmaRefresh from '../../assets/icons/figma/icone-refresh.svg';
+import figmaSmartPhone from '../../assets/icons/figma/icone-smart-phone-01.svg';
 
-declare global {
-  interface Window {
-    google?: any;
-  }
-}
+import {
+  startTelegramAuth,
+  getTelegramChallengeStatus,
+  verifyTelegramAuth,
+  getPostLoginRedirect,
+  AuthUser,
+} from './services/authService';
+
+type Step = 'PHONE' | 'WAITING_TELEGRAM' | 'VERIFY_OTP' | 'LOCKED';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const initialRole = searchParams.get('role') === 'merchant' ? 'MERCHANT' : 'CUSTOMER';
-  const initialState = searchParams.get('state');
-
   const [role, setRole] = useState<'CUSTOMER' | 'MERCHANT'>(initialRole);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+
+  // Étape du flux
+  const [step, setStep] = useState<Step>('PHONE');
+
+  // Champs & États
+  const [phoneInput, setPhoneInput] = useState('');
+  const [normalizedPhone, setNormalizedPhone] = useState('');
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [deepLink, setDeepLink] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<Date | null>(null);
+
+  // OTP 6 chiffres
+  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Timers & polling
+  const [waitingCountdown, setWaitingCountdown] = useState<number>(600); // 10 min
+  const [otpCountdown, setOtpCountdown] = useState<number>(300); // 5 min
+  const [resendCooldown, setResendCooldown] = useState<number>(60); // 60s
+  const pollingRef = useRef<any>(null);
+
+  // Feedback UI
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isSuspended, setIsSuspended] = useState(false);
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
 
   useEffect(() => {
     if (searchParams.get('role') === 'merchant') setRole('MERCHANT');
     if (searchParams.get('role') === 'client') setRole('CUSTOMER');
+  }, [searchParams]);
 
-    if (initialState === 'error') {
-      setErrorMessage('Adresse e-mail ou mot de passe incorrect. Veuillez réessayer.');
-      setIsSuspended(false);
-      setIsSuccess(false);
-    } else if (initialState === 'suspended') {
-      setIsSuspended(true);
-      setErrorMessage(null);
-      setIsSuccess(false);
-    } else if (initialState === 'success') {
-      setIsSuccess(true);
+  // Nettoyage au démontage
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  // Timer 10 min pour l'étape WAITING_TELEGRAM
+  useEffect(() => {
+    let timer: any = null;
+    if (step === 'WAITING_TELEGRAM' && waitingCountdown > 0) {
+      timer = setInterval(() => {
+        setWaitingCountdown((prev) => {
+          if (prev <= 1) {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            setErrorMessage('Le délai de confirmation Telegram de 10 minutes a expiré. Veuillez réessayer.');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
-  }, [searchParams, initialState]);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [step, waitingCountdown]);
 
-  const handleGoogleCredentialResponse = async (response: any) => {
-    if (!response?.credential) return;
-    setLoading(true);
+  // Timer 5 min pour l'étape VERIFY_OTP + Cooldown renvoi 60s
+  useEffect(() => {
+    let timer: any = null;
+    let resendTimer: any = null;
+
+    if (step === 'VERIFY_OTP') {
+      if (otpCountdown > 0) {
+        timer = setInterval(() => {
+          setOtpCountdown((prev) => {
+            if (prev <= 1) {
+              setErrorMessage('Le code de vérification a expiré.');
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
+
+      if (resendCooldown > 0) {
+        resendTimer = setInterval(() => {
+          setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+      }
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+      if (resendTimer) clearInterval(resendTimer);
+    };
+  }, [step, otpCountdown, resendCooldown]);
+
+  const toggleRole = () => {
+    setRole((prev) => (prev === 'CUSTOMER' ? 'MERCHANT' : 'CUSTOMER'));
+    setErrorMessage(null);
+  };
+
+  /**
+   * Validation & normalisation téléphone algérien mobile
+   */
+  const validateAndNormalizePhone = (input: string): string | null => {
+    const raw = input.replace(/[\s.\-()]/g, '');
+    const match = raw.match(/^(?:\+213|00213|0)?([567]\d{8})$/);
+    if (!match) return null;
+    return `+213${match[1]}`;
+  };
+
+  /**
+   * Étape 1 : Envoi du numéro et initiation Telegram
+   */
+  const handleStartTelegram = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setErrorMessage(null);
 
+    const normalized = validateAndNormalizePhone(phoneInput);
+    if (!normalized) {
+      setErrorMessage('Numéro de mobile algérien invalide. Ex : 05 XX XX XX XX, 06 XX... ou 07 XX...');
+      return;
+    }
+
+    setNormalizedPhone(normalized);
+    setLoading(true);
+
     try {
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idToken: response.credential,
-          role: role === 'MERCHANT' ? 'MERCHANT' : 'CUSTOMER',
-        }),
-      });
+      const data = await startTelegramAuth(normalized);
+      setChallengeId(data.challengeId);
+      setDeepLink(data.deepLink);
+      setExpiresAt(new Date(data.expiresAt));
 
-      const data = await res.json();
+      // Passer à l'étape d'attente Telegram
+      setStep('WAITING_TELEGRAM');
+      setWaitingCountdown(600); // 10 min
+      setErrorMessage(null);
 
-      if (res.status === 200 || res.status === 201) {
-        handleLoginSuccess(data);
-      } else if (res.status === 409) {
-        setErrorMessage(data.message || 'Un compte existe déjà avec cette adresse Google. Connectez-vous avec votre mot de passe.');
-      } else {
-        throw new Error(data?.error?.message || data?.message || 'Échec de connexion avec Google.');
-      }
+      // Lancer le polling sur challenges/:id toutes les 2s
+      startPollingChallenge(data.challengeId);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erreur lors de la connexion Google.');
+      if (err.status === 429) {
+        const mins = Math.ceil((err.retryAfter || 60) / 60);
+        setErrorMessage(`Trop de demandes. Veuillez patienter ${mins} minute(s) avant de réessayer.`);
+      } else {
+        setErrorMessage(err.message || 'Impossible de contacter le serveur. Vérifiez votre connexion.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '847323556063-cs5ali0pf79u63amoqv6rg7g57r2g74q.apps.googleusercontent.com';
-    const initGoogle = () => {
-      if (typeof window !== 'undefined' && window.google?.accounts?.id) {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: handleGoogleCredentialResponse,
-        });
-        const container = document.getElementById('google-hidden-btn');
-        if (container) {
-          window.google.accounts.id.renderButton(container, {
-            theme: 'outline',
-            size: 'large',
-          });
+  /**
+   * Polling statut du défi toutes les 2s
+   */
+  const startPollingChallenge = (cId: string) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await getTelegramChallengeStatus(cId);
+
+        if (res.status === 'FAILED') {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setErrorMessage('La vérification Telegram a échoué. Le contact n’a pas pu être validé.');
+          setStep('PHONE');
+        } else if (res.status === 'EXPIRED') {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setErrorMessage('Le lien Telegram a expiré. Veuillez relancer la connexion.');
+          setStep('PHONE');
+        } else if (res.codeSent || res.status === 'VERIFIED') {
+          // Contact validé dans Telegram -> passage immédiat à la saisie du code OTP
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setStep('VERIFY_OTP');
+          setOtpCountdown(300); // 5 min
+          setResendCooldown(60);
+          setErrorMessage(null);
+          // Focus 1er input
+          setTimeout(() => otpRefs.current[0]?.focus(), 150);
         }
-        return true;
+      } catch {
+        // En cas d'erreur réseau temporaire, continuer le polling
       }
-      return false;
-    };
-
-    if (!initGoogle()) {
-      const interval = setInterval(() => {
-        if (initGoogle()) clearInterval(interval);
-      }, 400);
-      return () => clearInterval(interval);
-    }
-  }, [role]);
-
-  const toggleRole = () => {
-    const nextRole = role === 'CUSTOMER' ? 'MERCHANT' : 'CUSTOMER';
-    setRole(nextRole);
-    setErrorMessage(null);
-    setIsSuspended(false);
+    }, 2000);
   };
 
-  const handleLoginSuccess = (data: any) => {
-    setIsSuccess(true);
-    setErrorMessage(null);
-    setIsSuspended(false);
+  /**
+   * Gestion de la saisie OTP à 6 chiffres
+   */
+  const handleOtpChange = (index: number, value: string) => {
+    // Si l'utilisateur colle une chaîne (ex: 6 chiffres)
+    if (value.length > 1) {
+      const clean = value.replace(/\D/g, '').slice(0, 6);
+      if (clean.length > 0) {
+        const newOtp = [...otp];
+        clean.split('').forEach((digit, i) => {
+          if (i < 6) newOtp[i] = digit;
+        });
+        setOtp(newOtp);
+        const nextIndex = Math.min(clean.length, 5);
+        otpRefs.current[nextIndex]?.focus();
 
-    if (data.accessToken) {
-      localStorage.setItem('forsa_access_token', data.accessToken);
-      if (data.refreshToken) {
-        localStorage.setItem('forsa_refresh_token', data.refreshToken);
+        if (clean.length === 6) {
+          submitOtp(clean);
+        }
       }
-      localStorage.setItem('forsa_user', JSON.stringify(data.user));
+      return;
     }
 
-    setTimeout(() => {
-      if (data.user?.role === 'MERCHANT' || role === 'MERCHANT') {
-        navigate('/merchant/dashboard');
-      } else {
-        navigate('/');
+    const digit = value.replace(/\D/g, '');
+    const newOtp = [...otp];
+    newOtp[index] = digit;
+    setOtp(newOtp);
+
+    // Auto-focus vers la case suivante si un chiffre est saisi
+    if (digit && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+
+    // Soumission automatique si les 6 cases sont remplies
+    if (digit && index === 5) {
+      const fullCode = newOtp.join('');
+      if (fullCode.length === 6) {
+        submitOtp(fullCode);
       }
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  /**
+   * Étape 3 : Soumission du code de vérification
+   */
+  const submitOtp = async (codeToSubmit?: string) => {
+    const code = codeToSubmit || otp.join('');
+    if (code.length !== 6) {
+      setErrorMessage('Veuillez saisir l’intégralité des 6 chiffres du code.');
+      return;
+    }
+
+    if (!challengeId) {
+      setErrorMessage('Session expirée. Veuillez recommencer.');
+      setStep('PHONE');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const data = await verifyTelegramAuth(challengeId, code);
+
+      // Vérification statut du compte
+      if (data.user?.status === 'SUSPENDED') {
+        navigate('/account/suspended');
+        return;
+      }
+
+      handleAuthSuccess(data.user);
+    } catch (err: any) {
+      // Nettoyage de l'OTP pour nouvelle saisie
+      setOtp(['', '', '', '', '', '']);
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+
+      if (err.status === 403 || err.code === 'FORBIDDEN') {
+        navigate('/account/suspended');
+        return;
+      }
+
+      if (err.status === 429) {
+        setErrorMessage('Trop de demandes. Réessayez dans quelques minutes.');
+        return;
+      }
+
+      if (err.attemptsLeft !== undefined && err.attemptsLeft <= 0) {
+        setStep('LOCKED');
+        setErrorMessage('Trop de tentatives incorrectes. Le défi a été verrouillé.');
+        return;
+      }
+
+      if (err.attemptsLeft !== undefined) {
+        setAttemptsLeft(err.attemptsLeft);
+        setErrorMessage(`Code incorrect. Il vous reste ${err.attemptsLeft} essai(s).`);
+        return;
+      }
+
+      setErrorMessage(err.message || 'Code de vérification incorrect ou expiré.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Renvoi d'un nouveau code / relance
+   */
+  const handleResendCode = async () => {
+    if (resendCooldown > 0 || loading) return;
+    setOtp(['', '', '', '', '', '']);
+    setErrorMessage(null);
+    setAttemptsLeft(null);
+    await handleStartTelegram();
+  };
+
+  /**
+   * Succès de connexion & redirection
+   */
+  const handleAuthSuccess = (user: AuthUser) => {
+    setIsSuccess(true);
+    setErrorMessage(null);
+
+    const redirectPath = getPostLoginRedirect(user, role);
+
+    setTimeout(() => {
+      navigate(redirectPath, { replace: true });
     }, 1200);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setIsSuspended(false);
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 403 || data?.error?.code === 'FORBIDDEN') {
-          setIsSuspended(true);
-          return;
-        }
-        throw new Error(data?.error?.message || 'Adresse e-mail ou mot de passe incorrect. Veuillez réessayer.');
-      }
-
-      handleLoginSuccess(data);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Adresse e-mail ou mot de passe incorrect. Veuillez réessayer.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSocialLogin = (provider: 'Google' | 'Apple') => {
-    setErrorMessage(null);
-    if (provider === 'Apple') {
-      setErrorMessage('La connexion avec Apple nécessite un compte Apple Developer payant (99$/an). Pour votre démonstration, utilisez la connexion avec Google ou vos identifiants.');
-      return;
-    }
-    if (provider === 'Google') {
-      // 1. Tenter le clic direct sur le bouton Google officiel
-      const googleBtn = document.querySelector('#google-hidden-btn div[role="button"]') as HTMLElement;
-      if (googleBtn) {
-        googleBtn.click();
-        return;
-      }
-      // 2. Si non prêt, appeler prompt()
-      if (window.google?.accounts?.id) {
-        window.google.accounts.id.prompt();
-        return;
-      }
-      setErrorMessage('Initialisation du service Google en cours... Réessayez dans un instant.');
-    }
+  const formatTimer = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   };
 
   return (
@@ -201,7 +358,7 @@ export const LoginPage: React.FC = () => {
         <div className="absolute inset-0 bg-[#FFFAF0]/28" />
       </div>
 
-      {/* En-tête Figma 1030:23481 */}
+      {/* En-tête Figma */}
       <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-4">
         <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
           FORSA
@@ -211,7 +368,7 @@ export const LoginPage: React.FC = () => {
         </span>
       </header>
 
-      {/* 07 · Connexion réussie · Modal overlay */}
+      {/* Modal overlay de succès */}
       {isSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white rounded-3xl p-8 flex flex-col items-center text-center gap-4 shadow-2xl border border-emerald-500/30">
@@ -220,199 +377,332 @@ export const LoginPage: React.FC = () => {
             </div>
             <h2 className="text-2xl font-bold text-[#0B2C25]">Connexion réussie !</h2>
             <p className="text-sm text-[#0B2C25]/75">
-              Ravi de vous revoir sur FORSA. Redirection en cours...
+              Bienvenue sur FORSA. Redirection en cours...
             </p>
           </div>
         </div>
       )}
 
-      {/* Carte Glassmorphism fidèle à 100% au design Figma 1030:23484 */}
-      <main className="relative z-10 backdrop-blur-[20px] bg-white/40 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[22px] my-auto max-w-[520px] w-full">
-        
-        {/* Pastille rôle : Espace client / Espace commerçant · Changer (Figma 1030:23486) */}
-        <div className="flex items-center justify-start w-full">
-          <button
-            type="button"
-            onClick={toggleRole}
-            className="group inline-flex items-center gap-2 bg-white/65 hover:bg-white/85 border border-[#0B2C25]/20 h-[38px] px-3.5 rounded-full transition shadow-sm cursor-pointer"
-          >
-            <img src={badgeRoleIcon} alt="Rôle" className="w-4 h-4 shrink-0" />
-            <span className="text-[13px] font-semibold text-[#0B2C25]">
-              {role === 'CUSTOMER' ? 'Espace client' : 'Espace commerçant'}
-            </span>
-            <span className="text-[#0B2C25]/40 text-[13px]">·</span>
-            <span className="text-[13px] font-semibold text-[#17664E] group-hover:underline">
-              Changer
-            </span>
-          </button>
-        </div>
-
-        {/* Titres et sous-titres (Figma 1030:23487 pour client / 1030:23508 pour commerçant) */}
-        <div className="text-center flex flex-col gap-2 w-full">
-          <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[34px] leading-tight">
-            {role === 'CUSTOMER' ? 'Bon retour !' : 'Espace commerçant'}
-          </h1>
-          <p className="font-normal text-[15px] text-[#0B2C25]/65 leading-normal">
-            {role === 'CUSTOMER'
-              ? 'Connectez-vous pour retrouver les offres près de chez vous'
-              : 'Gérez vos offres et vos réservations'}
-          </p>
-        </div>
-
-        {/* 05 · Message d'erreur : Identifiants incorrects (Figma 1030:23527) */}
-        {errorMessage && (
-          <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3.5 rounded-2xl">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* 06 · Message d'alerte : Compte suspendu (Figma 1030:23549) */}
-        {isSuspended && (
-          <div className="flex items-start gap-3 bg-[#D96B43]/15 border border-[#D96B43]/30 text-[#8C3A1A] text-xs sm:text-[13px] p-3.5 rounded-2xl">
-            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-[#D96B43]" />
-            <div className="flex flex-col gap-0.5">
-              <span className="font-semibold text-[#8C3A1A]">Compte suspendu</span>
-              <span>Votre compte a été suspendu suite à des signalements répétés. Contactez le support FORSA pour plus d’informations.</span>
-            </div>
-          </div>
-        )}
-
-        {/* Formulaire de connexion Figma 1030:23490 */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-[14px] w-full">
-          {/* Champ Email ou Téléphone */}
-          <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
-            <img src={inputMailIcon} alt="Email" className="size-5 shrink-0 opacity-60" />
-            <input
-              type="text"
-              required
-              placeholder="Adresse e-mail ou n° de téléphone"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"
-            />
-          </div>
-
-          {/* Champ Mot de passe avec icône Figma */}
-          <div className="relative bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
-            <img src={inputLockIcon} alt="Lock" className="size-5 shrink-0 opacity-60" />
-            <input
-              type={showPassword ? 'text' : 'password'}
-              required
-              placeholder="Mot de passe"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none pr-8"
-            />
+      {/* Carte Glassmorphism */}
+      <main className="relative z-10 backdrop-blur-[20px] bg-white/40 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[20px] my-auto max-w-[520px] w-full">
+        {/* Toggle Rôle (uniquement à l'étape initiale) */}
+        {step === 'PHONE' && (
+          <div className="flex items-center justify-start w-full">
             <button
               type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 text-[#0B2C25]/50 hover:text-[#0B2C25] transition cursor-pointer"
-              aria-label={showPassword ? 'Masquer' : 'Afficher'}
+              onClick={toggleRole}
+              className="group inline-flex items-center gap-2 bg-white/65 hover:bg-white/85 border border-[#0B2C25]/20 h-[38px] px-3.5 rounded-full transition shadow-sm cursor-pointer"
             >
-              <img src={inputEyeIcon} alt="Toggle visibility" className="size-5 opacity-60" />
-            </button>
-          </div>
-
-          {/* Options : Se souvenir de moi & Mot de passe oublié (Figma 1030:23493) */}
-          <div className="flex items-center justify-between w-full pt-1">
-            <label className="flex items-center gap-2.5 cursor-pointer text-[14px] text-[#0B2C25]/85 select-none">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="size-[20px] rounded-[6px] border-[1.2px] border-[#0B2C25]/50 bg-white/75 text-[#0B2C25] focus:ring-0 cursor-pointer"
-              />
-              <span>Se souvenir de moi</span>
-            </label>
-
-            <Link
-              to="/forgot-password"
-              className="text-[#17664E] font-medium text-[13px] hover:underline"
-            >
-              Mot de passe oublié ?
-            </Link>
-          </div>
-
-          {/* Bouton CTA Principal Figma 1030:23496 */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[17px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-md transition mt-2 cursor-pointer active:scale-[0.99]"
-          >
-            {loading ? (
-              <span>Connexion en cours...</span>
-            ) : (
-              <>
-                <span>Se connecter</span>
-                <img src={arrowRightIcon} alt="" className="w-5 h-5" />
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Section Sociale (Client uniquement - Figma 1030:23479) OU Information (Commerçant - Figma 1030:23505) */}
-        {role === 'CUSTOMER' ? (
-          <>
-            <div className="flex items-center gap-3 my-0.5">
-              <div className="flex-1 h-px bg-[#0B2C25]/15" />
-              <span className="text-[11px] text-[#0B2C25]/50 uppercase tracking-wider font-semibold">
-                OU
+              <img src={badgeRoleIcon} alt="Rôle" className="w-4 h-4 shrink-0" />
+              <span className="text-[13px] font-semibold text-[#0B2C25]">
+                {role === 'CUSTOMER' ? 'Espace client' : 'Espace commerçant'}
               </span>
-              <div className="flex-1 h-px bg-[#0B2C25]/15" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 w-full">
-              <button
-                type="button"
-                onClick={() => handleSocialLogin('Google')}
-                className="h-[52px] bg-white/60 hover:bg-white/85 border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-[14px] font-medium text-[#0B2C25] transition shadow-sm cursor-pointer"
-              >
-                <img src={googleSvg} alt="Google" className="size-5 shrink-0" />
-                <span>Google</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSocialLogin('Apple')}
-                className="h-[52px] bg-white/60 hover:bg-white/85 border border-[#0B2C25]/18 rounded-[16px] flex items-center justify-center gap-2.5 text-[14px] font-medium text-[#0B2C25] transition shadow-sm cursor-pointer"
-              >
-                <img src={appleSvg} alt="Apple" className="size-5 shrink-0" />
-                <span>Apple</span>
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="flex items-start gap-2.5 bg-white/40 border border-[#0B2C25]/15 rounded-[16px] p-3.5 text-xs text-[#0B2C25]/75">
-            <img src={infoCircleIcon} alt="" className="w-4 h-4 shrink-0 mt-0.5 opacity-80" />
-            <span>Votre compte doit être approuvé par l’équipe FORSA avant de publier des offres.</span>
+              <span className="text-[#0B2C25]/40 text-[13px]">·</span>
+              <span className="text-[13px] font-semibold text-[#17664E] group-hover:underline">
+                Changer
+              </span>
+            </button>
           </div>
         )}
 
-        {/* Elément conteneur invisible pour Google Identity Services */}
-        <div id="google-hidden-btn" className="hidden" aria-hidden="true" />
+        {/* ─── ÉTAPE 1 : Saisie Téléphone ───────────────────────────────────── */}
+        {step === 'PHONE' && (
+          <>
+            <div className="text-center flex flex-col gap-2 w-full">
+              <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[34px] leading-tight">
+                {role === 'CUSTOMER' ? 'Bon retour !' : 'Espace commerçant'}
+              </h1>
+              <p className="font-normal text-[15px] text-[#0B2C25]/65 leading-normal">
+                {role === 'CUSTOMER'
+                  ? 'Connectez-vous avec votre numéro mobile pour retrouver vos offres'
+                  : 'Gérez vos offres et vos réservations'}
+              </p>
+            </div>
 
-        {/* Lien de redirection vers l'inscription */}
-        <p className="text-center text-[14px] text-[#0B2C25]/75 pt-1">
-          {role === 'CUSTOMER' ? (
-            <>
-              Pas encore de compte ?{' '}
-              <Link to="/register?role=client" className="font-semibold text-[#17664E] hover:underline">
-                Créer un compte
-              </Link>
-            </>
-          ) : (
-            <>
-              Nouveau commerçant ?{' '}
-              <Link to="/register?role=merchant" className="font-semibold text-[#17664E] hover:underline">
-                Créer un compte professionnel
-              </Link>
-            </>
-          )}
-        </p>
+            {/* Message d'erreur */}
+            {errorMessage && (
+              <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3.5 rounded-2xl">
+                <img src={figmaAlertCircle} alt="" className="w-5 h-5 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleStartTelegram} className="flex flex-col gap-4 w-full">
+              <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[56px] px-[18px] flex items-center gap-3 transition">
+                <img src={inputPhoneIcon} alt="" className="size-5 shrink-0 opacity-60" />
+                <span className="text-sm font-semibold text-[#0B2C25]/80 select-none">+213</span>
+                <span className="text-[#0B2C25]/30">|</span>
+                <input
+                  type="tel"
+                  required
+                  placeholder="05 / 06 / 07 XX XX XX XX"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none font-medium"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-[56px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[17px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-md transition mt-2 cursor-pointer active:scale-[0.99] disabled:opacity-60"
+              >
+                {loading ? (
+                  <span>Initialisation...</span>
+                ) : (
+                  <>
+                    <span>Continuer avec Telegram</span>
+                    <img src={arrowRightIcon} alt="" className="w-5 h-5" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {role === 'MERCHANT' && (
+              <div className="flex items-start gap-2.5 bg-white/40 border border-[#0B2C25]/15 rounded-[16px] p-3.5 text-xs text-[#0B2C25]/75">
+                <img src={infoCircleIcon} alt="" className="w-4 h-4 shrink-0 mt-0.5 opacity-80" />
+                <span>L’accès commerçant requiert une boutique enregistrée et approuvée par l’équipe FORSA.</span>
+              </div>
+            )}
+
+            <p className="text-center text-[14px] text-[#0B2C25]/75 pt-1">
+              {role === 'CUSTOMER' ? (
+                <>
+                  Pas encore de compte ?{' '}
+                  <Link to="/register?role=client" className="font-semibold text-[#17664E] hover:underline">
+                    Créer un compte
+                  </Link>
+                </>
+              ) : (
+                <>
+                  Nouveau commerçant ?{' '}
+                  <Link to="/register?role=merchant" className="font-semibold text-[#17664E] hover:underline">
+                    Créer un compte professionnel
+                  </Link>
+                </>
+              )}
+            </p>
+          </>
+        )}
+
+        {/* ─── ÉTAPE 2 : Ouvrir Telegram & QR Code ─────────────────────────── */}
+        {step === 'WAITING_TELEGRAM' && (
+          <div className="flex flex-col items-center text-center gap-5 w-full">
+            <div className="flex items-center justify-between w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  if (pollingRef.current) clearInterval(pollingRef.current);
+                  setStep('PHONE');
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B2C25]/70 hover:text-[#0B2C25] transition cursor-pointer"
+              >
+                <img src={arrowLeftIcon} alt="" className="w-4 h-4" />
+                <span>Modifier le numéro</span>
+              </button>
+              <span className="text-xs font-medium text-[#17664E] bg-[#17664E]/10 px-2.5 py-1 rounded-full">
+                {normalizedPhone}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <h2 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
+                Ouvrez Telegram
+              </h2>
+              <p className="text-xs sm:text-[14px] text-[#0B2C25]/70 max-w-sm mx-auto">
+                Confirmez votre numéro avec le bot FORSA pour recevoir votre code à 6 chiffres.
+              </p>
+            </div>
+
+            {/* Message d'erreur */}
+            {errorMessage && (
+              <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3 rounded-2xl w-full text-left">
+                <img src={figmaAlertCircle} alt="" className="w-5 h-5 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* Bouton direct ouvrir Telegram */}
+            {deepLink && (
+              <a
+                href={deepLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full h-[54px] bg-[#229ED9] hover:bg-[#1E88BE] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-md transition cursor-pointer"
+              >
+                <img src={figmaSmartPhone} alt="" className="w-5 h-5 invert" />
+                <span>Ouvrir dans Telegram</span>
+              </a>
+            )}
+
+            {/* QR Code pour desktop */}
+            {deepLink && (
+              <div className="bg-white/80 p-4 rounded-[20px] border border-[#0B2C25]/15 shadow-sm flex flex-col items-center gap-2">
+                <QRCodeSVG value={deepLink} size={150} level="M" />
+                <span className="text-[11px] text-[#0B2C25]/60">
+                  Ou scannez avec votre smartphone
+                </span>
+              </div>
+            )}
+
+            {/* Indicateur de polling & compte à rebours */}
+            <div className="flex flex-col items-center gap-2 pt-1 w-full">
+              <div className="inline-flex items-center gap-2 text-xs font-medium text-[#0B2C25]/80 bg-white/50 px-3.5 py-1.5 rounded-full border border-[#0B2C25]/10">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#17664E] opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#17664E]" />
+                </span>
+                <span>En attente de votre confirmation dans Telegram...</span>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs text-[#0B2C25]/60">
+                <img src={figmaClock} alt="" className="w-3.5 h-3.5 opacity-60" />
+                <span>Temps restant : {formatTimer(waitingCountdown)}</span>
+              </div>
+            </div>
+
+            {waitingCountdown === 0 && (
+              <button
+                type="button"
+                onClick={() => handleStartTelegram()}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#17664E] hover:underline cursor-pointer"
+              >
+                <img src={figmaRefresh} alt="" className="w-3.5 h-3.5" />
+                <span>Générer un nouveau lien</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ─── ÉTAPE 3 : Saisie Code OTP ──────────────────────────────────── */}
+        {step === 'VERIFY_OTP' && (
+          <div className="flex flex-col items-center text-center gap-5 w-full">
+            <div className="flex items-center justify-between w-full">
+              <button
+                type="button"
+                onClick={() => setStep('PHONE')}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B2C25]/70 hover:text-[#0B2C25] transition cursor-pointer"
+              >
+                <img src={arrowLeftIcon} alt="" className="w-4 h-4" />
+                <span>Changer de numéro</span>
+              </button>
+              <span className="text-xs font-medium text-[#17664E] bg-[#17664E]/10 px-2.5 py-1 rounded-full">
+                {normalizedPhone}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <h2 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
+                Code de vérification
+              </h2>
+              <p className="text-xs sm:text-[14px] text-[#0B2C25]/70 max-w-sm mx-auto">
+                Entrez le code à 6 chiffres envoyé par le bot FORSA sur Telegram
+              </p>
+            </div>
+
+            {/* Message d'erreur */}
+            {errorMessage && (
+              <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3 rounded-2xl w-full text-left">
+                <img src={figmaAlertCircle} alt="" className="w-5 h-5 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* 6 cases OTP */}
+            <div className="flex justify-center gap-2 sm:gap-3 w-full my-2">
+              {otp.map((digit, idx) => (
+                <input
+                  key={idx}
+                  ref={(el) => {
+                    otpRefs.current[idx] = el;
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                  className="w-11 sm:w-13 h-14 sm:h-16 text-center text-2xl font-bold bg-white/70 border-[1.5px] border-[#0B2C25]/25 focus:border-[#17664E] focus:bg-white rounded-2xl text-[#0B2C25] shadow-sm focus:outline-none transition"
+                />
+              ))}
+            </div>
+
+            {/* Compte à rebours & Renvoi */}
+            <div className="flex flex-col items-center gap-2 w-full text-xs text-[#0B2C25]/70">
+              <div className="flex items-center gap-1.5">
+                <img src={figmaClock} alt="" className="w-3.5 h-3.5 opacity-60" />
+                <span>Le code expire dans : <strong className="text-[#0B2C25]">{formatTimer(otpCountdown)}</strong></span>
+              </div>
+
+              <div className="pt-1">
+                {resendCooldown > 0 ? (
+                  <span className="text-[#0B2C25]/50">
+                    Renvoyer un code ({resendCooldown}s)
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    disabled={loading}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#17664E] hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    <img src={figmaRefresh} alt="" className="w-3.5 h-3.5" />
+                    <span>Renvoyer un code</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={loading || otp.join('').length !== 6}
+              onClick={() => submitOtp()}
+              className="w-full h-[54px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            >
+              {loading ? (
+                <span>Vérification...</span>
+              ) : (
+                <>
+                  <span>Valider le code</span>
+                  <img src={arrowRightIcon} alt="" className="w-5 h-5" />
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* ─── ÉTAPE 4 : Compte verrouillé (Trop de tentatives) ─────────────── */}
+        {step === 'LOCKED' && (
+          <div className="flex flex-col items-center text-center gap-5 w-full">
+            <div className="w-16 h-16 rounded-full bg-[#B22222]/10 border border-[#B22222]/20 flex items-center justify-center">
+              <img src={figmaAlertCircle} alt="" className="w-8 h-8 text-[#B22222]" />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <h2 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
+                Tentatives épuisées
+              </h2>
+              <p className="text-xs sm:text-[14px] text-[#0B2C25]/75 max-w-sm mx-auto">
+                Par mesure de sécurité, ce défi a été annulé après 5 codes erronés. Veuillez recommencer depuis le début.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOtp(['', '', '', '', '', '']);
+                setStep('PHONE');
+                setErrorMessage(null);
+                setAttemptsLeft(null);
+              }}
+              className="w-full h-[52px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
+            >
+              <span>Recommencer</span>
+            </button>
+          </div>
+        )}
       </main>
 
-      {/* Spacer pour l'alignement vertical exact */}
       <div className="relative z-10 w-full max-w-6xl h-8" />
     </div>
   );

@@ -288,7 +288,7 @@ export class UserController {
         challengeId: challenge.id,
       }).catch((e) => console.warn('[EventBus] Erreur publish telegram.send.otp:', e.message));
 
-      if (process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV === 'development') {
         console.log(`[ChangePhoneDev] 🔑 Code confirmation étape 1 pour ${user.phoneE164}: ${code}`);
       }
 

@@ -24,15 +24,14 @@ import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
 // Profil & Compte MS1 (Sections B, C, D)
 import { ProfilePage } from './features/profile';
 
-// Suite Complète Authentification MS1 (Design Figma - 19 Écrans)
+// Suite Authentification Telegram & Profil MS1
 import {
   WelcomePage,
   RoleChoicePage,
   LoginPage,
   RegisterPage,
-  EmailVerificationPage,
-  VerifyPhonePage,
-  ForgotPasswordPage,
+  MerchantStatusPage,
+  AccountSuspendedPage,
 } from './features/auth';
 
 export const App: React.FC = () => {
@@ -91,15 +90,13 @@ export const App: React.FC = () => {
             <Route path="/profile" element={<ProfilePage />} />
           </Route>
 
-          {/* AUTHENTICATION SUITE MS1 (19 Écrans Figma) */}
+          {/* AUTHENTICATION SUITE MS1 (Telegram-first) */}
           <Route path="/welcome" element={<WelcomePage />} />
           <Route path="/role-select" element={<RoleChoicePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/verify-email" element={<EmailVerificationPage />} />
-          <Route path="/verify-phone" element={<VerifyPhonePage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ForgotPasswordPage />} />
+          <Route path="/merchant/status" element={<MerchantStatusPage />} />
+          <Route path="/account/suspended" element={<AccountSuspendedPage />} />
 
           {/* FALLBACK */}
           <Route path="*" element={<Navigate to="/" replace />} />

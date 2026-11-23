@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { prisma } from '../config/prisma';
+import { config } from '../config/env';
 import { ChallengePurpose, ChallengeStatus } from '@prisma/client';
 import { normalizeToE164, isValidE164Algerian } from '../utils/phone';
 import { ApiError, BadRequestError, NotFoundError } from '@forsa/common';
@@ -64,9 +65,10 @@ export async function createAuthChallenge(
     },
   });
 
-  const deepLink = `https://t.me/forsa_auth_bot?start=${nonce}`;
+  const botUsername = config.telegramBotUsername || 'forsa_auth_bot';
+  const deepLink = `https://t.me/${botUsername}?start=${nonce}`;
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV === 'development') {
     console.log(`[ChallengeDev] 🛡️ Nouveau défi créé pour ${phone} (ID: ${challenge.id})`);
     console.log(`[ChallengeDev] 🔗 DeepLink Telegram: ${deepLink}`);
   }

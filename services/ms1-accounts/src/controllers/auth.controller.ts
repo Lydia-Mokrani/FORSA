@@ -32,6 +32,7 @@ const startSchema = z.object({
 const verifySchema = z.object({
   challengeId: z.string().uuid('ID de défi invalide'),
   code: z.string().regex(/^\d{6}$/, 'Le code doit contenir exactement 6 chiffres'),
+  role: z.enum(['CUSTOMER', 'MERCHANT']).optional(),
 });
 
 const refreshSchema = z.object({
@@ -130,6 +131,8 @@ export class AuthController {
 
       let isNewUser = false;
 
+      const requestedRole = parsed.data.role === 'MERCHANT' ? Role.MERCHANT : Role.CUSTOMER;
+
       if (user) {
         // Réactivation si désactivé (spec §7)
         if (user.status === 'DEACTIVATED') {
@@ -141,14 +144,28 @@ export class AuthController {
         } else if (user.status === 'SUSPENDED' || user.status === 'DELETED') {
           throw new ForbiddenError('Ce compte a été suspendu ou supprimé.');
         }
+
+        // Si le rôle commerçant est demandé et pas encore présent
+        if (requestedRole === Role.MERCHANT && !user.roles.includes(Role.MERCHANT)) {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              roles: { set: [...user.roles, Role.MERCHANT] },
+            },
+            include: { shop: true, preferences: true },
+          });
+        }
       } else {
         isNewUser = true;
-        // Création du compte utilisateur avec rôle CUSTOMER par défaut
+        const initialRoles = requestedRole === Role.MERCHANT ? [Role.CUSTOMER, Role.MERCHANT] : [Role.CUSTOMER];
+        const initialMode = requestedRole === Role.MERCHANT ? 'merchant' : 'customer';
+
+        // Création du compte utilisateur
         user = await prisma.user.create({
           data: {
             phoneE164,
-            roles: [Role.CUSTOMER],
-            activeMode: 'customer',
+            roles: initialRoles,
+            activeMode: initialMode,
             status: 'ACTIVE',
             preferences: {
               create: {
