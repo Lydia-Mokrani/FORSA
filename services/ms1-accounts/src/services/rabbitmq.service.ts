@@ -27,7 +27,7 @@ export async function initRabbitMQ(): Promise<void> {
         const shop = await prisma.shop.update({
           where: whereClause,
           data: {
-            status: 'SUSPENDED',
+            verificationStatus: 'SUSPENDED',
             suspensionReason: payload.reason || 'Suspendu suite à des signalements répétés',
           },
           include: { user: true },
@@ -73,7 +73,7 @@ export async function initRabbitMQ(): Promise<void> {
         const shop = await prisma.shop.update({
           where: whereClause,
           data: {
-            status: 'APPROVED',
+            verificationStatus: 'APPROVED',
           },
           include: { user: true },
         });
@@ -117,7 +117,7 @@ export async function initRabbitMQ(): Promise<void> {
 
         const shop = await prisma.shop.update({
           where: whereClause,
-          data: { status: 'APPROVED', suspensionReason: null },
+          data: { verificationStatus: 'APPROVED', suspensionReason: null },
           include: { user: true },
         });
 
@@ -161,7 +161,7 @@ export async function initRabbitMQ(): Promise<void> {
         const shop = await prisma.shop.update({
           where: whereClause,
           data: {
-            status: 'REJECTED',
+            verificationStatus: 'REJECTED',
             suspensionReason: payload.reason || 'Dossier rejeté par la modération',
           },
         });

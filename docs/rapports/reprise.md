@@ -14,10 +14,12 @@
 * **Fichiers `.env`** :
   * La variable `DATABASE_URL` et `DATABASE_URL_UNPOOLED` doivent impérativement être chargées depuis le fichier local `.env` (qui pointe vers `neondb_lot1_test`).
   * Les secrets ne sont jamais commités dans le dépôt.
-* **Commande pour exécuter les migrations sur la base de test (unpooled)** :
-  ```powershell
-  npx prisma migrate resolve --applied "20261122230000_lot1_telegram_schema" --schema="services/ms1-accounts/prisma/schema.prisma"
-  ```
+* **Commandes de migration Prisma (unpooled)** :
+  * Pour exécuter réellement les scripts SQL de migration en attente :
+    ```powershell
+    npx prisma migrate deploy --schema="services/ms1-accounts/prisma/schema.prisma"
+    ```
+  * Note : `prisma migrate resolve --applied <migration>` ne lance pas le SQL, il sert uniquement à marquer une migration déjà exécutée manuellement comme appliquée dans la table `_prisma_migrations`.
 * **Commande pour démarrer le microservice MS1 en local (sur la base de test)** :
   ```powershell
   npm run dev:ms1

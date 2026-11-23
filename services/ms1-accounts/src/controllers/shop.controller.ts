@@ -41,7 +41,7 @@ export class ShopController {
       const userId = req.user?.sub;
       if (!userId) throw new UnauthorizedError();
 
-      if (req.user?.role !== 'MERCHANT') {
+      if (!req.user?.roles?.includes('MERCHANT' as any) && req.user?.role !== 'MERCHANT') {
         throw new ForbiddenError('Seuls les utilisateurs avec le profil COMMERÇANT peuvent enregistrer une boutique.');
       }
 
@@ -55,11 +55,13 @@ export class ShopController {
         throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
       }
 
+      const { openingHours, ...shopData } = parsed.data as any;
+
       const shop = await prisma.shop.create({
         data: {
-          ...parsed.data,
+          ...shopData,
           userId,
-          status: 'PENDING',
+          verificationStatus: 'PENDING',
         },
       });
 
@@ -73,7 +75,7 @@ export class ShopController {
         latitude: shop.latitude,
         longitude: shop.longitude,
         phone: shop.phone,
-        status: shop.status,
+        status: shop.verificationStatus,
       }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.created warning:', err.message));
 
       res.status(201).json({ shop });
@@ -129,13 +131,15 @@ export class ShopController {
         throw new NotFoundError('Boutique non trouvée.');
       }
 
+      const { openingHours, ...shopData } = parsed.data as any;
+
       const updated = await prisma.shop.update({
         where: { id: shop.id },
-        data: parsed.data,
+        data: shopData,
       });
 
       // Émission de l'événement shop.updated sur RabbitMQ pour MS2 (ShopSnapshot)
-      const mappedStatus = updated.status === 'APPROVED' ? 'ACTIVE' : (updated.status === 'PENDING' ? 'CLOSED' : updated.status);
+      const mappedStatus = updated.verificationStatus === 'APPROVED' ? 'ACTIVE' : (updated.verificationStatus === 'PENDING' ? 'CLOSED' : updated.verificationStatus);
       await rabbitMQ.publish('shop.updated', {
         shopId: updated.id,
         merchantId: updated.userId,
@@ -146,7 +150,7 @@ export class ShopController {
         longitude: updated.longitude,
         phone: updated.phone,
         status: mappedStatus,
-        shopStatus: updated.status,
+        shopStatus: updated.verificationStatus,
       }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.updated warning:', err.message));
 
       res.json({ shop: updated });
@@ -168,9 +172,8 @@ export class ShopController {
           latitude: true,
           longitude: true,
           phone: true,
-          openingHours: true,
           logoUrl: true,
-          status: true,
+          verificationStatus: true,
           createdAt: true,
         },
       });
@@ -311,7 +314,7 @@ export class ShopController {
       const updated = await prisma.shop.update({
         where: { id },
         data: {
-          status: status as any,
+          verificationStatus: status as any,
           suspensionReason: status === 'SUSPENDED' ? (reason || 'Suspendu par l\'administrateur') : null,
         },
         include: { user: true },
@@ -331,13 +334,13 @@ export class ShopController {
       }
 
       // 1. Émission de l'événement shop.status_changed pour MS2 (mappé en ACTIVE / SUSPENDED / CLOSED pour l'enum ShopStatus de MS2)
-      const mappedStatus = updated.status === 'APPROVED' ? 'ACTIVE' : (updated.status === 'PENDING' ? 'CLOSED' : updated.status);
+      const mappedStatus = updated.verificationStatus === 'APPROVED' ? 'ACTIVE' : (updated.verificationStatus === 'PENDING' ? 'CLOSED' : updated.verificationStatus);
       await rabbitMQ.publish('shop.status_changed', {
         shopId: updated.id,
         merchantId: updated.userId,
         userId: updated.userId,
         status: mappedStatus,
-        shopStatus: updated.status,
+        shopStatus: updated.verificationStatus,
         reason: updated.suspensionReason || undefined,
       }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish shop.status_changed warning:', err.message));
 
@@ -350,7 +353,7 @@ export class ShopController {
           decidedAt: new Date().toISOString(),
         }).catch((err) => console.warn('[MS1-Shop] RabbitMQ publish merchant.approved warning:', err.message));
 
-        if (existingShop.status === 'SUSPENDED') {
+        if (existingShop.verificationStatus === 'SUSPENDED') {
           await rabbitMQ.publish('merchant.reactivated', {
             merchantId: updated.userId,
             shopId: updated.id,

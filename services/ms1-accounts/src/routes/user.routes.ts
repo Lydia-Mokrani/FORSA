@@ -9,19 +9,13 @@ export const userRouter = Router();
 // Profil
 userRouter.get('/me', authenticate, UserController.getMe);
 userRouter.put('/me', authenticate, UserController.updateMe);
-userRouter.put('/me/password', authenticate, UserController.changePassword);
 userRouter.post('/me/switch-mode', authenticate, UserController.switchMode);
 
 // Avatar
 userRouter.post('/me/avatar', authenticate, handleAvatarUpload, UserController.uploadAvatar);
 userRouter.delete('/me/avatar', authenticate, UserController.deleteAvatar);
 
-// Vérification téléphone
-userRouter.post('/verify-phone/request', authenticate, UserController.requestPhoneOtp);
-userRouter.post('/verify-phone/confirm', authenticate, UserController.confirmPhoneOtp);
-userRouter.get('/verify-phone/status', authenticate, UserController.getPhoneStatus);
-
-// Comptes sociaux liés
+// Comptes sociaux liés (conservé en interne)
 userRouter.get('/me/social', authenticate, SocialController.list);
 userRouter.post('/me/social/google', authenticate, SocialController.linkGoogle);
 userRouter.delete('/me/social/:provider', authenticate, SocialController.unlink);

@@ -125,16 +125,16 @@ export class SocialController {
 
       // 4. Si un rôle est fourni, créer le compte immédiatement
       if (role && ['CUSTOMER', 'MERCHANT'].includes(role)) {
+        const assignedRole = role === 'MERCHANT' ? 'MERCHANT' : 'CLIENT';
         let newUser: any;
         if (await isPostgresAlive()) {
           newUser = await prisma.user.create({
             data: {
               email,
               fullName,
-              role,
+              roles: [assignedRole as any],
+              activeMode: assignedRole as any,
               avatarUrl,
-              emailVerified: true,
-              phoneVerified: false,
               socialAccounts: {
                 create: {
                   provider: 'GOOGLE',
@@ -149,10 +149,10 @@ export class SocialController {
             id: `usr_${Date.now()}`,
             email,
             fullName,
-            role,
+            roles: [assignedRole],
+            activeMode: assignedRole,
             avatarUrl,
-            emailVerified: true,
-            phoneVerified: false,
+            socialAccounts: [{ provider: 'GOOGLE', providerUserId: googleId }],
             status: 'ACTIVE',
             createdAt: new Date(),
           };
@@ -166,12 +166,10 @@ export class SocialController {
             id: newUser.id,
             email: newUser.email,
             fullName: newUser.fullName,
-            phone: newUser.phone ?? null,
-            role: newUser.role,
+            phone: newUser.phoneE164 ?? null,
+            roles: newUser.roles,
+            activeMode: newUser.activeMode,
             avatarUrl: newUser.avatarUrl,
-            emailVerified: newUser.emailVerified,
-            phoneVerified: newUser.phoneVerified,
-            needsPhone: true,
           },
         });
       }
@@ -296,14 +294,14 @@ export class SocialController {
         const hasSocialToRemove = user.socialAccounts.some(
           (a) => a.provider === provider,
         );
-        const hasPassword = !!user.passwordHash;
+        const hasPhone = !!user.phoneE164;
         const otherSocials = user.socialAccounts.filter((a) => a.provider !== provider);
 
-        if (hasSocialToRemove && !hasPassword && otherSocials.length === 0) {
+        if (hasSocialToRemove && !hasPhone && otherSocials.length === 0) {
           throw new ApiError(
             403,
             'LAST_LOGIN_METHOD',
-            'Vous ne pouvez pas supprimer votre dernier moyen de connexion. Ajoutez un mot de passe d\'abord.',
+            'Vous ne pouvez pas supprimer votre dernier moyen de connexion.',
           );
         }
 

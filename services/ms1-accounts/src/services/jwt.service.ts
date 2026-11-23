@@ -6,19 +6,19 @@ import { config } from '../config/env';
 
 export interface TokenPayload {
   sub: string;                      // ID utilisateur (userId)
-  email: string;
-  role: 'CUSTOMER' | 'MERCHANT' | 'ADMIN';
-  fullName: string;
-  emailVerified: boolean;
-  phoneVerified?: boolean;
-  
-  // Identifiant de la boutique et du commerçant (aligné avec MS2)
-  shopId?: string | null;           // UUID de la boutique
-  merchantId?: string | null;       // ID utilisateur du commerçant (= sub / userId, attendu par MS2)
-
-  // Statut d'approbation boutique / commerçant (aligné avec MS2)
+  roles: ('CUSTOMER' | 'MERCHANT' | 'ADMIN')[];
+  mode: string;                     // 'customer' | 'merchant'
   shopStatus?: string | null;
-  merchantStatus?: string | null;   // 'PENDING' | 'APPROVED' | 'SUSPENDED' (attendu par MS2)
+  // Champs optionnels et rétro-compatibilité
+  role?: 'CUSTOMER' | 'MERCHANT' | 'ADMIN';
+  email?: string | null;
+  phone?: string | null;
+  fullName?: string | null;
+  shopId?: string | null;
+  merchantId?: string | null;
+  merchantStatus?: string | null;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
 }
 
 class JwtService {
@@ -116,8 +116,22 @@ class JwtService {
     return jwt.verify(token, this.publicKey, {
       algorithms: ['RS256'],
       issuer: 'forsa-ms1-accounts',
-      ignoreExpiration: true, // Session permanente : aucune expiration automatique
     }) as TokenPayload;
+  }
+
+  /**
+   * Comparaison sécurisée à temps constant de deux chaînes hexadécimales (hashes)
+   */
+  public constantTimeCompare(a: string, b: string): boolean {
+    if (!a || !b) return false;
+    try {
+      const bufA = Buffer.from(a, 'hex');
+      const bufB = Buffer.from(b, 'hex');
+      if (bufA.length !== bufB.length) return false;
+      return crypto.timingSafeEqual(bufA, bufB);
+    } catch {
+      return false;
+    }
   }
 }
 

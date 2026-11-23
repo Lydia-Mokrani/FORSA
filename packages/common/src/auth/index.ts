@@ -6,11 +6,14 @@ export type UserRole = 'CUSTOMER' | 'MERCHANT' | 'ADMIN';
 
 export interface UserPayload {
   sub: string;             // userId
-  email: string;
-  role: UserRole;
+  roles?: UserRole[];
+  role?: UserRole;
+  mode?: string;           // 'customer' | 'merchant'
+  email?: string | null;
+  phone?: string | null;
   fullName?: string;
-  emailVerified: boolean;
-  phoneVerified: boolean;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
   shopId?: string | null;
   merchantId?: string | null;
   shopStatus?: string | null;
@@ -41,7 +44,6 @@ export const requireAuth = (publicKey: string) => {
     try {
       const decoded = jwt.verify(token, publicKey, {
         algorithms: ['RS256'],
-        ignoreExpiration: true,
       }) as UserPayload;
 
       req.user = decoded;
@@ -64,7 +66,9 @@ export const requireRole = (...allowedRoles: UserRole[]) => {
       return next(new UnauthorizedError());
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRoles = req.user.roles || (req.user.role ? [req.user.role] : []);
+    const hasRole = allowedRoles.some((r) => userRoles.includes(r));
+    if (!hasRole) {
       return next(new ForbiddenError(`Accès réservé aux rôles : ${allowedRoles.join(', ')}`));
     }
 
