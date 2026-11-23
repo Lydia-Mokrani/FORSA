@@ -2,7 +2,8 @@ import { app } from './app';
 import { ConsulRegistry } from '@forsa/common';
 import { config } from './config/env';
 import { initRabbitMQ, rabbitMQ } from './services/rabbitmq.service';
-import { startTelegramBot, stopTelegramBot } from './services/telegram.service';
+import { startTelegramBot, stopTelegramBot, initTelegramBotSubscriptions } from './services/telegram.service';
+import { initAuthEventListeners } from './events/auth-events.listener';
 
 // Enregistrement Consul pour la découverte dynamique Traefik
 const consul = new ConsulRegistry({
@@ -20,6 +21,10 @@ const server = app.listen(config.port, async () => {
 
   // Initialisation RabbitMQ (bus d'événements)
   await initRabbitMQ();
+
+  // Initialisation des écouteurs d'événements d'authentification et du bot
+  await initAuthEventListeners();
+  await initTelegramBotSubscriptions();
 
   // Enregistrement du service auprès de Consul
   await consul.register();

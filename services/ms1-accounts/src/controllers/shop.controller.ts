@@ -9,6 +9,7 @@ import {
   ConflictError,
   UnauthorizedError,
 } from '@forsa/common';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { rabbitMQ } from '../services/rabbitmq.service';
 import { config } from '../config/env';
@@ -55,11 +56,12 @@ export class ShopController {
         throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
       }
 
-      const { openingHours, ...shopData } = parsed.data as any;
+      const { openingHours, ...shopData } = parsed.data;
 
       const shop = await prisma.shop.create({
         data: {
           ...shopData,
+          openingHours: openingHours !== undefined ? (openingHours as Prisma.InputJsonValue) : Prisma.JsonNull,
           userId,
           verificationStatus: 'PENDING',
         },
@@ -131,11 +133,16 @@ export class ShopController {
         throw new NotFoundError('Boutique non trouvée.');
       }
 
-      const { openingHours, ...shopData } = parsed.data as any;
+      const { openingHours, ...shopData } = parsed.data;
 
       const updated = await prisma.shop.update({
         where: { id: shop.id },
-        data: shopData,
+        data: {
+          ...shopData,
+          ...(openingHours !== undefined
+            ? { openingHours: openingHours as Prisma.InputJsonValue }
+            : {}),
+        },
       });
 
       // Émission de l'événement shop.updated sur RabbitMQ pour MS2 (ShopSnapshot)

@@ -11,6 +11,10 @@ userRouter.get('/me', authenticate, UserController.getMe);
 userRouter.put('/me', authenticate, UserController.updateMe);
 userRouter.post('/me/switch-mode', authenticate, UserController.switchMode);
 
+// Changement de numéro (spec §3 & Lot 2B)
+userRouter.post('/me/phone/change/start', authenticate, UserController.changePhoneStart);
+userRouter.post('/me/phone/change/verify', authenticate, UserController.changePhoneVerify);
+
 // Avatar
 userRouter.post('/me/avatar', authenticate, handleAvatarUpload, UserController.uploadAvatar);
 userRouter.delete('/me/avatar', authenticate, UserController.deleteAvatar);

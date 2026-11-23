@@ -23,10 +23,13 @@ export const createApp = (): Express => {
     });
   });
 
-  // Montage des routes sous les préfixes Traefik
+  // Montage des routes sous les préfixes Traefik et direct
   app.use('/api/auth', authRouter);
+  app.use('/auth', authRouter);
   app.use('/api/users', userRouter);
+  app.use('/users', userRouter);
   app.use('/api/shops', shopRouter);
+  app.use('/shops', shopRouter);
 
   // Fichiers statiques : avatars
   app.use('/api/users/avatars', express.static(config.avatarDir, { maxAge: '7d' }));
