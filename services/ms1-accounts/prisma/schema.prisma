@@ -171,8 +171,9 @@ model ShopDocument {
   originalName String         @map("original_name")
   mimeType     String         @map("mime_type")
   size         Int
-  fileUrl      String         @map("file_url")
+  fileUrl      String?        @map("file_url")
   storagePath  String?        @map("storage_path")
+  fileData     Bytes?         @map("file_data")
   status       DocumentStatus @default(SUBMITTED)
   reason       String?
   createdAt    DateTime       @default(now()) @map("created_at")

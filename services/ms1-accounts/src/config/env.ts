@@ -46,8 +46,24 @@ export const config = {
 
   // Telegram OTP Bot
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || 'forsa_auth_bot',
+  telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || (process.env.NODE_ENV === 'production' ? '' : 'forsa_auth_bot'),
+
+  // Nominatim Geocoding
+  nominatimUrl: process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org/search',
+  geocoderUserAgent: process.env.GEOCODER_USER_AGENT || (process.env.NODE_ENV === 'production' ? '' : 'forsa-dev'),
 
   // Répertoire de stockage des avatars
   avatarDir: process.env.AVATAR_DIR || path.join(__dirname, '..', '..', 'uploads', 'avatars'),
 };
+
+// Fail-fast en production
+if (config.nodeEnv === 'production') {
+  if (!process.env.TELEGRAM_BOT_USERNAME || process.env.TELEGRAM_BOT_USERNAME.trim() === '') {
+    throw new Error('[MS1-Env] TELEGRAM_BOT_USERNAME est obligatoire en environnement de production');
+  }
+  const ua = process.env.GEOCODER_USER_AGENT;
+  if (!ua || ua.trim() === '' || ['forsa-dev', 'dummy', 'default'].includes(ua.trim().toLowerCase())) {
+    throw new Error('[MS1-Env] GEOCODER_USER_AGENT valide et non par défaut est obligatoire en environnement de production');
+  }
+}
+

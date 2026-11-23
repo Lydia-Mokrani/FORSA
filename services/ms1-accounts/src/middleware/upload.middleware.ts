@@ -1,31 +1,17 @@
+// services/ms1-accounts/src/middleware/upload.middleware.ts
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { v4 as uuidv4 } from 'uuid';
 import { BadRequestError } from '@forsa/common';
-import { config } from '../config/env';
 
-if (!fs.existsSync(config.uploadDir)) {
-  fs.mkdirSync(config.uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, config.uploadDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const uniqueName = `${uuidv4()}${ext}`;
-    cb(null, uniqueName);
-  },
-});
+// Stockage en mémoire vive (Buffer) : suppression intégrale du stockage disque local
+const storage = multer.memoryStorage();
 
 const fileFilter = (
   _req: Express.Request,
   file: Express.Multer.File,
   cb: multer.FileFilterCallback
 ) => {
-  const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+  // Acceptation stricte de PDF, JPG et PNG (suppression de webp)
+  const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png'];
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -37,6 +23,6 @@ export const documentUpload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10 Mo max par fichier
+    fileSize: 5 * 1024 * 1024, // 5 Mo max par fichier
   },
 });

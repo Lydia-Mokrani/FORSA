@@ -5,7 +5,6 @@ import { z } from 'zod';
 import {
   BadRequestError,
   NotFoundError,
-  ForbiddenError,
   ConflictError,
   UnauthorizedError,
 } from '@forsa/common';
@@ -13,38 +12,60 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { rabbitMQ } from '../services/rabbitmq.service';
 import { config } from '../config/env';
+import { validateDocumentFile } from '../utils/file-validator';
+import { geocoderService, GeocoderError } from '../services/geocoder.service';
 
-const createShopSchema = z.object({
+export const createShopSchema = z.object({
   name: z.string().min(2, 'Le nom du commerce est requis'),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  registryNumber: z.string().optional().nullable(),
   address: z.string().min(5, 'L adresse est requise'),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
   phone: z.string().min(8, 'Le téléphone de contact est requis'),
-  openingHours: z.record(z.any()).optional(),
-  logoUrl: z.string().url().optional(),
-});
+  openingHours: z.record(z.any()).optional().nullable(),
+  logoUrl: z.string().url().optional().nullable(),
+}).refine(
+  (data) => {
+    const hasLat = data.latitude !== undefined && data.latitude !== null;
+    const hasLng = data.longitude !== undefined && data.longitude !== null;
+    return (hasLat && hasLng) || (!hasLat && !hasLng);
+  },
+  {
+    message: 'Latitude et longitude doivent être toutes deux renseignées ou toutes deux absentes.',
+    path: ['latitude'],
+  }
+);
 
-const updateShopSchema = z.object({
+export const updateShopSchema = z.object({
   name: z.string().min(2).optional(),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  registryNumber: z.string().optional().nullable(),
   address: z.string().min(5).optional(),
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
   phone: z.string().min(8).optional(),
-  openingHours: z.record(z.any()).optional(),
-  logoUrl: z.string().url().optional(),
-});
+  openingHours: z.record(z.any()).optional().nullable(),
+  logoUrl: z.string().url().optional().nullable(),
+}).refine(
+  (data) => {
+    const hasLat = data.latitude !== undefined && data.latitude !== null;
+    const hasLng = data.longitude !== undefined && data.longitude !== null;
+    return (hasLat && hasLng) || (!hasLat && !hasLng);
+  },
+  {
+    message: 'Latitude et longitude doivent être toutes deux renseignées ou toutes deux absentes.',
+    path: ['latitude'],
+  }
+);
 
 export class ShopController {
   public static async createShop(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user?.sub;
       if (!userId) throw new UnauthorizedError();
-
-      if (!req.user?.roles?.includes('MERCHANT' as any) && req.user?.role !== 'MERCHANT') {
-        throw new ForbiddenError('Seuls les utilisateurs avec le profil COMMERÇANT peuvent enregistrer une boutique.');
-      }
 
       const existingShop = await prisma.shop.findUnique({ where: { userId } });
       if (existingShop) {
@@ -56,14 +77,55 @@ export class ShopController {
         throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
       }
 
-      const { openingHours, ...shopData } = parsed.data;
+      const { openingHours, category, registryNumber, ...shopData } = parsed.data;
 
+      // Création de la boutique avec persistance de category et registryNumber
       const shop = await prisma.shop.create({
         data: {
           ...shopData,
-          openingHours: openingHours !== undefined ? (openingHours as Prisma.InputJsonValue) : Prisma.JsonNull,
+          category: category || null,
+          registryNumber: registryNumber || null,
+          openingHours: openingHours !== undefined && openingHours !== null
+            ? (openingHours as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
           userId,
           verificationStatus: 'PENDING',
+        },
+      });
+
+      // Attribution du rôle MERCHANT à l'utilisateur sans jamais autoriser ADMIN
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (user) {
+        const currentRoles = (user.roles || []) as string[];
+        const rolesSet = new Set<string>(currentRoles);
+        rolesSet.add('MERCHANT');
+        // Protection stricte : interdiction absolue d'attribuer le rôle ADMIN via la création de boutique
+        if (!currentRoles.includes('ADMIN')) {
+          rolesSet.delete('ADMIN');
+        }
+        const updatedRoles = Array.from(rolesSet);
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            roles: updatedRoles as any,
+            activeMode: 'merchant',
+          },
+        });
+      }
+
+      // Enregistrement dans les journaux d'audit (audit_logs)
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'SHOP_CREATED',
+          ipAddress: req.ip || null,
+          userAgent: req.headers ? (req.headers['user-agent'] as string) || null : null,
+          metadata: {
+            shopId: shop.id,
+            shopName: shop.name,
+            assignedRole: 'MERCHANT',
+          },
         },
       });
 
@@ -133,14 +195,20 @@ export class ShopController {
         throw new NotFoundError('Boutique non trouvée.');
       }
 
-      const { openingHours, ...shopData } = parsed.data;
+      const { openingHours, category, registryNumber, ...shopData } = parsed.data;
 
       const updated = await prisma.shop.update({
         where: { id: shop.id },
         data: {
           ...shopData,
+          ...(category !== undefined ? { category } : {}),
+          ...(registryNumber !== undefined ? { registryNumber } : {}),
           ...(openingHours !== undefined
-            ? { openingHours: openingHours as Prisma.InputJsonValue }
+            ? {
+                openingHours: openingHours === null
+                  ? Prisma.DbNull
+                  : (openingHours as Prisma.InputJsonValue),
+              }
             : {}),
         },
       });
@@ -166,6 +234,74 @@ export class ShopController {
     }
   }
 
+  public static async getShopVerification(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.sub;
+      if (!userId) throw new UnauthorizedError();
+
+      const shop = await prisma.shop.findUnique({
+        where: { userId },
+        select: {
+          verificationStatus: true,
+          rejectReason: true,
+          createdAt: true,
+        },
+      });
+
+      if (!shop) {
+        throw new NotFoundError('Aucune boutique trouvée pour ce compte.');
+      }
+
+      res.json({
+        status: shop.verificationStatus,
+        rejectReason: shop.rejectReason,
+        submittedAt: shop.createdAt,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public static async getMyDocuments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.sub;
+      if (!userId) throw new UnauthorizedError();
+
+      const shop = await prisma.shop.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+
+      if (!shop) {
+        throw new NotFoundError('Aucune boutique trouvée pour ce compte.');
+      }
+
+      const docs = await prisma.shopDocument.findMany({
+        where: { shopId: shop.id },
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          reason: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const documents = docs.map((d) => ({
+        id: d.id,
+        type: d.type,
+        status: d.status,
+        reason: d.reason,
+        uploadedAt: d.createdAt,
+      }));
+
+      res.json({ documents });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   public static async getPublicShopById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
@@ -175,6 +311,8 @@ export class ShopController {
           id: true,
           name: true,
           description: true,
+          category: true,
+          registryNumber: true,
           address: true,
           latitude: true,
           longitude: true,
@@ -210,19 +348,34 @@ export class ShopController {
         throw new BadRequestError('Aucun document fourni. Les pièces requises sont: commercial_register, tax_id, storefront.');
       }
 
-      const createdDocs = [];
-
       const docTypeMapping: Record<string, 'COMMERCIAL_REGISTER' | 'TAX_ID' | 'STOREFRONT'> = {
         commercial_register: 'COMMERCIAL_REGISTER',
         tax_id: 'TAX_ID',
         storefront: 'STOREFRONT',
       };
 
+      // 1. Validation préalable de chaque fichier via ses magic bytes et sa taille (< 5 Mo)
       for (const [fieldName, fileArray] of Object.entries(files)) {
-        const file = fileArray[0];
+        const file = fileArray?.[0];
         const docType = docTypeMapping[fieldName];
         if (docType && file) {
-          // Supprimer un ancien document de même type s'il existe
+          const validation = validateDocumentFile(file);
+          if (!validation.valid) {
+            throw new BadRequestError(`Fichier ${fieldName} invalide : ${validation.error}`);
+          }
+        }
+      }
+
+      const createdDocs = [];
+
+      // 2. Persistance dans la base de données (colonne BYTEA file_data)
+      for (const [fieldName, fileArray] of Object.entries(files)) {
+        const file = fileArray?.[0];
+        const docType = docTypeMapping[fieldName];
+        if (docType && file) {
+          const validation = validateDocumentFile(file);
+
+          // Remplacement d'un ancien document de même type s'il existe
           await prisma.shopDocument.deleteMany({
             where: { shopId: shop.id, type: docType },
           });
@@ -231,15 +384,23 @@ export class ShopController {
             data: {
               shopId: shop.id,
               type: docType,
-              filename: file.filename,
-              originalName: file.originalname,
-              mimeType: file.mimetype,
-              size: file.size,
-              fileUrl: `/api/shops/${shop.id}/documents/${file.filename}`,
+              filename: file.originalname || `${docType.toLowerCase()}_${Date.now()}`,
+              originalName: file.originalname || `${docType.toLowerCase()}`,
+              mimeType: validation.detectedMime || file.mimetype,
+              size: file.buffer.length,
+              fileData: file.buffer,
+              fileUrl: null,
+              storagePath: `db://${shop.id}/${docType}`,
               status: 'SUBMITTED',
             },
           });
-          createdDocs.push(doc);
+
+          createdDocs.push({
+            id: doc.id,
+            type: doc.type,
+            status: doc.status,
+            uploadedAt: doc.createdAt,
+          });
         }
       }
 
@@ -284,21 +445,36 @@ export class ShopController {
       const { id, filename } = req.params;
 
       const doc = await prisma.shopDocument.findFirst({
-        where: { shopId: id, filename },
+        where: {
+          shopId: id,
+          OR: [
+            { id: filename },
+            { filename: filename },
+          ],
+        },
       });
 
       if (!doc) {
         throw new NotFoundError('Document non trouvé.');
       }
 
-      const filePath = path.join(config.uploadDir, doc.filename);
-      if (!fs.existsSync(filePath)) {
-        throw new NotFoundError('Fichier introuvable sur le volume de stockage.');
+      if (doc.fileData) {
+        res.setHeader('Content-Type', doc.mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
+        res.send(doc.fileData);
+        return;
       }
 
-      res.setHeader('Content-Type', doc.mimeType);
-      res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
-      fs.createReadStream(filePath).pipe(res);
+      // Rétrocompatibilité : anciens fichiers locaux non migrés
+      const filePath = path.join(config.uploadDir, doc.filename);
+      if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Type', doc.mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      }
+
+      throw new NotFoundError('Fichier introuvable sur le volume de stockage.');
     } catch (err) {
       next(err);
     }
@@ -379,6 +555,24 @@ export class ShopController {
 
       res.json({ shop: updated });
     } catch (err) {
+      next(err);
+    }
+  }
+
+  public static async geocode(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const q = req.query.q as string | undefined;
+      if (!q || !q.trim()) {
+        throw new BadRequestError('Le paramètre de recherche q est requis');
+      }
+
+      const result = await geocoderService.geocode(q);
+      res.json(result);
+    } catch (err: any) {
+      if (err instanceof GeocoderError) {
+        res.status(err.status).json({ message: err.message, code: err.code });
+        return;
+      }
       next(err);
     }
   }

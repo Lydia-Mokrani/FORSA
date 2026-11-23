@@ -4,6 +4,8 @@ import crypto from 'crypto';
 describe('JwtService - Unit Tests', () => {
   const sampleMerchantPayload: TokenPayload = {
     sub: 'usr_test_merchant_123',
+    roles: ['MERCHANT', 'CUSTOMER'],
+    mode: 'merchant',
     email: 'boulangerie.forsa@test.dz',
     role: 'MERCHANT',
     fullName: 'Ahmed Boulanger',
@@ -17,6 +19,8 @@ describe('JwtService - Unit Tests', () => {
 
   const sampleClientPayload: TokenPayload = {
     sub: 'usr_test_client_789',
+    roles: ['CUSTOMER'],
+    mode: 'customer',
     email: 'client.forsa@test.dz',
     role: 'CUSTOMER',
     fullName: 'Yacine Client',
