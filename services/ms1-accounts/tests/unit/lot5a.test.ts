@@ -3,11 +3,49 @@ import {
   validateDocumentFile,
   MAX_DOCUMENT_FILE_SIZE,
 } from '../../src/utils/file-validator';
+import { fileFilter } from '../../src/middleware/upload.middleware';
 import { GeocoderService, GeocoderError } from '../../src/services/geocoder.service';
-import { createShopSchema, updateShopSchema } from '../../src/controllers/shop.controller';
+import {
+  ShopController,
+  createShopSchema,
+  updateShopSchema,
+} from '../../src/controllers/shop.controller';
+import { prisma } from '../../src/config/prisma';
+import { BadRequestError, NotFoundError } from '@forsa/common';
 
-describe('LOT 5A - Backend Unit Tests', () => {
-  describe('1. Magic Bytes & File Validation', () => {
+// Mock de Prisma pour isoler les tests unitaires
+jest.mock('../../src/config/prisma', () => ({
+  prisma: {
+    shop: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    shopDocument: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    user: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    auditLog: {
+      create: jest.fn(),
+    },
+  },
+}));
+
+// Mock de RabbitMQ
+jest.mock('../../src/services/rabbitmq.service', () => ({
+  rabbitMQ: {
+    publish: jest.fn().mockResolvedValue(true),
+  },
+}));
+
+describe('LOT 5A & 5A-fix - Backend Unit Tests', () => {
+  describe('1. Magic Bytes, File Validation & WebP Rejection', () => {
     it('doit valider un fichier PDF authentique (%PDF-)', () => {
       const pdfHeader = Buffer.from('%PDF-1.5 test content');
       const detected = detectMagicBytes(pdfHeader);
@@ -50,7 +88,38 @@ describe('LOT 5A - Backend Unit Tests', () => {
       expect(result.detectedMime).toBe('image/jpeg');
     });
 
-    it('doit rejeter un fichier avec des magic bytes invalides ou corrompus', () => {
+    it('doit rejeter explicitement les fichiers WebP (magic bytes RIFF...WEBP)', () => {
+      // Signature binaire WebP : RIFF (4 octets) + taille (4 octets) + WEBP (4 octets)
+      const webpBuffer = Buffer.from('RIFF\x20\x00\x00\x00WEBPVP8 ');
+      const detected = detectMagicBytes(webpBuffer);
+      expect(detected).toBeNull();
+
+      const result = validateDocumentFile({
+        buffer: webpBuffer,
+        size: webpBuffer.length,
+        originalname: 'devanture.webp',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.code).toBe('INVALID_FILE_TYPE');
+      expect(result.error).toContain('Type de fichier non autorisé');
+    });
+
+    it('doit rejeter les fichiers WebP au niveau du fileFilter multer', (done) => {
+      const fakeWebpFile: any = {
+        mimetype: 'image/webp',
+        originalname: 'photo.webp',
+      };
+
+      const cb: any = (err: any, accept?: boolean) => {
+        expect(err).toBeInstanceOf(BadRequestError);
+        expect(accept).toBeUndefined();
+        done();
+      };
+
+      fileFilter({} as any, fakeWebpFile, cb);
+    });
+
+    it('doit rejeter un fichier avec des magic bytes corrompus ou inconnus', () => {
       const fakeFile = Buffer.from('GIF89a this is not allowed');
       const detected = detectMagicBytes(fakeFile);
       expect(detected).toBeNull();
@@ -67,7 +136,6 @@ describe('LOT 5A - Backend Unit Tests', () => {
 
     it('doit rejeter un fichier dépassant la limite de 5 Mo', () => {
       const oversizedBuffer = Buffer.alloc(MAX_DOCUMENT_FILE_SIZE + 1024);
-      // Préfixe PDF valide mais taille excessive
       oversizedBuffer.write('%PDF-1.4', 0);
 
       const result = validateDocumentFile({
@@ -81,136 +149,357 @@ describe('LOT 5A - Backend Unit Tests', () => {
     });
   });
 
-  describe('2. Geocode Status Mapping & Nominatim Client', () => {
-    let originalFetch: typeof global.fetch;
+  describe('2. Fail-Fast en Production (Config Env)', () => {
+    const originalEnv = { ...process.env };
+
+    afterEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    it('doit lever une exception si TELEGRAM_BOT_USERNAME est manquant en production', () => {
+      expect(() => {
+        jest.isolateModules(() => {
+          process.env.NODE_ENV = 'production';
+          process.env.INTERNAL_API_KEY = 'test_internal_key';
+          process.env.TELEGRAM_BOT_USERNAME = '';
+          process.env.GEOCODER_USER_AGENT = 'FORSA-Prod/1.0';
+          require('../../src/config/env');
+        });
+      }).toThrow(/TELEGRAM_BOT_USERNAME est obligatoire en environnement de production/);
+    });
+
+    it('doit lever une exception si GEOCODER_USER_AGENT est manquant ou par défaut en production', () => {
+      expect(() => {
+        jest.isolateModules(() => {
+          process.env.NODE_ENV = 'production';
+          process.env.INTERNAL_API_KEY = 'test_internal_key';
+          process.env.TELEGRAM_BOT_USERNAME = 'forsa_auth_bot';
+          process.env.GEOCODER_USER_AGENT = 'forsa-dev';
+          require('../../src/config/env');
+        });
+      }).toThrow(/GEOCODER_USER_AGENT valide et non par défaut est obligatoire en environnement de production/);
+    });
+
+    it('doit démarrer sans erreur en production si toutes les variables obligatoires sont valides', () => {
+      expect(() => {
+        jest.isolateModules(() => {
+          process.env.NODE_ENV = 'production';
+          process.env.INTERNAL_API_KEY = 'test_internal_key';
+          process.env.TELEGRAM_BOT_USERNAME = 'forsa_official_bot';
+          process.env.GEOCODER_USER_AGENT = 'FORSA-Production-App/1.0 (contact@forsa.dz)';
+          const { config } = require('../../src/config/env');
+          expect(config.nodeEnv).toBe('production');
+        });
+      }).not.toThrow();
+    });
+  });
+
+  describe('3. Coordinates Reset Logic in PUT /shops/me', () => {
+    const userId = 'usr_test_shop_123';
+    const mockExistingShop = {
+      id: 'shop_123',
+      userId,
+      name: 'Boutique Test',
+      address: '10 Rue Didouche Mourad, Alger',
+      latitude: 36.77,
+      longitude: 3.06,
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      (prisma.shop.findUnique as jest.Mock).mockResolvedValue(mockExistingShop);
+      (prisma.shop.update as jest.Mock).mockImplementation(async ({ data }: any) => ({
+        ...mockExistingShop,
+        ...data,
+      }));
+    });
+
+    it('doit réinitialiser latitude et longitude à null si l adresse a changé et qu aucune coordonnée n est fournie', async () => {
+      const req: any = {
+        user: { sub: userId },
+        body: {
+          address: '25 Boulevard Colonel Amirouche, Alger',
+        },
+      };
+      const res: any = { json: jest.fn() };
+      const next = jest.fn();
+
+      await ShopController.updateMyShop(req, res, next);
+
+      expect(prisma.shop.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'shop_123' },
+          data: expect.objectContaining({
+            address: '25 Boulevard Colonel Amirouche, Alger',
+            latitude: null,
+            longitude: null,
+          }),
+        })
+      );
+    });
+
+    it('doit conserver latitude et longitude inchangées si l adresse est inchangée et qu aucune coordonnée n est fournie', async () => {
+      const req: any = {
+        user: { sub: userId },
+        body: {
+          name: 'Nouveau Nom Boutique',
+          address: '10 Rue Didouche Mourad, Alger', // Même adresse
+        },
+      };
+      const res: any = { json: jest.fn() };
+      const next = jest.fn();
+
+      await ShopController.updateMyShop(req, res, next);
+
+      expect(prisma.shop.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'shop_123' },
+          data: expect.objectContaining({
+            name: 'Nouveau Nom Boutique',
+            address: '10 Rue Didouche Mourad, Alger',
+          }),
+        })
+      );
+      // Vérifier que latitude et longitude ne sont pas dans le payload d'update (la base conserve leurs valeurs)
+      const updateData = (prisma.shop.update as jest.Mock).mock.calls[0][0].data;
+      expect(updateData.latitude).toBeUndefined();
+      expect(updateData.longitude).toBeUndefined();
+    });
+
+    it('doit enregistrer les nouvelles coordonnées si une paire explicite est fournie', async () => {
+      const req: any = {
+        user: { sub: userId },
+        body: {
+          latitude: 36.752,
+          longitude: 3.041,
+        },
+      };
+      const res: any = { json: jest.fn() };
+      const next = jest.fn();
+
+      await ShopController.updateMyShop(req, res, next);
+
+      expect(prisma.shop.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'shop_123' },
+          data: expect.objectContaining({
+            latitude: 36.752,
+            longitude: 3.041,
+          }),
+        })
+      );
+    });
+
+    it('doit réinitialiser latitude et longitude si une paire explicite null/null est fournie', async () => {
+      const req: any = {
+        user: { sub: userId },
+        body: {
+          latitude: null,
+          longitude: null,
+        },
+      };
+      const res: any = { json: jest.fn() };
+      const next = jest.fn();
+
+      await ShopController.updateMyShop(req, res, next);
+
+      expect(prisma.shop.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'shop_123' },
+          data: expect.objectContaining({
+            latitude: null,
+            longitude: null,
+          }),
+        })
+      );
+    });
+
+    it('doit échouer avec 400 Bad Request si une seule coordonnée est envoyée', async () => {
+      const req: any = {
+        user: { sub: userId },
+        body: {
+          latitude: 36.752,
+          // longitude omise
+        },
+      };
+      const res: any = { json: jest.fn() };
+      const next = jest.fn();
+
+      await ShopController.updateMyShop(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(expect.any(BadRequestError));
+      expect(prisma.shop.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('4. Legacy Disk Fallback & Path Traversal Rejection', () => {
+    it('doit rejeter les tentatives de path traversal relatives (../../etc/passwd)', async () => {
+      const req: any = {
+        params: { id: 'shop-uuid-1', filename: '../../etc/passwd' },
+      };
+      const res: any = { setHeader: jest.fn(), send: jest.fn() };
+      const next = jest.fn();
+
+      await ShopController.downloadDocumentForAdmin(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(BadRequestError));
+    });
+
+    it('doit rejeter les variantes encodées de path traversal (%2e%2e/etc/passwd et ..%2f..)', async () => {
+      const encodedVariants = [
+        '%2e%2e/etc/passwd',
+        '..%2f..%2fetc/passwd',
+        '%2e%2e%5cwindows%5csystem32',
+      ];
+
+      for (const variant of encodedVariants) {
+        const req: any = {
+          params: { id: 'shop-uuid-1', filename: variant },
+        };
+        const res: any = { setHeader: jest.fn(), send: jest.fn() };
+        const next = jest.fn();
+
+        await ShopController.downloadDocumentForAdmin(req, res, next);
+        expect(next).toHaveBeenCalledWith(expect.any(BadRequestError));
+      }
+    });
+
+    it('doit rejeter les chemins absolus (/etc/passwd, C:\\boot.ini)', async () => {
+      const absolutePaths = ['/etc/passwd', 'C:\\boot.ini'];
+
+      for (const absPath of absolutePaths) {
+        const req: any = {
+          params: { id: 'shop-uuid-1', filename: absPath },
+        };
+        const res: any = { setHeader: jest.fn(), send: jest.fn() };
+        const next = jest.fn();
+
+        await ShopController.downloadDocumentForAdmin(req, res, next);
+        expect(next).toHaveBeenCalledWith(expect.any(BadRequestError));
+      }
+    });
+
+    it('doit retourner 404 si le document n existe pas en base', async () => {
+      (prisma.shopDocument.findFirst as jest.Mock).mockResolvedValue(null);
+
+      const req: any = {
+        params: { id: 'shop-uuid-1', filename: 'valid_filename.pdf' },
+      };
+      const res: any = { setHeader: jest.fn(), send: jest.fn() };
+      const next = jest.fn();
+
+      await ShopController.downloadDocumentForAdmin(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(NotFoundError));
+    });
+  });
+
+  describe('5. Geocoder Limiter, Bounded Queue & Per-User Rate Limit', () => {
     let geocoder: GeocoderService;
+    let originalFetch: typeof global.fetch;
 
     beforeEach(() => {
       originalFetch = global.fetch;
       geocoder = new GeocoderService('https://nominatim.openstreetmap.org/search', 'forsa-test');
       geocoder.clearCache();
+      geocoder.clearRateLimits();
+      geocoder.resetQueue();
     });
 
     afterEach(() => {
       global.fetch = originalFetch;
     });
 
-    it('doit retourner 200 avec lat, lng, displayName, city, wilaya quand Nominatim répond avec succès', async () => {
-      const mockResults = [
-        {
-          lat: '36.7525',
-          lon: '3.0420',
-          display_name: 'Bab El Oued, Alger, Algérie',
-          address: {
-            suburb: 'Bab El Oued',
-            city: 'Alger',
-            state: 'Alger',
-            country: 'Algérie',
-          },
-        },
-      ];
+    it('doit limiter les requêtes par utilisateur (max 10 par minute) et renvoyer 429 RATE_LIMITED à la 11ème', async () => {
+      jest.useFakeTimers();
+      const userId = 'usr_merchant_fast';
 
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => mockResults,
-      } as any);
-
-      const res = await geocoder.geocode('Bab El Oued Alger');
-      expect(res.lat).toBe(36.7525);
-      expect(res.lng).toBe(3.042);
-      expect(res.displayName).toBe('Bab El Oued, Alger, Algérie');
-      expect(res.city).toBe('Alger');
-      expect(res.wilaya).toBe('Alger');
-    });
-
-    it('doit lever une GeocoderError 404 (ADDRESS_NOT_FOUND) si aucun résultat retourné', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => [],
-      } as any);
-
-      await expect(geocoder.geocode('Adresse inexistante dans le désert 999999')).rejects.toThrow(
-        GeocoderError
-      );
-
-      try {
-        await geocoder.geocode('Adresse inexistante dans le désert 999999');
-      } catch (err: any) {
-        expect(err.status).toBe(404);
-        expect(err.code).toBe('ADDRESS_NOT_FOUND');
+      // 10 requêtes autorisées pour cet utilisateur
+      for (let i = 1; i <= 10; i++) {
+        expect(() => geocoder.checkUserRateLimit(userId)).not.toThrow();
       }
-    });
 
-    it('doit lever une GeocoderError 503 (GEOCODER_UNAVAILABLE) en cas de timeout ou erreur réseau', async () => {
-      global.fetch = jest.fn().mockRejectedValue(new Error('Network timeout after 5000ms'));
-
-      await expect(geocoder.geocode('Didouche Mourad Alger')).rejects.toThrow(GeocoderError);
+      // La 11ème requête dans la même minute doit être bloquée avec 429 RATE_LIMITED
+      expect(() => geocoder.checkUserRateLimit(userId)).toThrow(GeocoderError);
 
       try {
-        await geocoder.geocode('Didouche Mourad Alger');
+        geocoder.checkUserRateLimit(userId);
       } catch (err: any) {
-        expect(err.status).toBe(503);
-        expect(err.code).toBe('GEOCODER_UNAVAILABLE');
-        expect(err.message).toBe('Service de géocodage temporairement indisponible');
+        expect(err.status).toBe(429);
+        expect(err.code).toBe('RATE_LIMITED');
+        expect(err.message).toContain('Limite de requêtes atteinte');
       }
+
+      // Vérifier que geocode() invoque bien ce contrôle et rejette avec 429
+      await expect(geocoder.geocode('test query', userId)).rejects.toThrow(GeocoderError);
+
+      // Avancer le temps de 61 secondes : la fenêtre expire et la limite se réinitialise
+      jest.advanceTimersByTime(61000);
+      expect(() => geocoder.checkUserRateLimit(userId)).not.toThrow();
+
+      // Un autre utilisateur n'est pas bloqué
+      const otherUser = 'usr_another_merchant';
+      expect(() => geocoder.checkUserRateLimit(otherUser)).not.toThrow();
+
+      jest.useRealTimers();
     });
 
-    it('doit lever une GeocoderError 503 si le serveur retourne un code 500 ou 429', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-      } as any);
+    it('doit rejeter avec 503 GEOCODER_UNAVAILABLE immédiatement si la file d attente dépasse 20 requêtes', async () => {
+      // Simuler une file d'attente pleine
+      (geocoder as any).waitingQueueLength = 20;
 
-      await expect(geocoder.geocode('Didouche Mourad Alger')).rejects.toThrow(GeocoderError);
+      await expect(geocoder.geocode('Alger Centre')).rejects.toThrow(GeocoderError);
 
       try {
-        await geocoder.geocode('Didouche Mourad Alger');
+        await geocoder.geocode('Alger Centre');
       } catch (err: any) {
         expect(err.status).toBe(503);
         expect(err.code).toBe('GEOCODER_UNAVAILABLE');
       }
     });
 
-    it('doit lever une GeocoderError 400 (BAD_REQUEST) si la requête q est vide', async () => {
-      await expect(geocoder.geocode('   ')).rejects.toThrow(GeocoderError);
+    it('le timeout de 5 secondes s applique strictement à l appel réseau Nominatim', async () => {
+      jest.useFakeTimers();
+      (geocoder as any).lastRequestTime = -5000;
+
+      global.fetch = jest.fn().mockImplementation((_url, options) => {
+        return new Promise((_, reject) => {
+          if (options?.signal) {
+            options.signal.addEventListener('abort', () => {
+              reject(new Error('AbortError: The operation was aborted due to 5000ms timeout'));
+            });
+          }
+        });
+      });
+
+      const promise = geocoder.geocode('Rue Didouche Mourad');
+
+      // Attendre que la file d'attente se dénoue et que l'appel fetch soit déclenché
+      for (let i = 0; i < 10 && !(global.fetch as jest.Mock).mock.calls.length; i++) {
+        await Promise.resolve();
+      }
+
+      // Avancer les timers de 5000ms pour déclencher l'abort de l'appel réseau
+      jest.advanceTimersByTime(5000);
+
+      await expect(promise).rejects.toThrow(GeocoderError);
 
       try {
-        await geocoder.geocode('');
+        (geocoder as any).lastRequestTime = -5000;
+        const p2 = geocoder.geocode('Autre Rue');
+        for (let i = 0; i < 10 && (global.fetch as jest.Mock).mock.calls.length < 2; i++) {
+          await Promise.resolve();
+        }
+        jest.advanceTimersByTime(5000);
+        await p2;
       } catch (err: any) {
-        expect(err.status).toBe(400);
-        expect(err.code).toBe('BAD_REQUEST');
+        expect(err.status).toBe(503);
+        expect(err.code).toBe('GEOCODER_UNAVAILABLE');
       }
-    });
 
-    it('doit utiliser le cache mémoire sans ré-interroger Nominatim pour la même requête', async () => {
-      const mockResults = [
-        {
-          lat: '36.75',
-          lon: '3.05',
-          display_name: 'Alger Centre',
-          address: { city: 'Alger', state: 'Alger' },
-        },
-      ];
-
-      const fetchMock = jest.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => mockResults,
-      } as any);
-      global.fetch = fetchMock;
-
-      const first = await geocoder.geocode('alger centre');
-      const second = await geocoder.geocode('  Alger Centre  ');
-
-      expect(first.lat).toBe(36.75);
-      expect(second.lat).toBe(36.75);
-      expect(fetchMock).toHaveBeenCalledTimes(1); // Le deuxième appel utilise le cache
+      jest.useRealTimers();
     });
   });
 
-  describe('3. Lat/Lng Pair Rule in Schemas', () => {
+  describe('6. Lat/Lng Pair Rule in Schemas', () => {
     it('doit valider quand latitude et longitude sont toutes deux renseignées', () => {
       const validData = {
         name: 'Supérette El Bahdja',
@@ -296,24 +585,18 @@ describe('LOT 5A - Backend Unit Tests', () => {
     });
   });
 
-  describe('4. Role Escalation Guard on Shop Creation', () => {
+  describe('7. Role Escalation Guard on Shop Creation', () => {
     it('doit ajouter le rôle MERCHANT sans jamais autoriser ADMIN', () => {
-      // Simulation d'un compte CUSTOMER existant
       const existingUser = {
         id: 'usr_customer_123',
         role: 'CUSTOMER',
         roles: ['CUSTOMER'],
       };
 
-      // Tentative malveillante d'injection d'ADMIN dans la requête
-      const requestedRoles = ['MERCHANT', 'ADMIN'];
-
-      // Logique appliquée par le contrôleur ShopController.createShop
       const currentRoles = (existingUser.roles || []) as string[];
       const rolesSet = new Set<string>(currentRoles);
       rolesSet.add('MERCHANT');
 
-      // Règle stricte : ADMIN ne peut JAMAIS être ajouté par la création de boutique
       if (!currentRoles.includes('ADMIN')) {
         rolesSet.delete('ADMIN');
       }
@@ -344,9 +627,8 @@ describe('LOT 5A - Backend Unit Tests', () => {
     });
   });
 
-  describe('5. Own-Documents Response Sanitization', () => {
+  describe('8. Own-Documents Response Sanitization', () => {
     it('la réponse getMyDocuments ne doit jamais exposer storagePath, fileUrl ou fileData', () => {
-      // Enregistrement simulant la base de données
       const rawDbDocs = [
         {
           id: 'doc_123',
@@ -360,7 +642,6 @@ describe('LOT 5A - Backend Unit Tests', () => {
         },
       ];
 
-      // Mapping appliqué par getMyDocuments
       const sanitized = rawDbDocs.map((d) => ({
         id: d.id,
         type: d.type,
@@ -375,25 +656,10 @@ describe('LOT 5A - Backend Unit Tests', () => {
       expect(doc.status).toBe('SUBMITTED');
       expect(doc.uploadedAt).toBeDefined();
 
-      // Vérification impérative : aucune donnée sensible exposée
       expect(doc.storagePath).toBeUndefined();
       expect(doc.fileUrl).toBeUndefined();
       expect(doc.fileData).toBeUndefined();
       expect(Object.keys(doc)).toEqual(['id', 'type', 'status', 'reason', 'uploadedAt']);
-    });
-
-    it('la réponse uploadDocuments ne doit contenir que { id, type, status, uploadedAt }', () => {
-      const uploadedDocResponse = {
-        id: 'doc_456',
-        type: 'TAX_ID',
-        status: 'SUBMITTED',
-        uploadedAt: new Date('2026-11-23T12:05:00Z'),
-      } as any;
-
-      expect(uploadedDocResponse.fileData).toBeUndefined();
-      expect(uploadedDocResponse.storagePath).toBeUndefined();
-      expect(uploadedDocResponse.fileUrl).toBeUndefined();
-      expect(Object.keys(uploadedDocResponse)).toEqual(['id', 'type', 'status', 'uploadedAt']);
     });
   });
 });

@@ -1,4 +1,4 @@
-# LOT 5A — MS1 Backend : Contrat Boutique, Géocodage, Documents BYTEA & Alias
+# LOT 5A & 5A-fix — MS1 Backend : Contrat Boutique, Géocodage, Documents BYTEA & Sécurisation
 
 **Projet :** FORSA | Plateforme e-commerce Algérie  
 **Microservice :** `services/ms1-accounts`  
@@ -25,7 +25,7 @@
 | `GET` | `/api/shops/my/documents` | Oui (Bearer JWT) | Authentifié | Alias pièces justificatives | Aucun | `200 OK` |
 | `POST` | `/api/shops/my/documents` | Oui (Bearer JWT) | Authentifié | Téléversement des justificatifs (PDF/PNG/JPG max 5 Mo) | `multipart/form-data` : `commercial_register`, `tax_id`, `storefront` | `201 Created` : `{ message, documents: [{ id, type, status, uploadedAt }] }`<br>`400 Bad Request` |
 | `POST` | `/api/shops/me/documents` | Oui (Bearer JWT) | Authentifié | Alias téléversement des justificatifs | Même payload multipart | `201 Created` / `400 Bad Request` |
-| `GET` | `/api/shops/geocode` | Oui (Bearer JWT) | Authentifié | Géocodage d'adresse Nominatim via backend | Query string : `?q=...` | `200 OK` : `{ lat, lng, displayName, city, wilaya }`<br>`400` / `404` / `503 Service Unavailable` |
+| `GET` | `/api/shops/geocode` | Oui (Bearer JWT) | Authentifié | Géocodage d'adresse Nominatim via backend | Query string : `?q=...` | `200 OK` : `{ lat, lng, displayName, city, wilaya }`<br>`400` / `404` / `429` / `503 Service Unavailable` |
 | `POST` | `/api/users/me/photo` | Oui (Bearer JWT) | Authentifié | Alias téléversement photo / avatar profil | `multipart/form-data` : `avatar` | `200 OK` : `{ user, message }`<br>`400 Bad Request` |
 | `DELETE`| `/api/users/me/photo` | Oui (Bearer JWT) | Authentifié | Alias suppression photo / avatar profil | Aucun | `200 OK` : `{ user, message }` |
 | `GET` | `/api/shops/:id` | Non | Public | Consultation publique d'une boutique | Paramètre d'URL `:id` | `200 OK` : `{ shop }`<br>`404 Not Found` |
@@ -51,7 +51,7 @@
   - `latitude` / `longitude` : déjà présentes (`DOUBLE PRECISION NULL`)
 - **Note importante sur les fichiers locaux :**
   > [!NOTE]
-  > Les anciens fichiers locaux précédemment enregistrés sur le disque ne sont **PAS migrés**. Les nouveaux téléversements sont persistés directement dans PostgreSQL sous forme de données binaires `BYTEA` (`file_data`). L'endpoint de téléchargement administrateur supporte le fallback en lecture vers le système de fichiers pour les documents historiques.
+  > Les anciens fichiers locaux précédemment enregistrés sur le disque ne sont **PAS migrés**. Les nouveaux téléversements sont persistés directement dans PostgreSQL sous forme de données binaires `BYTEA` (`file_data`) via `StorageService`. L'endpoint de téléchargement administrateur supporte le fallback en lecture sécurisée vers le système de fichiers pour les documents historiques.
 
 ---
 
@@ -68,57 +68,103 @@
 
 ---
 
-## 4. Géocodage Nominatim (Serveur Backend Uniquement)
+## 4. Contrat de Géocodage (Geocode Contract)
 
-- **Sécurité & Confidentialité :**
-  - Le frontend n'appelle jamais Nominatim directement.
-  - Les requêtes d'adresse sont masquées dans les journaux applicatifs (`Bab*** (longueur: 17)`).
-- **Règles de limitation & Cache :**
-  - Throttling strict : maximum 1 requête par seconde globale via file d'attente asynchrone (`throttleQueue`).
+### Endpoint : `GET /api/shops/geocode?q=...`
+- **Authentification requise :** Bearer JWT valide.
+- **Limitation d'accès & Sécurité :**
+  - Le frontend FORSA n'appelle jamais Nominatim directement.
+  - Throttling strict : 1 requête par seconde globale.
+  - File d'attente bornée : **20 requêtes maximum** en attente. Si la file est saturée, réponse immédiate `503 Service Unavailable`.
+  - Limitation par utilisateur : **10 recherches par minute maximum** par utilisateur authentifié. À la 11ème requête, réponse immédiate `429 Too Many Requests`.
+  - Timeout réseau de 5 secondes : s'applique **strictement à l'appel HTTP Nominatim** et non au temps d'attente dans la file.
+  - Masquage des adresses dans les journaux applicatifs (`Bab*** (longueur: 17)`).
   - Cache en mémoire LRU/Map avec TTL de 24 heures (clé normalisée en minuscules, espaces condensés).
-  - Paramètres d'appel Nominatim : `format=json`, `countrycodes=dz`, `limit=5`, `addressdetails=1`.
-- **Format de Réponse :**
-  ```json
-  {
-    "lat": 36.7525,
-    "lng": 3.042,
-    "displayName": "Bab El Oued, Alger, Algérie",
-    "city": "Alger",
-    "wilaya": "Alger"
-  }
-  ```
-- **Gestion des Erreurs :**
-  - Requête vide ou invalide : `400 Bad Request` (`BAD_REQUEST`).
-  - Aucun résultat pour l'adresse : `404 Not Found` (`ADDRESS_NOT_FOUND`).
-  - Timeout > 5s, 5xx, ou HTTP 429 : `503 Service Unavailable` (`GEOCODER_UNAVAILABLE`) avec le message exact : `"Service de géocodage temporairement indisponible"`. L'application ne plante jamais.
+
+### Corps de Réponse Exact (Succès 200 OK)
+```json
+{
+  "lat": 36.7525,
+  "lng": 3.042,
+  "displayName": "Bab El Oued, Alger, Algérie",
+  "city": "Alger",
+  "wilaya": "Alger"
+}
+```
+
+### Corps de Réponse Exacts (Erreurs)
+
+#### 1. Paramètre `q` manquant ou vide (`400 Bad Request`)
+```json
+{
+  "message": "Le paramètre de recherche q est requis",
+  "code": "BAD_REQUEST"
+}
+```
+
+#### 2. Adresse introuvable (`404 Not Found`)
+```json
+{
+  "message": "Adresse introuvable.",
+  "code": "ADDRESS_NOT_FOUND"
+}
+```
+
+#### 3. Taux limite dépassé par utilisateur (`429 Too Many Requests`)
+```json
+{
+  "message": "Limite de requêtes atteinte (10 recherches par minute). Veuillez patienter.",
+  "code": "RATE_LIMITED"
+}
+```
+
+#### 4. Service indisponible / timeout / queue saturée (`503 Service Unavailable`)
+```json
+{
+  "message": "Service de géocodage temporairement indisponible",
+  "code": "GEOCODER_UNAVAILABLE"
+}
+```
 
 ---
 
-## 5. Validation des Pièces & Règle Lat/Lng
+## 5. Gestion des Coordonnées GPS & Contrat Boutique
 
-### Validation Binaire (Magic Bytes)
-- Validation effectuée via `detectMagicBytes` et `validateDocumentFile` (`src/utils/file-validator.ts`).
-- Types autorisés strictement :
-  - PDF (`%PDF-`, hex `0x25 0x50 0x44 0x46`)
-  - PNG (`\x89PNG\r\n\x1a\n`, hex `0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A`)
-  - JPEG (`\xFF\xD8\xFF`, hex `0xFF 0xD8 0xFF`)
-- Taille maximale par fichier : **5 Mo**.
-- Toute extension maquillée ou fichier corrompu est rejeté avec `400 Bad Request` (`INVALID_FILE_TYPE`).
-
-### Règle d'association Latitude / Longitude
-- Dans les schémas Zod `createShopSchema` et `updateShopSchema` :
-  - `latitude` et `longitude` doivent être **toutes deux présentes** ou **toutes deux absentes** (`null` ou `undefined`).
-  - Si l'une est fournie sans l'autre, la validation échoue avec le message : *"Latitude et longitude doivent être toutes deux renseignées ou toutes deux absentes."*
+### Réinitialisation des Coordonnées GPS (`PUT /shops/me`)
+- **Changement d'adresse sans coordonnées :** Si `address` est modifiée et que la requête ne contient ni `latitude` ni `longitude`, les coordonnées `latitude` et `longitude` sont automatiquement réinitialisées à `null` en base de données (position non confirmée).
+- **Adresse inchangée sans coordonnées :** Si l'adresse reste identique et qu'aucune coordonnée n'est fournie, les coordonnées existantes sont conservées inchangées.
+- **Paire explicite fournie :** Si `{ latitude, longitude }` sont transmises, elles sont sauvegardées.
+- **Effacement explicite :** La transmission de `{ latitude: null, longitude: null }` efface les coordonnées en base.
+- **Règle de paire indissociable :** Toute requête ne fournissant qu'une seule des deux coordonnées (ou une seule non-nulle) est immédiatement rejetée avec `400 Bad Request`.
 
 ### Attribution du rôle MERCHANT & Garde Anti-Escalade
-- Lors de la création d'une boutique :
+- Lors de la création d'une boutique (`POST /shops` ou `/shops/me`) :
   - L'utilisateur reçoit automatiquement le rôle `MERCHANT` dans son tableau `roles[]`.
   - Protection absolue : interdiction formelle d'ajouter `ADMIN` lors de la création d'une boutique.
   - Un enregistrement d'audit `SHOP_CREATED` est inséré dans `audit_logs`.
 
 ---
 
-## 6. Liste des Comptes avec Téléphone Nullifié (`PHONE_DUPLICATE_NULLIFIED`)
+## 6. Stockage Sécurisé des Documents & Anti-Path Traversal
+
+### Stockage Binaire via `StorageService`
+- Interface abstraite `StorageService` (`put`, `get`, `delete`) implémentée par le driver `DatabaseStorageService` adossé à la colonne PostgreSQL `file_data` (`BYTEA`).
+- `multer.memoryStorage()` utilisé exclusivement : suppression intégrale du stockage sur disque local pour les nouveaux uploads.
+- Validation binaire par magic bytes (`detectMagicBytes`) : seuls PDF (`%PDF-`), PNG (`\x89PNG`), JPEG (`\xFF\xD8\xFF`) sont autorisés. Fichiers WebP et autres formats rejetés avec `400 Bad Request`.
+- Limite de taille stricte : **5 Mo maximum** par fichier.
+- Sanitisation des réponses commerçant (`GET /shops/me/documents` et `POST /shops/my/documents`) : aucun chemin interne (`storagePath`), URL publique ni octet binaire n'est retourné.
+
+### Sécurisation de l'accès Administrateur aux Justificatifs
+- Endpoint `GET /api/shops/:id/documents/:filename` réservé au rôle `ADMIN`.
+- Validation stricte anti-traversal :
+  - `:id` restreint à `/^[a-zA-Z0-9_-]+$/`.
+  - `:filename` restreint à `/^[a-zA-Z0-9_.-]+$/` et rejet explicite de `..`, `/`, `\`, `%2e`, `%2f`, `%5c`, et chemins absolus.
+  - Les fichiers sont servis en priorité depuis PostgreSQL (`file_data`).
+  - Pour le repli sur les fichiers disques existants non migrés, le chemin est résolu via `path.resolve(config.uploadDir, path.basename(doc.filename))` et confiné strictement à `config.uploadDir`.
+
+---
+
+## 7. Liste des Comptes avec Téléphone Nullifié (`PHONE_DUPLICATE_NULLIFIED`)
 
 Requête exécutée sur la base de test `neondb_lot1_test` (audit logs pour déduplication de numéro) :
 
@@ -131,19 +177,19 @@ Requête exécutée sur la base de test `neondb_lot1_test` (audit logs pour déd
 
 ---
 
-## 7. Questions & Clarifications
-
-1. **Persistance des formats d'horaires (`openingHours`) :**  
-   Le schéma actuel persiste les horaires au format JSONB libre (`Record<string, any>`). Un schéma de validation strict par jour (ex: `monday: { open: "08:00", close: "18:00", closed: false }`) pourra être formalisé si nécessaire lors de l'intégration avec le frontend du Lot 6A.
-2. **Quota Nominatim en production :**  
-   Pour un trafic élevé en production en Algérie, l'hébergement d'une instance Nominatim dédiée ou l'utilisation d'une passerelle mise en cache (Redis) est recommandée par rapport au serveur public OpenStreetMap qui applique une limite de 1 requête par seconde.
-
----
-
-## 8. Résultats des Tests & Compilation
+## 8. Résultats des Tests & Compilation (Preuves Formelles)
 
 - **Vérification TypeScript :** `npx tsc --noEmit` exécuté avec **0 erreur**.
 - **Tests Unitaires Jest :**
   - Suites de tests : **5 / 5 réussies** (`jwt.service.test.ts`, `telegram-auth.test.ts`, `validation.test.ts`, `lot2b.test.ts`, `lot5a.test.ts`).
-  - Tests unitaires : **79 passés / 79 au total (100% succès, 0 échec)**.
-  - Nouveaux tests ajoutés dans `lot5a.test.ts` : 18 tests dédiés couvrant les magic bytes, le mapping d'état géocodage, la règle de paire lat/lng, la garde anti-escalade ADMIN, et la sanitisation des documents.
+  - Tests unitaires : **89 passés / 89 au total (100% succès, 0 échec)**.
+  - Couverture complète des points de contrôle Lot 5A-fix :
+    * Rejet de WebP et limite 5 Mo (magic bytes + fileFilter).
+    * Fail-fast en production si `TELEGRAM_BOT_USERNAME` ou `GEOCODER_USER_AGENT` manquant ou factice.
+    * Réinitialisation de latitude/longitude à null sur modification d'adresse sans coordonnées.
+    * Préservation des coordonnées si l'adresse est inchangée.
+    * Rejet strict des paires coordonnées partielles (400 Bad Request).
+    * Rejet de path traversal (`../../etc/passwd`, encodé `%2e%2e`, chemins absolus).
+    * Limitation par utilisateur (10 req/min -> 429 `RATE_LIMITED`).
+    * File d'attente Nominatim bornée à 20 -> 503 `GEOCODER_UNAVAILABLE`.
+    * Timeout réseau de 5 secondes strictement appliqué à l'appel Nominatim.

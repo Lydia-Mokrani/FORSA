@@ -11,7 +11,7 @@ export interface GeocodeResult {
   wilaya: string | null;
 }
 
-export type GeocodeErrorCode = 'ADDRESS_NOT_FOUND' | 'GEOCODER_UNAVAILABLE' | 'BAD_REQUEST';
+export type GeocodeErrorCode = 'ADDRESS_NOT_FOUND' | 'GEOCODER_UNAVAILABLE' | 'BAD_REQUEST' | 'RATE_LIMITED';
 
 export class GeocoderError extends Error {
   public status: number;
@@ -40,6 +40,13 @@ export class GeocoderService {
   // Throttling strict : max 1 requête par seconde globalement (règle Nominatim)
   private lastRequestTime: number = 0;
   private throttleQueue: Promise<void> = Promise.resolve();
+  private waitingQueueLength: number = 0;
+  private maxQueueLength: number = 20;
+
+  // Limitation par utilisateur : max 10 requêtes par minute
+  private userRequestTimestamps: Map<string, number[]> = new Map();
+  private userRateLimitMax: number = 10;
+  private userRateLimitWindowMs: number = 60 * 1000;
 
   constructor(nominatimUrl?: string, userAgent?: string) {
     this.nominatimUrl = (nominatimUrl || config.nominatimUrl || 'https://nominatim.openstreetmap.org').replace(/\/+$/, '');
@@ -50,22 +57,57 @@ export class GeocoderService {
     return q.trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
-  private async throttle(): Promise<void> {
-    const nextInQueue = this.throttleQueue.then(async () => {
-      const now = Date.now();
-      const elapsed = now - this.lastRequestTime;
-      if (elapsed < 1000) {
-        await new Promise((resolve) => setTimeout(resolve, 1000 - elapsed));
-      }
-      this.lastRequestTime = Date.now();
-    });
-    this.throttleQueue = nextInQueue.catch(() => {});
-    return nextInQueue;
+  public checkUserRateLimit(userId: string): void {
+    const now = Date.now();
+    const timestamps = this.userRequestTimestamps.get(userId) || [];
+    const validTimestamps = timestamps.filter((t) => now - t < this.userRateLimitWindowMs);
+
+    if (validTimestamps.length >= this.userRateLimitMax) {
+      throw new GeocoderError(
+        429,
+        'RATE_LIMITED',
+        'Limite de requêtes atteinte (10 recherches par minute). Veuillez patienter.'
+      );
+    }
+
+    validTimestamps.push(now);
+    this.userRequestTimestamps.set(userId, validTimestamps);
   }
 
-  public async geocode(query: string): Promise<GeocodeResult> {
+  private async throttle(): Promise<void> {
+    if (this.waitingQueueLength >= this.maxQueueLength) {
+      throw new GeocoderError(
+        503,
+        'GEOCODER_UNAVAILABLE',
+        'Service de géocodage temporairement indisponible'
+      );
+    }
+
+    this.waitingQueueLength++;
+    try {
+      const nextInQueue = this.throttleQueue.then(async () => {
+        const now = Date.now();
+        const elapsed = now - this.lastRequestTime;
+        if (elapsed < 1000) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 - elapsed));
+        }
+        this.lastRequestTime = Date.now();
+      });
+      this.throttleQueue = nextInQueue.catch(() => {});
+      await nextInQueue;
+    } finally {
+      this.waitingQueueLength = Math.max(0, this.waitingQueueLength - 1);
+    }
+  }
+
+  public async geocode(query: string, userId?: string): Promise<GeocodeResult> {
     if (!query || !query.trim()) {
       throw new GeocoderError(400, 'BAD_REQUEST', 'Le paramètre de recherche q est requis');
+    }
+
+    // Contrôle du taux par utilisateur authentifié
+    if (userId) {
+      this.checkUserRateLimit(userId);
     }
 
     const trimmed = query.trim();
@@ -83,7 +125,7 @@ export class GeocoderService {
       : '***';
     console.log(`[MS1-Geocoder] Géocodage requis pour requête masquée: ${maskedQuery}`);
 
-    // 2. Throttling Nominatim (1 req/s)
+    // 2. Throttling Nominatim (1 req/s) avec limitation de file d'attente à 20
     await this.throttle();
 
     const baseUrl = this.nominatimUrl.endsWith('/search')
@@ -91,7 +133,7 @@ export class GeocoderService {
       : `${this.nominatimUrl}/search`;
     const url = `${baseUrl}?format=json&countrycodes=dz&limit=5&addressdetails=1&q=${encodeURIComponent(trimmed)}`;
 
-    // 3. Appel HTTP avec timeout de 5 secondes
+    // 3. Appel HTTP avec timeout de 5 secondes STRICTEMENT dédié à l'appel réseau
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
@@ -160,10 +202,20 @@ export class GeocoderService {
   }
 
   /**
-   * Méthode utilitaire pour vider le cache (utile en tests unitaires)
+   * Méthodes utilitaires pour réinitialiser l'état (utile en tests unitaires)
    */
   public clearCache(): void {
     this.cache.clear();
+  }
+
+  public clearRateLimits(): void {
+    this.userRequestTimestamps.clear();
+  }
+
+  public resetQueue(): void {
+    this.waitingQueueLength = 0;
+    this.throttleQueue = Promise.resolve();
+    this.lastRequestTime = 0;
   }
 }
 

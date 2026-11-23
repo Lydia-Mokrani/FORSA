@@ -13,6 +13,7 @@ import { prisma } from '../config/prisma';
 import { rabbitMQ } from '../services/rabbitmq.service';
 import { config } from '../config/env';
 import { validateDocumentFile } from '../utils/file-validator';
+import { storageService } from '../services/storage.service';
 import { geocoderService, GeocoderError } from '../services/geocoder.service';
 
 export const createShopSchema = z.object({
@@ -195,14 +196,37 @@ export class ShopController {
         throw new NotFoundError('Boutique non trouvée.');
       }
 
-      const { openingHours, category, registryNumber, ...shopData } = parsed.data;
+      const {
+        openingHours,
+        category,
+        registryNumber,
+        latitude,
+        longitude,
+        address,
+        ...shopData
+      } = parsed.data;
+
+      let newLatitude: number | null | undefined = latitude;
+      let newLongitude: number | null | undefined = longitude;
+
+      // Règle Lot 5A-fix : si latitude et longitude ne sont pas fournies dans la requête
+      if (latitude === undefined && longitude === undefined) {
+        // Si l'adresse a changé, on réinitialise latitude et longitude à null dans la base
+        if (address !== undefined && address.trim() !== shop.address.trim()) {
+          newLatitude = null;
+          newLongitude = null;
+        }
+      }
 
       const updated = await prisma.shop.update({
         where: { id: shop.id },
         data: {
           ...shopData,
+          ...(address !== undefined ? { address } : {}),
           ...(category !== undefined ? { category } : {}),
           ...(registryNumber !== undefined ? { registryNumber } : {}),
+          ...(newLatitude !== undefined ? { latitude: newLatitude } : {}),
+          ...(newLongitude !== undefined ? { longitude: newLongitude } : {}),
           ...(openingHours !== undefined
             ? {
                 openingHours: openingHours === null
@@ -368,7 +392,7 @@ export class ShopController {
 
       const createdDocs = [];
 
-      // 2. Persistance dans la base de données (colonne BYTEA file_data)
+      // 2. Persistance dans la base de données via StorageService (BYTEA)
       for (const [fieldName, fileArray] of Object.entries(files)) {
         const file = fileArray?.[0];
         const docType = docTypeMapping[fieldName];
@@ -388,12 +412,19 @@ export class ShopController {
               originalName: file.originalname || `${docType.toLowerCase()}`,
               mimeType: validation.detectedMime || file.mimetype,
               size: file.buffer.length,
-              fileData: file.buffer,
               fileUrl: null,
               storagePath: `db://${shop.id}/${docType}`,
               status: 'SUBMITTED',
             },
           });
+
+          // Appel explicite à StorageService.put
+          await storageService.put(
+            doc.id,
+            file.buffer,
+            validation.detectedMime || file.mimetype,
+            doc.originalName
+          );
 
           createdDocs.push({
             id: doc.id,
@@ -444,6 +475,24 @@ export class ShopController {
     try {
       const { id, filename } = req.params;
 
+      // 1. Validation stricte anti-traversal sur id et filename
+      if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+        throw new BadRequestError('Identifiant boutique invalide.');
+      }
+
+      // Rejeter path traversal brut ou encodé (../, %2e, %2f, %5c, absolus)
+      if (
+        !filename ||
+        filename.includes('..') ||
+        filename.includes('/') ||
+        filename.includes('\\') ||
+        /%2e|%2f|%5c/i.test(filename) ||
+        !/^[a-zA-Z0-9_.-]+$/.test(filename)
+      ) {
+        throw new BadRequestError('Nom de document invalide.');
+      }
+
+      // 2. Recherche en base de données par identifiant ou nom de fichier
       const doc = await prisma.shopDocument.findFirst({
         where: {
           shopId: id,
@@ -458,19 +507,32 @@ export class ShopController {
         throw new NotFoundError('Document non trouvé.');
       }
 
-      if (doc.fileData) {
-        res.setHeader('Content-Type', doc.mimeType);
-        res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
-        res.send(doc.fileData);
+      // 3. Récupération prioritaire via StorageService (stockage BYTEA en base)
+      const storedFile = await storageService.get(doc.id);
+      if (storedFile && storedFile.data) {
+        res.setHeader('Content-Type', storedFile.mimeType || doc.mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${storedFile.filename || doc.originalName}"`);
+        res.send(storedFile.data);
         return;
       }
 
-      // Rétrocompatibilité : anciens fichiers locaux non migrés
-      const filePath = path.join(config.uploadDir, doc.filename);
-      if (fs.existsSync(filePath)) {
+      // 4. Rétrocompatibilité : lecture sécurisée du fichier local (UNIQUEMENT depuis doc.filename vérifié en DB)
+      // Ne JAMAIS utiliser l'entrée utilisateur brute pour lire le disque
+      const uploadDirResolved = path.resolve(config.uploadDir);
+      const safeDbFilename = path.basename(doc.filename);
+      const safeTargetDiskPath = path.resolve(uploadDirResolved, safeDbFilename);
+
+      if (
+        !safeTargetDiskPath.startsWith(uploadDirResolved + path.sep) &&
+        safeTargetDiskPath !== uploadDirResolved
+      ) {
+        throw new BadRequestError('Accès au fichier non autorisé.');
+      }
+
+      if (fs.existsSync(safeTargetDiskPath)) {
         res.setHeader('Content-Type', doc.mimeType);
         res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
-        fs.createReadStream(filePath).pipe(res);
+        fs.createReadStream(safeTargetDiskPath).pipe(res);
         return;
       }
 
@@ -566,7 +628,8 @@ export class ShopController {
         throw new BadRequestError('Le paramètre de recherche q est requis');
       }
 
-      const result = await geocoderService.geocode(q);
+      const userId = req.user?.sub;
+      const result = await geocoderService.geocode(q, userId);
       res.json(result);
     } catch (err: any) {
       if (err instanceof GeocoderError) {

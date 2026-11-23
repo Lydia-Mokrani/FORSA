@@ -5,7 +5,7 @@ import { BadRequestError } from '@forsa/common';
 // Stockage en mémoire vive (Buffer) : suppression intégrale du stockage disque local
 const storage = multer.memoryStorage();
 
-const fileFilter = (
+export const fileFilter = (
   _req: Express.Request,
   file: Express.Multer.File,
   cb: multer.FileFilterCallback
