@@ -13,7 +13,7 @@ Statut des infos : le design Figma est la source de vérité visuelle. Le backen
 
 ## 1. Règles pour implémenter le design
 - Figma : fichier `forsa`, pages `inspos` (icônes), `web pc`, `web phone`, `ready to dev` (écrans MS1 à implémenter ici). Ne PAS modifier Figma.
-- Reprendre fidèlement : couleurs, typo (Poppins), rayons, espacements, composants du design system. Tokens observés : vert foncé `#0b2c25`, vert `#17664e`, lime `#84b140`, menthe `#eef7ec`, crème `#fdf8ec`/`#fffaf0`, bordure `#d9ddd0`, rouge `#b3261e`, ambre `#fff4dc`. Cartes : rayon 20, bordure 1px.
+- Reprendre fidèlement : couleurs, typo (Poppins), rayons, espacements, composants du design system. Tokens observés : vert foncé `#0b2c25`, vert `#17664e`, lime `#84b140`, menthe `#eef7ec`, crème `#fdf8ec`/`#fffaf0`, bordure `#d9ddd0`/`#dbf0dd`, rouge `#b3261e`, ambre `#fff4dc`. Cartes : rayon 24px (ou 32px selon conteneur), bordure 1.5px `#dbf0dd` (inspection Figma confirmée).
 - Icônes : uniquement celles de la page `inspos` (famille Hugeicons). Aucune icône externe.
 - Chaque écran existe en desktop (1440) et mobile (390) → implémentation responsive, pas deux apps.
 - Implémenter **tous les états** dessinés (erreur, vide, chargement, succès, désactivé), pas seulement l'état nominal.

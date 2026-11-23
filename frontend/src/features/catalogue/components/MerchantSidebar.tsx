@@ -201,10 +201,10 @@ const NavLogoutIcon: React.FC<{ className?: string }> = ({ className = 'size-[16
 
 const MERCHANT_ITEMS = [
   { label: 'Tableau de bord', icon: LayoutGrid, to: '/merchant/dashboard' },
-  { label: 'Réservations', icon: CalendarCheck },
   { label: 'Ajouter une offre', icon: Plus, to: '/merchant/create-offer' },
   { label: 'Avis', icon: Star },
-  { label: 'Compte', icon: User, to: '/profile' },
+  { label: 'Compte', icon: User, to: '/merchant/shop' },
+  { label: 'Réservations', icon: CalendarCheck },
 ];
 
 export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({

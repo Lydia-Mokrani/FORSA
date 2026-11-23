@@ -20,6 +20,7 @@ import { MerchantDashboardPage } from './features/catalogue/pages/MerchantDashbo
 import { MyOffersPage } from './features/catalogue/pages/MyOffersPage';
 import { CreateOfferPage } from './features/catalogue/pages/CreateOfferPage';
 import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
+import { ShopEditPage } from './features/catalogue/pages/ShopEditPage';
 
 // Profil & Compte MS1 (Sections B, C, D)
 import { ProfilePage } from './features/profile';
@@ -60,6 +61,10 @@ export const App: React.FC = () => {
             <Route
               path="/merchant/edit-offer/:id"
               element={<EditOfferPage />}
+            />
+            <Route
+              path="/merchant/shop"
+              element={<ShopEditPage />}
             />
           </Route>
 
