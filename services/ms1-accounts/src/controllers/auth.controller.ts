@@ -59,6 +59,9 @@ export class AuthController {
       }
 
       const phone = normalizeToE164(parsed.data.phone);
+      if (!phone) {
+        throw new BadRequestError('Numéro de téléphone mobile algérien invalide (+213 5/6/7 xx xx xx).');
+      }
 
       const challenge = await createAuthChallenge(phone, ChallengePurpose.LOGIN);
 

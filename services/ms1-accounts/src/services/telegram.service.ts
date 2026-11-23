@@ -105,6 +105,11 @@ async function handleTelegramUpdate(update: any): Promise<void> {
     const contactPhone = normalizeToE164(rawContactPhone);
     const contactUserId = message.contact.user_id;
 
+    if (!contactPhone) {
+      await sendTelegramMessage(chatId, '❌ Numéro de téléphone invalide. Utilisez un numéro mobile algérien.', { remove_keyboard: true });
+      return;
+    }
+
     // Vérification de sécurité : contact.user_id == from.id
     if (contactUserId && senderId && contactUserId !== senderId) {
       await sendTelegramMessage(
