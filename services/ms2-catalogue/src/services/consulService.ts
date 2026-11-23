@@ -26,6 +26,7 @@ function getServiceAddress(): string {
 }
 
 let isRegistered = false;
+let backgroundRetryTimer: NodeJS.Timeout | null = null;
 
 export function isConsulRegistered(): boolean {
   return isRegistered;
@@ -36,7 +37,7 @@ export function getConsulServiceId(): string {
   return `${env.SERVICE_NAME}-${serviceAddress}-${env.PORT}`;
 }
 
-async function consulPut(path: string, body?: unknown): Promise<void> {
+async function consulPut(path: string, body?: unknown, timeoutMs = 5000): Promise<void> {
   return new Promise((resolve, reject) => {
     const data    = body ? JSON.stringify(body) : '';
     const options = {
@@ -48,6 +49,7 @@ async function consulPut(path: string, body?: unknown): Promise<void> {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(data),
       },
+      timeout: timeoutMs,
     };
 
     const req = http.request(options, (res) => {
@@ -58,17 +60,21 @@ async function consulPut(path: string, body?: unknown): Promise<void> {
       }
     });
 
+    req.on('timeout', () => {
+      req.destroy(new Error(`Consul HTTP request timed out after ${timeoutMs}ms`));
+    });
+
     req.on('error', reject);
     if (data) req.write(data);
     req.end();
   });
 }
 
-export async function registerWithConsul(maxRetries = 5): Promise<void> {
+function buildRegistration(): ConsulRegistration {
   const serviceAddress = getServiceAddress();
   const serviceId = getConsulServiceId();
 
-  const registration: ConsulRegistration = {
+  return {
     ID:      serviceId,
     Name:    env.SERVICE_NAME,
     Tags:    [
@@ -83,25 +89,37 @@ export async function registerWithConsul(maxRetries = 5): Promise<void> {
     Address: serviceAddress,
     Port:    env.PORT,
     Check: {
-      HTTP:                            `http://${serviceAddress}:${env.PORT}/health`,
+      // Consul uses /health/ready so traffic is only routed when DB & RabbitMQ are ready
+      HTTP:                            `http://${serviceAddress}:${env.PORT}/health/ready`,
       Interval:                        '10s',
       Timeout:                         '5s',
       DeregisterCriticalServiceAfter:  '1m',
     },
   };
+}
+
+export async function registerWithConsul(maxRetries = 5): Promise<void> {
+  const registration = buildRegistration();
+  const serviceId = registration.ID;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       await consulPut('/v1/agent/service/register', registration);
       isRegistered = true;
-      logger.info('Registered with Consul successfully', { serviceId, serviceAddress, port: env.PORT });
+      if (backgroundRetryTimer) {
+        clearInterval(backgroundRetryTimer);
+        backgroundRetryTimer = null;
+      }
+      logger.info('Registered with Consul successfully', { serviceId, serviceAddress: registration.Address, port: env.PORT });
       return;
     } catch (err: any) {
       const isLast = attempt === maxRetries;
       const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
       logger.warn(`Consul registration attempt ${attempt}/${maxRetries} failed: ${err.message}. Retrying in ${delay}ms...`);
       if (isLast) {
-        logger.error('Could not register with Consul after all retries; proceeding without Consul registration', { err });
+        isRegistered = false;
+        logger.error('Could not register with Consul after initial retries; starting background retry every 30s', { err });
+        scheduleBackgroundRegistrationRetry();
         return;
       }
       await new Promise((r) => setTimeout(r, delay));
@@ -109,7 +127,29 @@ export async function registerWithConsul(maxRetries = 5): Promise<void> {
   }
 }
 
+function scheduleBackgroundRegistrationRetry(): void {
+  if (backgroundRetryTimer) return;
+  backgroundRetryTimer = setInterval(async () => {
+    try {
+      const registration = buildRegistration();
+      await consulPut('/v1/agent/service/register', registration);
+      isRegistered = true;
+      clearInterval(backgroundRetryTimer!);
+      backgroundRetryTimer = null;
+      logger.info('Background Consul registration succeeded', { serviceId: registration.ID });
+    } catch (err: any) {
+      isRegistered = false;
+      logger.debug('Background Consul registration attempt failed', { error: err.message });
+    }
+  }, 30000);
+  backgroundRetryTimer.unref();
+}
+
 export async function deregisterFromConsul(): Promise<void> {
+  if (backgroundRetryTimer) {
+    clearInterval(backgroundRetryTimer);
+    backgroundRetryTimer = null;
+  }
   try {
     const serviceId = getConsulServiceId();
     await consulPut(`/v1/agent/service/deregister/${serviceId}`);

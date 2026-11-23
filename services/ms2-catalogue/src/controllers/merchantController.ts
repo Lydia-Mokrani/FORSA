@@ -14,7 +14,15 @@ import { OfferStatus, MovementType } from '@prisma/client';
  */
 export async function getMerchantDashboard(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const merchantId = req.user.merchantId;
+    const user = req.user;
+    if (user.role !== 'MERCHANT' || !user.sub) {
+      Errors.forbidden(res, 'Access denied.');
+      return;
+    }
+
+    const merchantFilter = user.shopId
+      ? { OR: [{ merchant_id: user.sub }, { merchant_id: user.shopId, shop_id: user.shopId }] }
+      : { merchant_id: user.sub };
 
     const [
       totalOffers,
@@ -25,13 +33,13 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
       hiddenOffers,
       withdrawnOffers,
     ] = await Promise.all([
-      prisma.offer.count({ where: { merchant_id: merchantId } }),
-      prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.ACTIVE } }),
-      prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.EXPIRED } }),
-      prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.PENDING_VERIFICATION } }),
-      prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.SOLD_OUT } }),
-      prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.HIDDEN } }),
-      prisma.offer.count({ where: { merchant_id: merchantId, status: OfferStatus.WITHDRAWN } }),
+      prisma.offer.count({ where: merchantFilter }),
+      prisma.offer.count({ where: { ...merchantFilter, status: OfferStatus.ACTIVE } }),
+      prisma.offer.count({ where: { ...merchantFilter, status: OfferStatus.EXPIRED } }),
+      prisma.offer.count({ where: { ...merchantFilter, status: OfferStatus.PENDING_VERIFICATION } }),
+      prisma.offer.count({ where: { ...merchantFilter, status: OfferStatus.SOLD_OUT } }),
+      prisma.offer.count({ where: { ...merchantFilter, status: OfferStatus.HIDDEN } }),
+      prisma.offer.count({ where: { ...merchantFilter, status: OfferStatus.WITHDRAWN } }),
     ]);
 
     // Calculate outstanding reserved quantity:
@@ -39,21 +47,21 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
     const [reserveAgg, releaseAgg, pickupAgg] = await Promise.all([
       prisma.stockMovement.aggregate({
         where: {
-          offer:         { merchant_id: merchantId },
+          offer:         merchantFilter,
           movement_type: MovementType.RESERVE,
         },
         _sum: { quantity: true },
       }),
       prisma.stockMovement.aggregate({
         where: {
-          offer:         { merchant_id: merchantId },
+          offer:         merchantFilter,
           movement_type: MovementType.RELEASE,
         },
         _sum: { quantity: true },
       }),
       prisma.stockMovement.aggregate({
         where: {
-          offer:         { merchant_id: merchantId },
+          offer:         merchantFilter,
           movement_type: MovementType.PICKUP,
         },
         _sum: { quantity: true },
@@ -69,14 +77,14 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
     // Number of confirmed customer pickup movements
     const pickupCount = await prisma.stockMovement.count({
       where: {
-        offer:         { merchant_id: merchantId },
+        offer:         merchantFilter,
         movement_type: MovementType.PICKUP,
       },
     });
 
     // Recent offers for activity feed
     const recentOffers = await prisma.offer.findMany({
-      where:   { merchant_id: merchantId },
+      where:   merchantFilter,
       orderBy: [{ updated_at: 'desc' }],
       take:    5,
       include: { category: true, photos: { take: 1 } },
@@ -84,7 +92,9 @@ export async function getMerchantDashboard(req: AuthenticatedRequest, res: Respo
 
     // Shop snapshot info for this merchant
     const shops = await prisma.shopSnapshot.findMany({
-      where: { merchant_id: merchantId },
+      where: user.shopId
+        ? { OR: [{ merchant_id: user.sub }, { merchant_id: user.shopId, id: user.shopId }] }
+        : { merchant_id: user.sub },
     });
 
     res.json({

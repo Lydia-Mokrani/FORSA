@@ -185,7 +185,7 @@ describe('Timezone, Expiration & Advanced Business Rules', () => {
     test('rejects stock adjustment with zero change', async () => {
       const req = {
         params: { id: 'offer-1' },
-        user: { merchantId: 'merchant-1' },
+        user: { role: 'MERCHANT', sub: 'merchant-1', shopId: 'shop-1', emailVerified: true },
         body: {
           quantityDelta: 0,
           reason: 'No change count',

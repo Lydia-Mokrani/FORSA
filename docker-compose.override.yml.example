@@ -1,0 +1,8 @@
+# docker-compose.override.yml.example
+# Copy to docker-compose.override.yml for local development only.
+# Exposes the private database port on localhost:5433 for Studio/pgAdmin.
+
+services:
+  ms2-db:
+    ports:
+      - "5433:5432"

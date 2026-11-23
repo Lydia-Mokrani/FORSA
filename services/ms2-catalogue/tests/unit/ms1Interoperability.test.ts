@@ -66,10 +66,10 @@ describe('MS1 <-> MS2 Interoperability', () => {
 
   // ── 1. RS256 JWT Validation ────────────────────────────────────────────────
   describe('RS256 JWT Validation', () => {
-    test('successfully validates RS256 token signed by MS1 with exact claims', () => {
+    test('successfully validates RS256 token signed by MS1 with exact claims', async () => {
       const claims = {
         sub: 'user-uuid-1234',
-        merchantId: 'shop-uuid-5678',
+        merchantId: 'user-uuid-1234',  // MS1 contract: merchantId === sub (user ID)
         shopId: 'shop-uuid-5678',
         role: 'MERCHANT' as const,
         email: 'merchant@forsa.dz',
@@ -78,7 +78,7 @@ describe('MS1 <-> MS2 Interoperability', () => {
         merchantStatus: 'APPROVED' as const,
       };
 
-      const token = jwt.sign(claims, privateKey, { algorithm: 'RS256', expiresIn: '1h' });
+      const token = jwt.sign(claims, privateKey, { algorithm: 'RS256', expiresIn: '1h', issuer: 'forsa-ms1-accounts' });
 
       const req = {
         headers: { authorization: `Bearer ${token}` },
@@ -87,12 +87,12 @@ describe('MS1 <-> MS2 Interoperability', () => {
       const res = mockResponse();
       const next = jest.fn();
 
-      authenticate(req, res, next);
+      await authenticate(req, res, next);
 
       expect(next).toHaveBeenCalled();
       expect(req.user).toBeDefined();
       expect(req.user.sub).toBe('user-uuid-1234');
-      expect(req.user.merchantId).toBe('shop-uuid-5678');
+      expect(req.user.merchantId).toBe('user-uuid-1234');  // MS1: merchantId === sub
       expect(req.user.shopId).toBe('shop-uuid-5678');
       expect(req.user.role).toBe('MERCHANT');
       expect(req.user.email).toBe('merchant@forsa.dz');
@@ -101,10 +101,10 @@ describe('MS1 <-> MS2 Interoperability', () => {
       expect(req.user.merchantStatus).toBe('APPROVED');
     });
 
-    test('strictly rejects symmetric HS256 tokens', () => {
+    test('strictly rejects symmetric HS256 tokens', async () => {
       const claims = {
         sub: 'attacker-123',
-        merchantId: 'fake-shop',
+        merchantId: 'attacker-123',
         shopId: 'fake-shop',
         role: 'MERCHANT',
         email: 'attacker@forsa.dz',
@@ -123,7 +123,7 @@ describe('MS1 <-> MS2 Interoperability', () => {
       const res = mockResponse();
       const next = jest.fn();
 
-      authenticate(req, res, next);
+      await authenticate(req, res, next);
 
       expect(next).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(401);
@@ -134,10 +134,10 @@ describe('MS1 <-> MS2 Interoperability', () => {
       );
     });
 
-    test('rejects expired RS256 tokens', () => {
+    test('rejects expired RS256 tokens', async () => {
       const claims = {
         sub: 'user-uuid-1234',
-        merchantId: 'shop-uuid-5678',
+        merchantId: 'user-uuid-1234',
         shopId: 'shop-uuid-5678',
         role: 'MERCHANT',
         email: 'merchant@forsa.dz',
@@ -146,7 +146,7 @@ describe('MS1 <-> MS2 Interoperability', () => {
         merchantStatus: 'APPROVED',
       };
 
-      const token = jwt.sign(claims, privateKey, { algorithm: 'RS256', expiresIn: '-10s' });
+      const token = jwt.sign(claims, privateKey, { algorithm: 'RS256', expiresIn: '-10s', issuer: 'forsa-ms1-accounts' });
 
       const req = {
         headers: { authorization: `Bearer ${token}` },
@@ -155,7 +155,7 @@ describe('MS1 <-> MS2 Interoperability', () => {
       const res = mockResponse();
       const next = jest.fn();
 
-      authenticate(req, res, next);
+      await authenticate(req, res, next);
 
       expect(next).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(401);

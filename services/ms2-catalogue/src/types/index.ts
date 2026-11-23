@@ -5,17 +5,17 @@ import { Request } from 'express';
 
 // ─── JWT Payload (from MS1 - RS256) ───────────────────────────────────────────
 export interface JwtPayload {
-  sub:            string;   // User ID
-  merchantId:     string;   // Shop ID / Merchant ID
-  shopId:         string;   // Explicit Shop ID
-  role:           UserRole;
-  email:          string;
-  fullName:       string;
-  emailVerified:  boolean;
-  merchantStatus: MerchantStatus;
-  iss?:           string;
-  iat?:           number;
-  exp?:           number;
+  sub:             string;                  // User ID (merchant account ID)
+  role:            UserRole;
+  email?:          string;
+  fullName?:       string;
+  emailVerified:   boolean;
+  merchantStatus?: MerchantStatus | null;   // Null for CUSTOMER / ADMIN
+  shopId?:         string | null;           // Null for CUSTOMER / ADMIN, required for MERCHANT
+  merchantId?:     string | null;           // Legacy alias in MS1 tokens; never used for authorization
+  iss?:            string;
+  iat?:            number;
+  exp?:            number;
 }
 
 export type UserRole       = 'CUSTOMER' | 'MERCHANT' | 'ADMIN';

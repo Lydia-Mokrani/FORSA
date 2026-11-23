@@ -123,11 +123,9 @@ describe('MS1 <-> MS2 Contract & Interoperability Integration Tests', () => {
             name: 'Superette El Bahia',
             status: 'ACTIVE',
           }),
-          update: expect.objectContaining({
-            merchant_id: TEST_USER_ID,
-            name: 'Superette El Bahia',
-            status: 'ACTIVE',
-          }),
+          // update is intentionally empty: re-delivery of shop.created must NOT overwrite
+          // newer status or data (idempotency per Item D)
+          update: {},
         })
       );
     });

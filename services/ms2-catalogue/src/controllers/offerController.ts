@@ -32,26 +32,25 @@ function parseNumberParam(val: unknown, name: string): { value?: number; error?:
 }
 
 /**
- * Robust ownership validation:
- * Bridges the gap where MS1's shop.created sends merchantId = shop.userId,
- * while MS1's JWT sets merchantId = shopId and sub = userId.
+ * Robust ownership validation (Binding decisions D1 and D2, Item C):
+ * Offers and shops belong to the user ID (sub).
+ * D1: MS2 must NOT use the merchantId claim for authorization or storage.
+ * D2: offers.merchant_id and shop_snapshots.merchant_id = user ID (sub).
  */
 export function isShopOwnedByMerchant(shop: { id: string; merchant_id: string }, user: JwtPayload): boolean {
-  return (
-    shop.merchant_id === user.merchantId ||
-    shop.merchant_id === user.sub ||
-    shop.id === user.shopId ||
-    shop.id === user.merchantId
-  );
+  if (user.role !== 'MERCHANT' || !user.sub || !user.shopId) return false;
+  return shop.merchant_id === user.sub && shop.id === user.shopId;
 }
 
 export function isOfferOwnedByMerchant(offer: { merchant_id: string; shop_id: string }, user: JwtPayload): boolean {
-  return (
-    offer.merchant_id === user.merchantId ||
-    offer.merchant_id === user.sub ||
-    offer.shop_id === user.shopId ||
-    offer.shop_id === user.merchantId
-  );
+  if (user.role !== 'MERCHANT' || !user.sub) return false;
+  if (offer.merchant_id === user.sub) return true;
+  // LEGACY branch: for old rows where merchant_id stored shopId
+  // TODO: Remove after executing data migration script
+  if (user.shopId && offer.merchant_id === user.shopId && offer.shop_id === user.shopId) {
+    return true;
+  }
+  return false;
 }
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
@@ -338,14 +337,22 @@ export async function getMyOffers(req: AuthenticatedRequest, res: Response): Pro
   try {
     const pagination = parsePagination(req.query as Record<string, unknown>);
     const user = req.user;
-    const merchantIds = Array.from(new Set([user.merchantId, user.sub, user.shopId].filter(Boolean)));
 
-    const where: Prisma.OfferWhereInput = {
-      OR: [
-        { merchant_id: { in: merchantIds } },
-        { shop_id: { in: merchantIds } },
-      ],
-    };
+    if (user.role !== 'MERCHANT' || !user.sub) {
+      Errors.forbidden(res, 'Access denied.');
+      return;
+    }
+
+    const where: Prisma.OfferWhereInput = user.shopId
+      ? {
+          OR: [
+            { merchant_id: user.sub },
+            // LEGACY branch: rows where merchant_id stored shopId
+            // TODO: Remove after executing data migration script
+            { merchant_id: user.shopId, shop_id: user.shopId },
+          ],
+        }
+      : { merchant_id: user.sub };
 
     const [offers, total] = await prisma.$transaction([
       prisma.offer.findMany({
@@ -369,6 +376,11 @@ export async function getMyOffers(req: AuthenticatedRequest, res: Response): Pro
 
 export async function createOffer(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
+    if (req.user.role !== 'MERCHANT' || !req.user.sub || !req.user.shopId) {
+      Errors.forbidden(res, 'Only merchants with a registered shop can perform this action.');
+      return;
+    }
+
     const parsed = CreateOfferSchema.safeParse(req.body);
     if (!parsed.success) {
       Errors.badRequest(res, 'Validation failed', { issues: parsed.error.flatten() });
@@ -444,10 +456,10 @@ export async function createOffer(req: AuthenticatedRequest, res: Response): Pro
 
     const discountPercent = calcDiscount(data.originalPrice, data.discountedPrice);
 
-    // Offers strictly start as DRAFT
+    // Offers strictly start as DRAFT. Stored merchant_id is strictly the user account ID (sub).
     const offer = await prisma.offer.create({
       data: {
-        merchant_id:         req.user.merchantId || req.user.sub,
+        merchant_id:         req.user.sub,
         shop_id:             data.shopId,
         category_id:         data.categoryId,
         name:                data.name,
@@ -598,7 +610,7 @@ export async function submitOffer(req: AuthenticatedRequest, res: Response): Pro
       payload: {
         verificationEventId,
         offerId:           updated.id,
-        merchantId:        req.user.merchantId || req.user.sub,
+        merchantId:        req.user.sub,
         productType:       updated.product_type,
         productExpiryDate: updated.product_expiry_date.toISOString(),
         datePhotoUrl:      updated.date_photo_url,
@@ -666,7 +678,7 @@ export async function withdrawOffer(req: AuthenticatedRequest, res: Response): P
       occurredAt: new Date().toISOString(),
       payload: {
         offerId:    updated.id,
-        merchantId: req.user.merchantId || req.user.sub,
+        merchantId: req.user.sub,
       },
     });
 
@@ -827,7 +839,7 @@ export async function adjustStock(req: AuthenticatedRequest, res: Response): Pro
         occurredAt: new Date().toISOString(),
         payload: {
           offerId:    id,
-          merchantId: req.user.merchantId || req.user.sub,
+          merchantId: req.user.sub,
         },
       });
     }
@@ -983,7 +995,7 @@ export async function updateOffer(req: AuthenticatedRequest, res: Response): Pro
         payload: {
           verificationEventId: newVerificationEventId,
           offerId:           updated.id,
-          merchantId:        req.user.merchantId || req.user.sub,
+          merchantId:        req.user.sub,
           productType:       updated.product_type,
           productExpiryDate: updated.product_expiry_date.toISOString(),
           datePhotoUrl:      updated.date_photo_url,
@@ -1035,7 +1047,7 @@ export async function deleteOffer(req: AuthenticatedRequest, res: Response): Pro
       eventId:    uuidv4(),
       type:       'offer.withdrawn',
       occurredAt: new Date().toISOString(),
-      payload:    { offerId: id, merchantId: req.user.merchantId || req.user.sub },
+      payload:    { offerId: id, merchantId: req.user.sub },
     });
 
     res.status(204).send();

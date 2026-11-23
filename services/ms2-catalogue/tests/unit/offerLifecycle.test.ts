@@ -77,7 +77,7 @@ describe('Offer Lifecycle, Stock & Verification Production Logic', () => {
       const dayAfterTomorrow = new Date(Date.now() + 48 * 3600 * 1000);
 
       const req = {
-        user: { merchantId: dummyMerchantId },
+        user: { role: 'MERCHANT', sub: dummyMerchantId, shopId: dummyShopId, emailVerified: true },
         body: {
           shopId: dummyShopId,
           categoryId: dummyCategoryId,
@@ -128,7 +128,7 @@ describe('Offer Lifecycle, Stock & Verification Production Logic', () => {
     test('rejects creation when discounted price is higher than original price', async () => {
       const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
       const req = {
-        user: { merchantId: dummyMerchantId },
+        user: { role: 'MERCHANT', sub: dummyMerchantId, shopId: dummyShopId, emailVerified: true },
         body: {
           shopId: dummyShopId,
           categoryId: dummyCategoryId,
@@ -157,7 +157,7 @@ describe('Offer Lifecycle, Stock & Verification Production Logic', () => {
     test('rejects creation when pickup deadline is in the past', async () => {
       const yesterday = new Date(Date.now() - 24 * 3600 * 1000);
       const req = {
-        user: { merchantId: dummyMerchantId },
+        user: { role: 'MERCHANT', sub: dummyMerchantId, shopId: dummyShopId, emailVerified: true },
         body: {
           shopId: dummyShopId,
           categoryId: dummyCategoryId,
@@ -184,7 +184,7 @@ describe('Offer Lifecycle, Stock & Verification Production Logic', () => {
     test('submitting PACKAGED offer without date label photo is rejected', async () => {
       const req = {
         params: { id: dummyOfferId },
-        user: { merchantId: dummyMerchantId },
+        user: { role: 'MERCHANT', sub: dummyMerchantId, shopId: dummyShopId, emailVerified: true },
       } as unknown as AuthenticatedRequest;
 
       const res = mockResponse();
@@ -211,7 +211,7 @@ describe('Offer Lifecycle, Stock & Verification Production Logic', () => {
     test('submitting offer without any product photos is rejected', async () => {
       const req = {
         params: { id: dummyOfferId },
-        user: { merchantId: dummyMerchantId },
+        user: { role: 'MERCHANT', sub: dummyMerchantId, shopId: dummyShopId, emailVerified: true },
       } as unknown as AuthenticatedRequest;
 
       const res = mockResponse();
@@ -237,7 +237,7 @@ describe('Offer Lifecycle, Stock & Verification Production Logic', () => {
     test('submitting valid FRESH offer transitions to PENDING_VERIFICATION', async () => {
       const req = {
         params: { id: dummyOfferId },
-        user: { merchantId: dummyMerchantId },
+        user: { role: 'MERCHANT', sub: dummyMerchantId, shopId: dummyShopId, emailVerified: true },
       } as unknown as AuthenticatedRequest;
 
       const res = mockResponse();

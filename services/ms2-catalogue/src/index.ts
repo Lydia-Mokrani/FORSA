@@ -22,20 +22,57 @@ import { connectRabbitMQ, closeRabbitMQ, isRabbitMQConnected } from './messaging
 import { startConsumers } from './messaging/consumers';
 import { startExpirationJob } from './jobs/expirationJob';
 import { registerWithConsul, deregisterFromConsul, isConsulRegistered } from './services/consulService';
-import { loadMs1PublicKey } from './middleware/auth';
+import { startBackgroundKeyRefresh, hasMs1PublicKey } from './middleware/auth';
 
 const app = express();
 let server: Server | null = null;
 
+// ── Reverse-proxy trust configuration (Item V.1) ──────────────────────────────
+app.set('trust proxy', process.env.TRUST_PROXY || 1);
+
 // ── Security middleware ───────────────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: false, // Handled specifically for /media
+}));
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN ?? '*',
+  origin: env.CORS_ORIGIN,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Internal-Api-Key'],
 }));
 
-// ── Health check (placed BEFORE rate limiting so Consul / Traefik checks are never blocked) ─
+// ── Health checks (placed BEFORE rate limiting) (Item P.1) ────────────────────
+
+// Docker / liveness probe: process up
+app.get('/health/live', (_req: Request, res: Response) => {
+  res.status(200).json({ status: 'alive' });
+});
+
+// Consul / readiness probe: 503 if DB or RabbitMQ down; reports authKey state
+app.get('/health/ready', async (_req: Request, res: Response) => {
+  let dbStatus = 'disconnected';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch {
+    dbStatus = 'disconnected';
+  }
+
+  const mqStatus = isRabbitMQConnected() ? 'connected' : 'disconnected';
+  const authKeyStatus = hasMs1PublicKey() ? 'loaded' : 'missing';
+  const isReady = dbStatus === 'connected' && mqStatus === 'connected';
+
+  res.status(isReady ? 200 : 503).json({
+    status:    isReady ? 'ready' : 'unready',
+    service:   env.SERVICE_NAME,
+    timestamp: new Date().toISOString(),
+    database:  dbStatus,
+    rabbitmq:  mqStatus,
+    authKey:   authKeyStatus,
+  });
+});
+
+// Backward-compatible general health check
 app.get('/health', async (_req: Request, res: Response) => {
   let dbStatus = 'disconnected';
   try {
@@ -47,6 +84,7 @@ app.get('/health', async (_req: Request, res: Response) => {
 
   const mqStatus = isRabbitMQConnected() ? 'connected' : 'disconnected';
   const consulStatus = isConsulRegistered() ? 'registered' : 'unregistered';
+  const authKeyStatus = hasMs1PublicKey() ? 'loaded' : 'missing';
   const isHealthy = dbStatus === 'connected';
 
   res.status(isHealthy ? 200 : 503).json({
@@ -57,6 +95,7 @@ app.get('/health', async (_req: Request, res: Response) => {
     database:  dbStatus,
     rabbitmq:  mqStatus,
     consul:    consulStatus,
+    authKey:   authKeyStatus,
   });
 });
 
@@ -73,9 +112,11 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ── Static media files (uploaded images) ─────────────────────────────────────
-// Accessible at /media/:filename
-app.use('/media', express.static(path.resolve(env.UPLOAD_DIR)));
+// ── Static media files with Cross-Origin-Resource-Policy (Item V.2) ───────────
+app.use('/media', (req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.resolve(env.UPLOAD_DIR)));
 
 // ── API routes ────────────────────────────────────────────────────────────────
 app.use(router);
@@ -94,13 +135,14 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 async function bootstrap(): Promise<void> {
   try {
-    // 1. Start the HTTP server first so the service is reachable
-    server = app.listen(env.PORT, () => {
-      logger.info(`MS2 Catalogue & Search running on port ${env.PORT} [${env.NODE_ENV}]`);
+    // 1. Start HTTP server on HOST and PORT (Item M)
+    const host = env.HOST;
+    server = app.listen(env.PORT, host, () => {
+      logger.info(`MS2 Catalogue & Search running on http://${host}:${env.PORT} [${env.NODE_ENV}]`);
     });
 
-    // 2. Load MS1 RSA RS256 public key (from env or dynamic endpoint)
-    await loadMs1PublicKey();
+    // 2. Load MS1 RSA RS256 public key asynchronously in background without blocking startup (Item G)
+    startBackgroundKeyRefresh();
 
     // 3. Connect to PostgreSQL database
     try {
@@ -136,9 +178,19 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-// Graceful shutdown
+// Graceful shutdown with 10s forced-exit timeout (Item P.4)
+let isShuttingDown = false;
 async function gracefulShutdown(signal: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
   logger.info(`${signal} received. Shutting down gracefully...`);
+
+  const forceExitTimeout = setTimeout(() => {
+    logger.error('Graceful shutdown timed out after 10s; forcing exit.');
+    process.exit(1);
+  }, 10000);
+  forceExitTimeout.unref();
+
   if (server) {
     await new Promise<void>((resolve) => {
       server!.close((err) => {
@@ -150,6 +202,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   await deregisterFromConsul();
   await closeRabbitMQ();
   await prisma.$disconnect();
+  clearTimeout(forceExitTimeout);
   process.exit(0);
 }
 

@@ -1,11 +1,11 @@
-# FORSA — Full stack docker-compose for local development
-# MS2 Catalogue & Search service
-# Shared infrastructure (RabbitMQ, Consul, Traefik) is provided centrally by infra/docker-compose.infra.yml
+# FORSA — MS2 Catalogue & Search compose
+# Infrastructure (RabbitMQ, Consul, Traefik) runs on the infrastructure host (S0).
+# Local Docker networking connects ms2-catalogue to its private database (ms2-db).
+# Remote cross-server links (RabbitMQ, Consul, MS1) use env-configured hostnames/IPs.
 
 networks:
-  forsa-net:
-    name: forsa-net
-    external: true
+  ms2-net:
+    driver: bridge
 
 volumes:
   ms2-db-data:
@@ -13,23 +13,21 @@ volumes:
 
 services:
 
-  # ── MS2 database (private — only ms2-catalogue connects) ───────────────────
+  # ── MS2 Database (private — only ms2-catalogue connects) ────────────────────
 
   ms2-db:
     image: postgres:16-alpine
     container_name: forsa-ms2-db
     networks:
-      - forsa-net
+      - ms2-net
     environment:
-      POSTGRES_DB:       ms2_catalogue
-      POSTGRES_USER:     ms2_user
-      POSTGRES_PASSWORD: ms2_password
+      POSTGRES_DB:       ${POSTGRES_DB:-ms2_catalogue}
+      POSTGRES_USER:     ${POSTGRES_USER:-ms2_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ms2_password}
     volumes:
       - ms2-db-data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"      # Exposed on 5433 to avoid conflict with other local PG
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ms2_user -d ms2_catalogue"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ms2_user} -d ${POSTGRES_DB:-ms2_catalogue}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -42,36 +40,34 @@ services:
       target:  production
     container_name: forsa-ms2
     networks:
-      - forsa-net
+      - ms2-net
+    ports:
+      - "${MS2_PUBLISH_PORT:-3002}:3002"
     depends_on:
-      ms2-db:   { condition: service_healthy }
+      ms2-db: { condition: service_healthy }
     environment:
       NODE_ENV:           production
       PORT:               3002
+      HOST:               0.0.0.0
       SERVICE_NAME:       ms2-catalogue
-      SERVICE_ADDRESS:    ${SERVICE_ADDRESS:-ms2-catalogue}
-      DATABASE_URL:       postgresql://ms2_user:ms2_password@ms2-db:5432/ms2_catalogue
-      MS1_JWT_PUBLIC_KEY: ${MS1_JWT_PUBLIC_KEY}
-      MS1_PUBLIC_KEY_URL: ${MS1_PUBLIC_KEY_URL:-http://localhost:3001/api/auth/public-key}
+      SERVICE_ADDRESS:    ${SERVICE_ADDRESS}
+      DATABASE_URL:       postgresql://${POSTGRES_USER:-ms2_user}:${POSTGRES_PASSWORD:-ms2_password}@ms2-db:5432/${POSTGRES_DB:-ms2_catalogue}
+      MS1_JWT_PUBLIC_KEY: ${MS1_JWT_PUBLIC_KEY:-}
+      MS1_PUBLIC_KEY_URL: ${MS1_PUBLIC_KEY_URL}
       INTERNAL_API_KEY:   ${INTERNAL_API_KEY}
-      RABBITMQ_URL:       ${RABBITMQ_URL:-amqp://forsa_user:forsa_password@rabbitmq:5672}
-      RABBITMQ_EXCHANGE:  forsa.events
-      CONSUL_HOST:        ${CONSUL_HOST:-consul}
+      RABBITMQ_URL:       ${RABBITMQ_URL}
+      RABBITMQ_EXCHANGE:  ${RABBITMQ_EXCHANGE:-forsa.events}
+      CONSUL_HOST:        ${CONSUL_HOST}
       CONSUL_PORT:        ${CONSUL_PORT:-8500}
-      MEDIA_BASE_URL:     http://localhost/media
+      CORS_ORIGIN:        ${CORS_ORIGIN}
+      MEDIA_BASE_URL:     ${MEDIA_BASE_URL}
       UPLOAD_DIR:         /app/uploads
       LOG_LEVEL:          info
     volumes:
       - ms2-uploads:/app/uploads
-    labels:
-      # Traefik routing — only expose PUBLIC routes
-      # /internal/** is intentionally NOT routed through Traefik
-      - "traefik.enable=true"
-      - "traefik.http.routers.ms2-api.rule=PathPrefix(`/api/offers`) || PathPrefix(`/api/categories`) || PathPrefix(`/api/merchant`) || PathPrefix(`/media`)"
-      - "traefik.http.routers.ms2-api.entrypoints=web"
-      - "traefik.http.services.ms2.loadbalancer.server.port=3002"
+    # Traefik routing is managed via Consul Catalog tags registered by consulService.ts (Item N)
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health/live"]
       interval: 15s
       timeout: 5s
       retries: 5
