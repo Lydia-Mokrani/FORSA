@@ -148,4 +148,54 @@ describe('JwtService - Unit Tests', () => {
       expect(r1.hash).not.toBe(r2.hash);
     });
   });
+
+  describe('Multi-Instance & Stable kid (WAMS Lot 5B-1)', () => {
+    it('doit embarquer le keyId (kid) dans le header du token JWT', () => {
+      const token = jwtService.generateAccessToken(sampleMerchantPayload);
+      const decodedComplete: any = require('jsonwebtoken').decode(token, { complete: true });
+
+      expect(decodedComplete).toBeDefined();
+      expect(decodedComplete.header).toBeDefined();
+      expect(decodedComplete.header.alg).toBe('RS256');
+      expect(decodedComplete.header.kid).toBe(jwtService.getKeyId());
+      expect(decodedComplete.header.kid).toBe('forsa-ms1-auth-v1');
+    });
+
+    it('deux instances de service configurées avec les mêmes clés exposent le même JWKS et valident mutuellement leurs tokens', () => {
+      const { JwtService: JwtServiceClass } = require('../../src/services/jwt.service');
+      const keyPair = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+
+      const instance1 = new JwtServiceClass({
+        privateKey: keyPair.privateKey,
+        publicKey: keyPair.publicKey,
+        keyId: 'forsa-cluster-key-test',
+      });
+
+      const instance2 = new JwtServiceClass({
+        privateKey: keyPair.privateKey,
+        publicKey: keyPair.publicKey,
+        keyId: 'forsa-cluster-key-test',
+      });
+
+      // 1. Clés publiques et kid identiques
+      expect(instance1.getPublicKey()).toBe(instance2.getPublicKey());
+      expect(instance1.getKeyId()).toBe(instance2.getKeyId());
+
+      // 2. Token émis par Instance 1 vérifié avec succès par Instance 2
+      const token1 = instance1.generateAccessToken(sampleMerchantPayload);
+      const verifiedBy2 = instance2.verifyAccessToken(token1);
+      expect(verifiedBy2.sub).toBe(sampleMerchantPayload.sub);
+      expect(verifiedBy2.role).toBe('MERCHANT');
+
+      // 3. Token émis par Instance 2 vérifié avec succès par Instance 1
+      const token2 = instance2.generateAccessToken(sampleClientPayload);
+      const verifiedBy1 = instance1.verifyAccessToken(token2);
+      expect(verifiedBy1.sub).toBe(sampleClientPayload.sub);
+      expect(verifiedBy1.role).toBe('CUSTOMER');
+    });
+  });
 });

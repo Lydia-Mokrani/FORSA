@@ -462,6 +462,21 @@ export class ShopController {
       const { id } = req.params;
       const documents = await prisma.shopDocument.findMany({
         where: { shopId: id },
+        select: {
+          id: true,
+          shopId: true,
+          type: true,
+          status: true,
+          reason: true,
+          originalName: true,
+          filename: true,
+          mimeType: true,
+          size: true,
+          fileUrl: true,
+          storagePath: true,
+          createdAt: true,
+          updatedAt: true,
+        },
         orderBy: { createdAt: 'desc' },
       });
 

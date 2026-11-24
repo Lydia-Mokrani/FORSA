@@ -1,6 +1,5 @@
 import multer from 'multer';
 import path from 'path';
-import crypto from 'crypto';
 import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { ApiError } from '@forsa/common';
@@ -16,45 +15,36 @@ const SIGNATURES: Record<string, Buffer[]> = {
   'image/webp': [Buffer.from([0x52, 0x49, 0x46, 0x46])], // RIFF
 };
 
-/** Vérifie la signature binaire du fichier */
-export function hasImageSignature(filePath: string, mime: string): boolean {
+/** Vérifie la signature binaire du fichier (Buffer en mémoire ou chemin disque rétrocompatible) */
+export function hasImageSignature(target: string | Buffer, mime: string): boolean {
   try {
-    const fd = fs.openSync(filePath, 'r');
-    const header = Buffer.alloc(8);
-    fs.readSync(fd, header, 0, 8, 0);
-    fs.closeSync(fd);
-
     const sigs = SIGNATURES[mime];
     if (!sigs) return false;
-    return sigs.some((sig) => header.slice(0, sig.length).equals(sig));
+
+    let header: Buffer;
+    if (Buffer.isBuffer(target)) {
+      header = target.subarray(0, 8);
+    } else {
+      if (!fs.existsSync(target)) return false;
+      const fd = fs.openSync(target, 'r');
+      header = Buffer.alloc(8);
+      fs.readSync(fd, header, 0, 8, 0);
+      fs.closeSync(fd);
+    }
+
+    return sigs.some((sig) => header.subarray(0, sig.length).equals(sig));
   } catch {
     return false;
   }
 }
 
-/** Calcule le chemin complet du fichier avatar à partir du nom */
+/** Calcule le chemin complet du fichier avatar rétrocompatible sur le disque */
 export function avatarFilePath(filename: string): string {
   return path.join(config.avatarDir, filename);
 }
 
-/** S'assure que le répertoire des avatars existe */
-function ensureAvatarDir(): void {
-  if (!fs.existsSync(config.avatarDir)) {
-    fs.mkdirSync(config.avatarDir, { recursive: true });
-  }
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    ensureAvatarDir();
-    cb(null, config.avatarDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-    const unique = crypto.randomBytes(16).toString('hex');
-    cb(null, `avatar-${unique}${ext}`);
-  },
-});
+// Stockage 100% en mémoire vive : suppression complète des écritures sur le disque local
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -68,7 +58,7 @@ const upload = multer({
   },
 });
 
-/** Middleware Express : traite l'upload d'un avatar (champ "avatar") */
+/** Middleware Express : traite l'upload d'un avatar (champ "avatar") en mémoire tampon */
 export function handleAvatarUpload(req: Request, res: Response, next: NextFunction): void {
   upload.single('avatar')(req, res, (err) => {
     if (err instanceof multer.MulterError) {

@@ -21,16 +21,30 @@ export interface TokenPayload {
   phoneVerified?: boolean;
 }
 
-class JwtService {
+export class JwtService {
   private privateKey: string = '';
   private publicKey: string = '';
+  private keyId: string = config.jwtKeyId || 'forsa-ms1-auth-v1';
 
-  constructor() {
-    this.initKeys();
+  constructor(options?: { privateKey?: string; publicKey?: string; keyId?: string }) {
+    if (options?.privateKey && options?.publicKey) {
+      this.privateKey = options.privateKey;
+      this.publicKey = options.publicKey;
+      if (options.keyId) this.keyId = options.keyId;
+    } else {
+      this.initKeys();
+    }
   }
 
   private initKeys(): void {
-    // 1. Recherche des fichiers de clés PEM existants sur le disque
+    // 1. Chargement prioritaire depuis les variables d'environnement (indispensable pour multi-instances sans volume)
+    if (config.jwtPrivateKey && config.jwtPublicKey) {
+      this.privateKey = config.jwtPrivateKey;
+      this.publicKey = config.jwtPublicKey;
+      return;
+    }
+
+    // 2. Recherche des fichiers de clés PEM existants sur le disque
     const candidatePrivatePaths = [
       path.resolve(config.jwtPrivateKeyPath),
       path.resolve(process.cwd(), config.jwtPrivateKeyPath),
@@ -54,7 +68,6 @@ class JwtService {
         try {
           this.privateKey = fs.readFileSync(privPath, 'utf8');
           this.publicKey = fs.readFileSync(pubPath, 'utf8');
-          console.log(`[MS1-JWT] 🔑 Clés RSA 2048 chargées depuis le disque (${pubPath})`);
           return;
         } catch (err: any) {
           console.warn(`[MS1-JWT] Échec de lecture des clés à ${privPath}: ${err.message}`);
@@ -62,8 +75,14 @@ class JwtService {
       }
     }
 
-    // 2. Si aucune paire n'est trouvée, générer une paire RSA 2048 persistante et l'enregistrer sur le disque
-    console.warn('[MS1-JWT] ⚠️ Clés PEM absentes sur le disque. Génération d\'une paire RSA 2048 persistante...');
+    // 3. Fail-fast en production si les clés ne sont pas configurées
+    if (config.nodeEnv === 'production') {
+      throw new Error(
+        '[MS1-JWT] 🚨 En production, les clés RSA (JWT_PRIVATE_KEY/JWT_PUBLIC_KEY ou fichiers PEM) sont obligatoires. Génération aléatoire interdite pour garantir le multi-instance.'
+      );
+    }
+
+    // 4. Hors-production (dev/test) : génération d'une paire RSA 2048 en mémoire
     const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
       modulusLength: 2048,
       publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -73,20 +92,21 @@ class JwtService {
     this.privateKey = privateKey;
     this.publicKey = publicKey;
 
-    // Déterminer le dossier cible pour persister les clés
-    const targetDir = path.resolve(__dirname, '..', '..', 'keys');
-    try {
-      if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-      }
-      const targetPrivate = path.join(targetDir, 'private.pem');
-      const targetPublic = path.join(targetDir, 'public.pem');
+    // En développement uniquement, tenter de persister les clés sur disque pour réutilisation
+    if (config.nodeEnv === 'development') {
+      const targetDir = path.resolve(__dirname, '..', '..', 'keys');
+      try {
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
+        }
+        const targetPrivate = path.join(targetDir, 'private.pem');
+        const targetPublic = path.join(targetDir, 'public.pem');
 
-      fs.writeFileSync(targetPrivate, privateKey, { mode: 0o600 });
-      fs.writeFileSync(targetPublic, publicKey, { mode: 0o644 });
-      console.log(`[MS1-JWT] 💾 Clés RSA persistantes enregistrées avec succès dans : ${targetDir}`);
-    } catch (writeErr: any) {
-      console.warn(`[MS1-JWT] Impossible de persister les clés sur le disque (${writeErr.message}), clés conservées en mémoire.`);
+        fs.writeFileSync(targetPrivate, privateKey, { mode: 0o600 });
+        fs.writeFileSync(targetPublic, publicKey, { mode: 0o644 });
+      } catch {
+        // En cas d'impossibilité d'écriture (e.g. conteneur en lecture seule), clés conservées en mémoire
+      }
     }
   }
 
@@ -94,11 +114,16 @@ class JwtService {
     return this.publicKey;
   }
 
+  public getKeyId(): string {
+    return this.keyId;
+  }
+
   public generateAccessToken(payload: TokenPayload): string {
     return jwt.sign(payload, this.privateKey, {
       algorithm: 'RS256',
       expiresIn: config.jwtAccessExpiresIn as any,
       issuer: 'forsa-ms1-accounts',
+      keyid: this.keyId,
     });
   }
 

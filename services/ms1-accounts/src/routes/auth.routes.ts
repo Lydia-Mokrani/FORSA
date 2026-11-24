@@ -36,6 +36,7 @@ authRouter.get('/jwks', (_req, res) => {
         kty: 'RSA',
         use: 'sig',
         alg: 'RS256',
+        kid: jwtService.getKeyId(),
         publicKey: jwtService.getPublicKey(),
       },
     ],

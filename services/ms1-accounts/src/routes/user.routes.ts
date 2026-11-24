@@ -16,6 +16,7 @@ userRouter.post('/me/phone/change/start', authenticate, UserController.changePho
 userRouter.post('/me/phone/change/verify', authenticate, UserController.changePhoneVerify);
 
 // Avatar & Photo alias
+userRouter.get('/avatars/:filename', UserController.getAvatar);
 userRouter.post('/me/avatar', authenticate, handleAvatarUpload, UserController.uploadAvatar);
 userRouter.post('/me/photo', authenticate, handleAvatarUpload, UserController.uploadAvatar);
 userRouter.delete('/me/avatar', authenticate, UserController.deleteAvatar);

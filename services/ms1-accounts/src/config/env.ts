@@ -19,6 +19,9 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   databaseUrl: process.env.DATABASE_URL || 'postgresql://forsa_user:forsa_secret_ms1@localhost:5432/forsa_ms1_accounts?schema=public',
   
+  jwtPrivateKey: process.env.JWT_PRIVATE_KEY ? process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n') : '',
+  jwtPublicKey: process.env.JWT_PUBLIC_KEY ? process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n') : '',
+  jwtKeyId: process.env.JWT_KEY_ID || 'forsa-ms1-auth-v1',
   jwtPrivateKeyPath: process.env.JWT_PRIVATE_KEY_PATH || path.join(__dirname, '..', '..', 'keys', 'private.pem'),
   jwtPublicKeyPath: process.env.JWT_PUBLIC_KEY_PATH || path.join(__dirname, '..', '..', 'keys', 'public.pem'),
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '36500d',

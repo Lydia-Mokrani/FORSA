@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import path from 'path';
 import { z } from 'zod';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -382,37 +383,34 @@ export class UserController {
       const userId = req.user?.sub;
       if (!userId) throw new UnauthorizedError();
 
-      if (!req.file) {
+      if (!req.file || !req.file.buffer) {
         throw new BadRequestError('Aucun fichier reçu. Envoyez un fichier dans le champ "avatar".');
       }
 
-      const filePath = req.file.path;
+      const buffer = req.file.buffer;
 
-      if (!hasImageSignature(filePath, req.file.mimetype)) {
-        fs.unlinkSync(filePath);
+      if (!hasImageSignature(buffer, req.file.mimetype)) {
         throw new ApiError(400, 'INVALID_FILE_CONTENT', 'Le contenu du fichier ne correspond pas à une image valide.');
       }
 
-      const newUrl = `/api/users/avatars/${req.file.filename}`;
+      const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
+      const newUrl = `/api/users/avatars/${userId}${ext}`;
 
-      let oldAvatarUrl: string | null = null;
       if (await isPostgresAlive()) {
-        const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
-        oldAvatarUrl = user?.avatarUrl ?? null;
-        await prisma.user.update({ where: { id: userId }, data: { avatarUrl: newUrl } });
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            avatarUrl: newUrl,
+            avatarData: buffer,
+            avatarMime: req.file.mimetype,
+          },
+        });
       } else {
-        const u = devDb.users.get(userId);
+        const u = devDb.users.get(userId) as any;
         if (u) {
-          oldAvatarUrl = u.avatarUrl ?? null;
           u.avatarUrl = newUrl;
-        }
-      }
-
-      if (oldAvatarUrl) {
-        const oldFilename = oldAvatarUrl.split('/').pop();
-        if (oldFilename) {
-          const oldPath = avatarFilePath(oldFilename);
-          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+          u.avatarData = buffer;
+          u.avatarMime = req.file.mimetype;
         }
       }
 
@@ -427,28 +425,76 @@ export class UserController {
       const userId = req.user?.sub;
       if (!userId) throw new UnauthorizedError();
 
-      let oldAvatarUrl: string | null = null;
       if (await isPostgresAlive()) {
-        const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
-        oldAvatarUrl = user?.avatarUrl ?? null;
-        await prisma.user.update({ where: { id: userId }, data: { avatarUrl: null } });
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            avatarUrl: null,
+            avatarData: null,
+            avatarMime: null,
+          },
+        });
       } else {
-        const u = devDb.users.get(userId);
+        const u = devDb.users.get(userId) as any;
         if (u) {
-          oldAvatarUrl = u.avatarUrl ?? null;
           u.avatarUrl = null;
-        }
-      }
-
-      if (oldAvatarUrl) {
-        const oldFilename = oldAvatarUrl.split('/').pop();
-        if (oldFilename) {
-          const oldPath = avatarFilePath(oldFilename);
-          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+          u.avatarData = null;
+          u.avatarMime = null;
         }
       }
 
       res.json({ message: 'Photo de profil supprimée.' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/users/avatars/:filename
+   * Sert l'avatar depuis la base de données (BYTEA) pour supporter le multi-instance sans volume partagé.
+   * Rétrocompatibilité : fallback sur le disque si l'image existe physiquement.
+   */
+  public static async getAvatar(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { filename } = req.params;
+      if (!filename) throw new NotFoundError('Avatar non trouvé');
+
+      // 1. Recherche par identifiant ou URL dans la base PostgreSQL
+      if (await isPostgresAlive()) {
+        const userId = filename.replace(/\.[^.]+$/, '');
+        const user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { id: userId },
+              { avatarUrl: { contains: filename } },
+            ],
+          },
+          select: { avatarData: true, avatarMime: true },
+        });
+
+        if (user && user.avatarData) {
+          res.setHeader('Content-Type', user.avatarMime || 'image/jpeg');
+          res.setHeader('Cache-Control', 'public, max-age=604800');
+          return res.status(200).send(Buffer.from(user.avatarData)) as any;
+        }
+      } else {
+        // Fallback devDb
+        const userId = filename.replace(/\.[^.]+$/, '');
+        const u = devDb.users.get(userId) as any;
+        if (u && u.avatarData) {
+          res.setHeader('Content-Type', u.avatarMime || 'image/jpeg');
+          return res.status(200).send(Buffer.from(u.avatarData)) as any;
+        }
+      }
+
+      // 2. Fallback rétrocompatible pour anciens fichiers sur disque local
+      const legacyPath = avatarFilePath(filename);
+      if (fs.existsSync(legacyPath)) {
+        res.setHeader('Cache-Control', 'public, max-age=604800');
+        return res.sendFile(legacyPath);
+      }
+
+      throw new NotFoundError('Avatar non trouvé');
     } catch (err) {
       next(err);
     }

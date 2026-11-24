@@ -2,7 +2,7 @@
 
 > **Module :** Web Architectures & Microservices (WAMS) — UMBB ING4 GL (Semestre 7)  
 > **Superviseur :** Dr. Yahiatene Youcef  
-> **Composant :** MS1 Accounts & Shops — Scalabilité Horizontale & Justificatifs PostgreSQL  
+> **Composant :** MS1 Accounts & Shops — Scalabilité Horizontale, Justificatifs & Avatars PostgreSQL  
 > **Date :** 24 novembre 2026  
 
 ---
@@ -25,8 +25,8 @@ Dans le cadre du cahier des charges WAMS, le service **MS1 Accounts & Shops** es
          ┌───────────────────┘                   └──────────────────┐
          ▼                                                          ▼
 ┌─────────────────────────────────┐                       ┌─────────────────────────────────┐
-│     MS1 Instance 1 (Port 3001)   │                       │     MS1 Instance 2 (Port 3002)   │
-│  - X-Instance-Id: ms1-acc-1     │                       │  - X-Instance-Id: ms1-acc-2     │
+│  ms1-accounts-1 (Port 3001)     │                       │  ms1-accounts-2 (Port 3002)     │
+│  - X-Instance-Id: ms1-accounts-1│                       │  - X-Instance-Id: ms1-accounts-2│
 │  - GEOCODER_MIN_INTERVAL: 2000ms│                       │  - GEOCODER_MIN_INTERVAL: 2000ms│
 └────────────────┬────────────────┘                       └────────────────┬────────────────┘
                  │                                                         │
@@ -37,6 +37,7 @@ Dans le cadre du cahier des charges WAMS, le service **MS1 Accounts & Shops** es
                                │ PostgreSQL 16 (DB1)  │
                                │  - Colonne BYTEA     │
                                │  - file_data         │
+                               │  - avatar_data       │
                                └──────────────────────┘
 ```
 
@@ -45,94 +46,78 @@ Chaque instance MS1 injecte automatiquement dans toutes les réponses HTTP l'en-
 - `ms1-accounts-1` (port 3001) renvoie `X-Instance-Id: ms1-accounts-1`
 - `ms1-accounts-2` (port 3002) renvoie `X-Instance-Id: ms1-accounts-2`
 
-Cet en-tête est relayé fidèlement par Traefik au client, permettant d'attester de la répartition effective de la charge entre les deux instances.
+Cet en-tête est relayé fidèlement par Traefik au client, attestant de la répartition effective de la charge entre les instances.
 
 ---
 
-## 2. Stockage des Documents Justificatifs en Base PostgreSQL (BYTEA)
+## 2. Stockage des Documents et Avatars en Base PostgreSQL (BYTEA)
 
 ### Point de Preuve Explicite : Aucun Volume Partagé Requis
-Les pièces justificatives téléversées par les commerçants (`COMMERCIAL_REGISTER`, `TAX_ID`, `STOREFRONT`) sont stockées directement dans la base de données PostgreSQL dédiée à MS1 via la colonne binaire `file_data` (type **BYTEA**) de la table `shop_documents`.
+1. **Documents justificatifs :** Stockés dans la table `shop_documents` via la colonne `file_data` (BYTEA).
+2. **Avatars utilisateurs :** Stockés dans la table `users` via la colonne `avatar_data` (BYTEA) avec `avatar_mime` (VARCHAR).
 
 **Conséquence architecturale majeure :**
-Puisque les données binaires résident directement dans la base PostgreSQL centrale partagée par les instances MS1, **aucun volume partagé (NFS, GlusterFS ou volume Docker partagé multi-hôtes) n'est nécessaire** entre les instances. N'importe quelle instance MS1 peut recevoir et servir n'importe quel document à tout moment.
+Puisque les données binaires résident directement dans la base PostgreSQL centrale partagée par les instances MS1, **aucun volume partagé (NFS, Ceph, volume partagé Docker multi-hôtes) n'est nécessaire** entre les instances. N'importe quelle instance MS1 peut recevoir et servir n'importe quel avatar ou document justificatif à tout instant.
 
-### Preuve Formelle par Grep : Absence d'Écriture Disque pour les Nouveaux Fichiers
-L'analyse statique du code source confirme qu'aucune fonction d'écriture disque n'est appelée lors du cycle de vie des nouveaux justificatifs :
+### Preuve Formelle : Absence d'Écriture Disque pour les Nouveaux Fichiers
+L'analyse statique du code source (`grep -rnE "writeFile|createWriteStream|diskStorage|mkdir|appendFile|renameSync|copyFile" services/ms1-accounts/src`) confirme qu'aucune fonction d'écriture disque n'est appelée lors du cycle de vie des nouveaux justificatifs ou avatars :
 
-1. **Réception en mémoire vive (RAM) :**
-   ```text
-   services/ms1-accounts/src/middleware/upload.middleware.ts:6
-   const storage = multer.memoryStorage();
-   ```
-   Multer utilise exclusivement `memoryStorage()` : aucun fichier temporaire n'est créé sur le disque lors de l'upload.
-
-2. **Validation des Magic Bytes en mémoire :**
-   `validateDocumentFile(file)` vérifie l'en-tête binaire (%PDF-, PNG, JPEG) directement sur `file.buffer`.
-
-3. **Persistance en base via `StorageService` :**
-   ```text
-   services/ms1-accounts/src/controllers/shop.controller.ts:422
-   await storageService.put(doc.id, file.buffer, validation.detectedMime || file.mimetype, doc.originalName);
-   ```
-   L'implémentation `DatabaseStorageService.put()` exécute :
-   ```text
-   services/ms1-accounts/src/services/storage.service.ts:30-36
-   await prisma.shopDocument.update({
-     where: { id },
-     data: {
-       fileData: data,
-       storagePath: `db://${id}`,
-     },
-   });
-   ```
-
-4. **Grep des écritures disque dans `services/ms1-accounts/src` :**
-   - Seules les clés RSA (`jwt.service.ts`) et les avatars publics (`avatar-upload.middleware.ts`) écrivent sur le disque.
-   - **0 écriture disque** pour les pièces justificatives des boutiques.
-
-### Limite du Fallback Rétrocompatible Disque (Fichiers Anciens)
-Pour garantir la compatibilité avec les documents téléversés avant la mise en place du stockage BYTEA, le contrôleur `shop.controller.ts` conserve un fallback sécurisé en **lecture seule** :
-```ts
-// shop.controller.ts (lignes 532-536)
-if (fs.existsSync(safeTargetDiskPath)) {
-  res.setHeader('Content-Type', doc.mimeType);
-  res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
-  fs.createReadStream(safeTargetDiskPath).pipe(res);
-  return;
-}
-```
-**Limite architecturale identifiée :** Ce fallback disque est purement local. Les anciens fichiers résidant sur le système de fichiers d'une machine ne sont pas accessibles par l'autre instance. Tous les nouveaux fichiers créés depuis le lot 5A sont stockés en base (BYTEA) et sont donc universellement accessibles par toutes les instances.
+1. **Multer en mémoire pure (`memoryStorage`) :**
+   - Documents : `upload.middleware.ts` utilise `multer.memoryStorage()` (max 5 Mo, PDF/JPG/PNG).
+   - Avatars : `avatar-upload.middleware.ts` utilise `multer.memoryStorage()` (max 2 Mo, JPG/PNG/WebP).
+2. **Persistance en base de données :**
+   - Documents : gérés par `DatabaseStorageService.put()` qui met à jour la colonne `file_data` (BYTEA).
+   - Avatars : gérés par `UserController.uploadAvatar()` qui met à jour `avatar_data` et `avatar_mime` (BYTEA).
+3. **Distribution sans disque :**
+   - Documents : servis via `shop.controller.ts` (`GET /api/shops/me/documents/:docId/download` et admin).
+   - Avatars : servis via `UserController.getAvatar()` (`GET /api/users/avatars/:filename`), avec streaming direct du Buffer BYTEA et headers HTTP `Cache-Control: public, max-age=604800`.
 
 ---
 
-## 3. Throttling & Rate Limiting du Géocodeur Nominatim Multi-Instances
+## 3. Gestion des Clés RSA & JWKS Multi-Instances
 
-### Politique d'Utilisation Nominatim & Débit Global
+### Uniformité des Clés en Production
+Pour que les tokens JWT signés par `ms1-accounts-1` soient vérifiables par `ms1-accounts-2` sans régénération aléatoire :
+- Les clés sont chargées prioritairement depuis les variables d'environnement `JWT_PRIVATE_KEY` et `JWT_PUBLIC_KEY`.
+- Un identifiant de clé stable `kid` (`JWT_KEY_ID`, par défaut `forsa-ms1-auth-v1`) est obligatoirement embarqué dans l'en-tête de chaque token JWT (`header.kid`) et exposé sur le endpoint `/auth/jwks` et `/api/auth/jwks`.
+- En environnement de production (`NODE_ENV=production`), le démarrage échoue immédiatement (*fail-fast*) si aucune clé RSA n'est fournie, interdisant toute divergence de clés entre conteneurs.
+
+---
+
+## 4. Throttling & Rate Limiting du Géocodeur Nominatim Multi-Instances
+
+### Règle des $N$ Instances : $N \times 1000\text{ ms}$
 Le service OpenStreetMap Nominatim applique une politique stricte : **au maximum 1 requête par seconde (1 req/s)**. Tout dépassement expose le service à un bannissement IP (HTTP 429).
 
-### Configuration Pilotée par Variables d'Environnement
-Dans `services/ms1-accounts/src/config/env.ts` et `geocoder.service.ts`, les paramètres du géocodeur sont entièrement configurables via l'environnement :
+Pour un déploiement de $N$ instances indépendantes sans bus partagé pour le throttler, la valeur de `GEOCODER_MIN_INTERVAL_MS` pour chaque instance doit impérativement respecter la formule :
+$$\text{GEOCODER\_MIN\_INTERVAL\_MS} = N \times 1000\text{ ms}$$
 
-| Variable d'Environnement | Rôle | Valeur par Défaut (Mono-Instance) | Valeur Déployée (Multi-Instances 2x) |
-|---|---|---|---|
-| `GEOCODER_MIN_INTERVAL_MS` | Intervalle minimum entre 2 requêtes consécutives vers Nominatim | `1000` (1 req/s) | **`2000`** (0.5 req/s par instance) |
-| `GEOCODER_QUEUE_MAX` | Taille maximale de la file d'attente d'attente avant rejet 503 | `20` | `20` |
-| `GEOCODER_USER_LIMIT_PER_MIN` | Limite de requêtes de géocodage par utilisateur authentifié | `10` | `10` |
+- Pour $N = 1$ instance : $\text{GEOCODER\_MIN\_INTERVAL\_MS} = 1000\text{ ms}$ (1 req/s).
+- Pour $N = 2$ instances : $\text{GEOCODER\_MIN\_INTERVAL\_MS} = 2000\text{ ms}$ (0.5 req/s par instance $\implies$ max 1 req/s cumulé).
+- Pour $N = 3$ instances : $\text{GEOCODER\_MIN\_INTERVAL\_MS} = 3000\text{ ms}$ (0.33 req/s par instance $\implies$ max 1 req/s cumulé).
 
-### Calcul du Débit Cumulé avec 2 Instances
-Avec 2 instances configurées à `GEOCODER_MIN_INTERVAL_MS=2000` :
-$$\text{Débit maximal total} = 2 \times \frac{1 \text{ req}}{2000 \text{ ms}} = 1 \text{ req/s}$$
-Le total cumulé reste strictement **inférieur ou égal à 1 requête par seconde**, respectant scrupuleusement la politique d'OpenStreetMap.
-
-### Comportement du Rate Limit Utilisateur & Amélioration Cible
-- **Comportement actuel :** Le compteur de requêtes par utilisateur (`checkUserRateLimit`) est maintenu dans la mémoire de chaque processus (`userRequestTimestamps`).
-- **Effet multi-instances :** Si un utilisateur envoie des requêtes réparties équitablement entre les deux instances par Traefik, il peut consommer jusqu'à $2 \times 10 = 20\text{ requêtes par minute}$ (facteur d'échelle effectif jusqu'à $2\times$).
-- **Solution cible (recommandée) :** La solution distribuée optimale pour un environnement de production hautement disponible est un limiteur de débit centralisé (Redis ou table PostgreSQL dédiée avec algorithme de *token bucket*) afin d'unifier le quota utilisateur à travers l'ensemble du cluster.
+### User-Agent Identifiable Obligatoire
+Le service `geocoder.service.ts` transmet systématiquement un en-tête `User-Agent` identifiable configuré via `config.geocoderUserAgent`. En production, le démarrage échoue immédiatement si `GEOCODER_USER_AGENT` est absent ou défini sur une valeur par défaut/fictive (`forsa-dev`, `dummy`, `default`).
 
 ---
 
-## 4. Script de Démonstration Traefik & Multi-Instances
+## 5. Limites Multi-Instances Restantes & Pistes d'Amélioration
+
+Bien que l'architecture actuelle garantisse l'intégrité des tokens, le partage des fichiers binaires (BYTEA) et le respect du débit global Nominatim, les limites architecturales suivantes subsistent et sont documentées :
+
+1. **Limiteur de requêtes utilisateur du géocodeur en mémoire locale :**
+   - Le compteur utilisateur (`checkUserRateLimit`) est maintenu dans la mémoire vive de chaque processus (`userRequestTimestamps`).
+   - *Impact :* Un utilisateur peut consommer jusqu'à $N \times 10\text{ requêtes/min}$ (ex. 20 req/min avec 2 instances) si ses requêtes sont parfaitement équilibrées par Traefik.
+   - *Solution cible :* Déporter le bucket utilisateur sur Redis ou une table PostgreSQL dédiée.
+2. **Fichiers historiques sur disque local (fichiers legacy) :**
+   - Le fallback de lecture sur disque local (`avatarFilePath` et anciens justificatifs) ne fonctionne que sur l'instance physique où le fichier avait été initialement écrit avant la migration BYTEA.
+   - *Statut :* Tout nouveau fichier téléversé passe à 100% par PostgreSQL (BYTEA) et n'est pas affecté par cette limite.
+3. **Invalidation de session en mémoire locale :**
+   - Les sessions actives sont persistées en base PostgreSQL (`refresh_tokens`), mais si un cache mémoire est utilisé ultérieurement, un bus de publication/abonnement (RabbitMQ / Redis) sera nécessaire pour propager les révocations instantanées.
+
+---
+
+## 6. Script de Démonstration Traefik & Multi-Instances
 
 Le script de démonstration est disponible dans [`scripts/demo-5b.sh`](../../scripts/demo-5b.sh).
 
