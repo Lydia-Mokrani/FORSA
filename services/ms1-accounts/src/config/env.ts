@@ -51,6 +51,12 @@ export const config = {
   // Nominatim Geocoding
   nominatimUrl: process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org/search',
   geocoderUserAgent: process.env.GEOCODER_USER_AGENT || (process.env.NODE_ENV === 'production' ? '' : 'forsa-dev'),
+  geocoderMinIntervalMs: parseInt(process.env.GEOCODER_MIN_INTERVAL_MS || '1000', 10),
+  geocoderQueueMax: parseInt(process.env.GEOCODER_QUEUE_MAX || '20', 10),
+  geocoderUserLimitPerMin: parseInt(process.env.GEOCODER_USER_LIMIT_PER_MIN || '10', 10),
+
+  // Identifiant d'instance (multi-instances / Traefik load-balancing)
+  instanceId: process.env.INSTANCE_ID || `ms1-${process.env.HOSTNAME || '1'}-${process.env.PORT || '3001'}`,
 
   // Répertoire de stockage des avatars
   avatarDir: process.env.AVATAR_DIR || path.join(__dirname, '..', '..', 'uploads', 'avatars'),

@@ -37,20 +37,58 @@ export class GeocoderService {
   private maxCacheEntries: number = 300;
   private cacheTtlMs: number = 24 * 60 * 60 * 1000; // 24 heures
 
-  // Throttling strict : max 1 requête par seconde globalement (règle Nominatim)
+  // Throttling strict : paramétrable via env (défaut 1000ms = 1 req/s)
   private lastRequestTime: number = 0;
   private throttleQueue: Promise<void> = Promise.resolve();
   private waitingQueueLength: number = 0;
-  private maxQueueLength: number = 20;
+  private maxQueueLength: number;
+  private minIntervalMs: number;
 
-  // Limitation par utilisateur : max 10 requêtes par minute
+  // Limitation par utilisateur : paramétrable via env (défaut 10 req/min)
   private userRequestTimestamps: Map<string, number[]> = new Map();
-  private userRateLimitMax: number = 10;
+  private userRateLimitMax: number;
   private userRateLimitWindowMs: number = 60 * 1000;
 
-  constructor(nominatimUrl?: string, userAgent?: string) {
+  constructor(
+    nominatimUrl?: string,
+    userAgent?: string,
+    options?: {
+      minIntervalMs?: number;
+      maxQueueLength?: number;
+      userRateLimitMax?: number;
+    }
+  ) {
     this.nominatimUrl = (nominatimUrl || config.nominatimUrl || 'https://nominatim.openstreetmap.org').replace(/\/+$/, '');
     this.userAgent = userAgent || config.geocoderUserAgent || 'FORSA-MS1-Geocoder/1.0 (contact@forsa-dz.com)';
+
+    // Lecture pilotée par variables d'environnement avec valeurs par défaut
+    this.minIntervalMs = options?.minIntervalMs ?? (
+      process.env.GEOCODER_MIN_INTERVAL_MS
+        ? parseInt(process.env.GEOCODER_MIN_INTERVAL_MS, 10)
+        : (config.geocoderMinIntervalMs || 1000)
+    );
+    this.maxQueueLength = options?.maxQueueLength ?? (
+      process.env.GEOCODER_QUEUE_MAX
+        ? parseInt(process.env.GEOCODER_QUEUE_MAX, 10)
+        : (config.geocoderQueueMax || 20)
+    );
+    this.userRateLimitMax = options?.userRateLimitMax ?? (
+      process.env.GEOCODER_USER_LIMIT_PER_MIN
+        ? parseInt(process.env.GEOCODER_USER_LIMIT_PER_MIN, 10)
+        : (config.geocoderUserLimitPerMin || 10)
+    );
+  }
+
+  public getMinIntervalMs(): number {
+    return this.minIntervalMs;
+  }
+
+  public getMaxQueueLength(): number {
+    return this.maxQueueLength;
+  }
+
+  public getUserRateLimitMax(): number {
+    return this.userRateLimitMax;
   }
 
   private normalizeKey(q: string): string {
@@ -66,7 +104,7 @@ export class GeocoderService {
       throw new GeocoderError(
         429,
         'RATE_LIMITED',
-        'Limite de requêtes atteinte (10 recherches par minute). Veuillez patienter.'
+        `Limite de requêtes atteinte (${this.userRateLimitMax} recherches par minute). Veuillez patienter.`
       );
     }
 
@@ -88,8 +126,8 @@ export class GeocoderService {
       const nextInQueue = this.throttleQueue.then(async () => {
         const now = Date.now();
         const elapsed = now - this.lastRequestTime;
-        if (elapsed < 1000) {
-          await new Promise((resolve) => setTimeout(resolve, 1000 - elapsed));
+        if (elapsed < this.minIntervalMs) {
+          await new Promise((resolve) => setTimeout(resolve, this.minIntervalMs - elapsed));
         }
         this.lastRequestTime = Date.now();
       });

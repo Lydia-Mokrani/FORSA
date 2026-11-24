@@ -662,4 +662,70 @@ describe('LOT 5A & 5A-fix - Backend Unit Tests', () => {
       expect(Object.keys(doc)).toEqual(['id', 'type', 'status', 'reason', 'uploadedAt']);
     });
   });
+
+  describe('9. Geocoder Environment Overrides (Lot 5B-1 Addendum)', () => {
+    const originalEnv = { ...process.env };
+
+    afterEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    it('doit utiliser les valeurs par défaut (1000ms, queue 20, limite 10 req/min) sans variables d environnement', () => {
+      delete process.env.GEOCODER_MIN_INTERVAL_MS;
+      delete process.env.GEOCODER_QUEUE_MAX;
+      delete process.env.GEOCODER_USER_LIMIT_PER_MIN;
+
+      const geocoder = new GeocoderService();
+      expect(geocoder.getMinIntervalMs()).toBe(1000);
+      expect(geocoder.getMaxQueueLength()).toBe(20);
+      expect(geocoder.getUserRateLimitMax()).toBe(10);
+    });
+
+    it('doit lire et appliquer les surcharges des variables d environnement (GEOCODER_MIN_INTERVAL_MS, GEOCODER_QUEUE_MAX, GEOCODER_USER_LIMIT_PER_MIN)', () => {
+      process.env.GEOCODER_MIN_INTERVAL_MS = '2000';
+      process.env.GEOCODER_QUEUE_MAX = '50';
+      process.env.GEOCODER_USER_LIMIT_PER_MIN = '5';
+
+      const geocoder = new GeocoderService();
+      expect(geocoder.getMinIntervalMs()).toBe(2000);
+      expect(geocoder.getMaxQueueLength()).toBe(50);
+      expect(geocoder.getUserRateLimitMax()).toBe(5);
+    });
+
+    it('doit respecter la priorité des options explicites transmises au constructeur', () => {
+      process.env.GEOCODER_MIN_INTERVAL_MS = '2000';
+      process.env.GEOCODER_QUEUE_MAX = '50';
+      process.env.GEOCODER_USER_LIMIT_PER_MIN = '5';
+
+      const geocoder = new GeocoderService(undefined, undefined, {
+        minIntervalMs: 3000,
+        maxQueueLength: 15,
+        userRateLimitMax: 8,
+      });
+
+      expect(geocoder.getMinIntervalMs()).toBe(3000);
+      expect(geocoder.getMaxQueueLength()).toBe(15);
+      expect(geocoder.getUserRateLimitMax()).toBe(8);
+    });
+
+    it('doit bloquer à la 6ème requête utilisateur quand le rate limit configuré est de 5', () => {
+      const geocoder = new GeocoderService(undefined, undefined, {
+        userRateLimitMax: 5,
+      });
+      const userId = 'user_custom_rate_limit';
+
+      for (let i = 0; i < 5; i++) {
+        expect(() => geocoder.checkUserRateLimit(userId)).not.toThrow();
+      }
+
+      expect(() => geocoder.checkUserRateLimit(userId)).toThrow(GeocoderError);
+      try {
+        geocoder.checkUserRateLimit(userId);
+      } catch (err: any) {
+        expect(err.status).toBe(429);
+        expect(err.code).toBe('RATE_LIMITED');
+        expect(err.message).toContain('5 recherches par minute');
+      }
+    });
+  });
 });

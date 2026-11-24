@@ -14,6 +14,12 @@ export const createApp = (): Express => {
   app.use(express.json());
   app.use(loggerMiddleware);
 
+  // Identification d'instance pour Traefik / Load Balancing (WAMS Multi-Instances)
+  app.use((_req, res, next) => {
+    res.setHeader('X-Instance-Id', config.instanceId);
+    next();
+  });
+
   // Endpoint Healthcheck pour Consul et Docker
   app.get('/health', (_req, res) => {
     res.status(200).json({

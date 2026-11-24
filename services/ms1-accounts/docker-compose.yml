@@ -17,11 +17,14 @@ services:
       timeout: 5s
       retries: 5
 
-  ms1-accounts:
+  # ============================================================
+  # Instance 1 : MS1 Accounts & Shops (Port 3001)
+  # ============================================================
+  ms1-accounts-1:
     build:
       context: ../..
       dockerfile: services/ms1-accounts/Dockerfile
-    container_name: forsa-ms1-accounts
+    container_name: forsa-ms1-accounts-1
     restart: unless-stopped
     depends_on:
       ms1-postgres:
@@ -32,6 +35,7 @@ services:
       - .env
     environment:
       PORT: 3001
+      INSTANCE_ID: ms1-accounts-1
       NODE_ENV: production
       DATABASE_URL: postgresql://forsa_user:forsa_secret_ms1@ms1-postgres:5432/forsa_ms1_accounts?schema=public
       RABBITMQ_URL: amqp://forsa_user:forsa_password@10.0.0.10:5672 # IP Serveur S0
@@ -40,10 +44,46 @@ services:
       SERVICE_HOST: 10.0.0.11 # IP Serveur S1
       INTERNAL_API_KEY: 0860c84a8ea7aaca109f98b5b30ce65a262d67425aad0f474290c3f3e86822f9
       UPLOAD_DIR: /app/uploads/documents
+      # Geocoder : 2000ms par instance pour garantir total <= 1 req/s vers Nominatim (2 instances)
+      GEOCODER_MIN_INTERVAL_MS: 2000
+      GEOCODER_QUEUE_MAX: 20
+      GEOCODER_USER_LIMIT_PER_MIN: 10
     volumes:
-      - ms1_documents_data:/app/uploads/documents
+      - ./keys:/app/services/ms1-accounts/keys:ro
+
+  # ============================================================
+  # Instance 2 : MS1 Accounts & Shops (Port 3002)
+  # ============================================================
+  ms1-accounts-2:
+    build:
+      context: ../..
+      dockerfile: services/ms1-accounts/Dockerfile
+    container_name: forsa-ms1-accounts-2
+    restart: unless-stopped
+    depends_on:
+      ms1-postgres:
+        condition: service_healthy
+    ports:
+      - "3002:3002"
+    env_file:
+      - .env
+    environment:
+      PORT: 3002
+      INSTANCE_ID: ms1-accounts-2
+      NODE_ENV: production
+      DATABASE_URL: postgresql://forsa_user:forsa_secret_ms1@ms1-postgres:5432/forsa_ms1_accounts?schema=public
+      RABBITMQ_URL: amqp://forsa_user:forsa_password@10.0.0.10:5672 # IP Serveur S0
+      CONSUL_HOST: 10.0.0.10 # IP Serveur S0
+      CONSUL_PORT: 8500
+      SERVICE_HOST: 10.0.0.11 # IP Serveur S1
+      INTERNAL_API_KEY: 0860c84a8ea7aaca109f98b5b30ce65a262d67425aad0f474290c3f3e86822f9
+      UPLOAD_DIR: /app/uploads/documents
+      # Geocoder : 2000ms par instance pour garantir total <= 1 req/s vers Nominatim (2 instances)
+      GEOCODER_MIN_INTERVAL_MS: 2000
+      GEOCODER_QUEUE_MAX: 20
+      GEOCODER_USER_LIMIT_PER_MIN: 10
+    volumes:
       - ./keys:/app/services/ms1-accounts/keys:ro
 
 volumes:
   ms1_postgres_data:
-  ms1_documents_data:
