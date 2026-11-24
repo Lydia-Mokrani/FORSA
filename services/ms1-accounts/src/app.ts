@@ -5,6 +5,9 @@ import { authRouter } from './routes/auth.routes';
 import { userRouter } from './routes/user.routes';
 import { shopRouter } from './routes/shop.routes';
 import { config } from './config/env';
+import { prisma } from './config/prisma';
+import { eventBus } from './services/event-bus';
+import { consul } from './services/consul.service';
 
 export const createApp = (): Express => {
   const app = express();
@@ -20,12 +23,57 @@ export const createApp = (): Express => {
     next();
   });
 
-  // Endpoint Healthcheck pour Consul et Docker
-  app.get('/health', (_req, res) => {
-    res.status(200).json({
-      status: 'UP',
+  // Endpoint Healthcheck pour Consul et Docker (WAMS §3)
+  app.get('/health', async (_req, res) => {
+    // 1. Vérification DB (SELECT 1 avec timeout 2s)
+    let dbStatus: 'up' | 'down' = 'down';
+    try {
+      const dbCheck = prisma.$queryRawUnsafe('SELECT 1');
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('DB_TIMEOUT')), 2000)
+      );
+      await Promise.race([dbCheck, timeout]);
+      dbStatus = 'up';
+    } catch {
+      dbStatus = 'down';
+    }
+
+    // 2. Vérification Broker
+    let brokerStatus: 'up' | 'down' | 'disabled' = 'disabled';
+    const driver = process.env.EVENT_BUS_DRIVER?.toLowerCase();
+    const isMemory = driver === 'memory' || process.env.RABBITMQ_ENABLED === 'false';
+    if (isMemory) {
+      brokerStatus = 'disabled';
+    } else {
+      const isUp = typeof (eventBus as any).isBrokerUp === 'function' ? (eventBus as any).isBrokerUp() : false;
+      brokerStatus = isUp ? 'up' : 'down';
+    }
+
+    // 3. Statut Consul
+    const registered = Boolean(consul.registered);
+
+    // 4. Décision de statut et code HTTP
+    if (dbStatus === 'down') {
+      return res.status(503).json({
+        status: 'DOWN',
+        service: 'ms1-accounts',
+        instanceId: config.instanceId,
+        timestamp: new Date().toISOString(),
+        broker: brokerStatus,
+        db: dbStatus,
+        registered,
+      });
+    }
+
+    const overallStatus = brokerStatus === 'down' ? 'DEGRADED' : 'UP';
+    return res.status(200).json({
+      status: overallStatus,
       service: 'ms1-accounts',
+      instanceId: config.instanceId,
       timestamp: new Date().toISOString(),
+      broker: brokerStatus,
+      db: dbStatus,
+      registered,
     });
   });
 

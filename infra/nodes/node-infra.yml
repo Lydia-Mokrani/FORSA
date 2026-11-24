@@ -1,0 +1,75 @@
+version: '3.8'
+
+# ==============================================================================
+# FORSA (WAMS) — Nœud Infrastructure Centrale (Consul, RabbitMQ, Traefik v3)
+# ==============================================================================
+
+services:
+  # 1. Service Discovery & Configuration Registry : Consul
+  consul:
+    image: hashicorp/consul:1.19
+    container_name: forsa-consul
+    restart: unless-stopped
+    command: "agent -server -bootstrap-expect=1 -client=0.0.0.0 -ui -bind=0.0.0.0"
+    ports:
+      # UI Consul liée strictement à localhost (127.0.0.1) pour sécurité
+      - "127.0.0.1:${CONSUL_UI_PORT:-8500}:8500"
+      # Port RPC / Agent accessible depuis le réseau interne des nœuds
+      - "${CONSUL_PORT:-8500}:8500"
+      - "8600:8600/udp"
+    environment:
+      - CONSUL_BIND_INTERFACE=eth0
+    volumes:
+      - consul_data:/consul/data
+    networks:
+      - forsa-network
+
+  # 2. Broker Asynchrone AMQP : RabbitMQ avec DLQ
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: forsa-rabbitmq
+    restart: unless-stopped
+    environment:
+      # Aucun compte guest par défaut en production : variables obligatoires depuis l'environnement
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-forsa_user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD est obligatoire}
+    ports:
+      # Port AMQP pour les microservices pairs
+      - "${RABBITMQ_PORT:-5672}:5672"
+      # Interface web d'administration liée strictement à localhost (127.0.0.1)
+      - "127.0.0.1:${RABBITMQ_MGMT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - forsa-network
+
+  # 3. Reverse Proxy & Dynamic Load Balancer : Traefik v3
+  traefik:
+    image: traefik:v3.1
+    container_name: forsa-traefik
+    restart: unless-stopped
+    command:
+      - "--providers.consulcatalog=true"
+      - "--providers.consulcatalog.endpoint.address=consul:${CONSUL_PORT:-8500}"
+      - "--providers.consulcatalog.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--api.dashboard=true"
+      - "--accesslog=true"
+      - "--log.level=INFO"
+    ports:
+      # Port public HTTP routé vers les microservices
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      # Dashboard Traefik lié strictement à 127.0.0.1 pour administration
+      - "127.0.0.1:${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+    depends_on:
+      - consul
+    networks:
+      - forsa-network
+
+networks:
+  forsa-network:
+    driver: bridge
+
+volumes:
+  consul_data:
+  rabbitmq_data:

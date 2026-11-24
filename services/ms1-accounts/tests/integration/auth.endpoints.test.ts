@@ -4,29 +4,33 @@ import { jwtService } from '../../src/services/jwt.service';
 
 describe('Integration - Auth & Security Endpoints', () => {
   describe('GET /api/auth/public-key & /api/auth/jwks', () => {
-    it('doit exposer la clé publique RS256 aux microservices pairs (HTTP 200)', async () => {
+    it('doit exposer la clé publique RS256 aux microservices pairs (HTTP 200 PEM)', async () => {
       const response = await request(app).get('/api/auth/public-key');
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('algorithm', 'RS256');
-      expect(response.body).toHaveProperty('issuer', 'forsa-ms1-accounts');
-      expect(response.body).toHaveProperty('publicKey');
-      expect(response.body.publicKey).toContain('-----BEGIN PUBLIC KEY-----');
+      expect(response.text).toContain('-----BEGIN PUBLIC KEY-----');
     });
 
-    it('la route alias /api/auth/jwks doit renvoyer les mêmes informations', async () => {
+    it('la route alias /api/auth/jwks doit renvoyer les clés au format JWKS RFC 7517', async () => {
       const response = await request(app).get('/api/auth/jwks');
 
       expect(response.status).toBe(200);
-      expect(response.body.algorithm).toBe('RS256');
-      expect(response.body.publicKey).toContain('-----BEGIN PUBLIC KEY-----');
+      expect(Array.isArray(response.body.keys)).toBe(true);
+      expect(response.body.keys.length).toBeGreaterThanOrEqual(1);
+      const key = response.body.keys[0];
+      expect(key.kty).toBe('RSA');
+      expect(key.alg).toBe('RS256');
+      expect(key.use).toBe('sig');
+      expect(typeof key.n).toBe('string');
+      expect(typeof key.e).toBe('string');
+      expect(key.publicKey).toContain('-----BEGIN PUBLIC KEY-----');
     });
   });
 
   describe('Validation des entrées & Codes HTTP (400 Bad Request)', () => {
-    it('doit renvoyer HTTP 400 si le body de login est vide', async () => {
+    it('doit renvoyer HTTP 400 si le body de /api/auth/telegram/start est vide', async () => {
       const response = await request(app)
-        .post('/api/auth/login')
+        .post('/api/auth/telegram/start')
         .send({});
 
       expect(response.status).toBe(400);
@@ -34,32 +38,14 @@ describe('Integration - Auth & Security Endpoints', () => {
       expect(response.body.error.message).toBeDefined();
     });
 
-    it('doit renvoyer HTTP 400 si le format email est invalide lors du register', async () => {
+    it('doit renvoyer HTTP 400 si le format du numéro de téléphone est invalide', async () => {
       const response = await request(app)
-        .post('/api/auth/register')
-        .send({
-          email: 'not-an-email-address',
-          password: 'Password123!',
-          fullName: 'Test User',
-        });
+        .post('/api/auth/telegram/start')
+        .send({ phone: '123' });
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('BAD_REQUEST');
-      expect(response.body.error.message).toContain('Format email invalide');
-    });
-
-    it('doit renvoyer HTTP 400 si le mot de passe fait moins de 8 caractères lors du register', async () => {
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({
-          email: 'test@forsa.dz',
-          password: 'short',
-          fullName: 'Test User',
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('BAD_REQUEST');
-      expect(response.body.error.message).toContain('au moins 8 caractères');
+      expect(response.body.error.message).toContain('téléphone');
     });
   });
 
@@ -82,30 +68,24 @@ describe('Integration - Auth & Security Endpoints', () => {
       expect(response.body.error.message).toContain('Token d\'authentification invalide');
     });
 
-    it('doit renvoyer HTTP 403 si un CLIENT tente d accéder à une route réservée aux COMMERÇANTS (POST /api/shops)', async () => {
-      // Génération d'un token valide pour un CLIENT
+    it('doit renvoyer HTTP 403 si un CLIENT tente d accéder à une route réservée aux ADMINS (GET /api/shops/:id/documents)', async () => {
       const clientToken = jwtService.generateAccessToken({
         sub: 'usr_test_client_id_403',
         email: 'client.forbidden@forsa.dz',
+        roles: ['CUSTOMER'],
         role: 'CUSTOMER',
+        mode: 'customer',
         fullName: 'Client Interdit',
         emailVerified: true,
       });
 
       const response = await request(app)
-        .post('/api/shops')
-        .set('Authorization', `Bearer ${clientToken}`)
-        .send({
-          name: 'Boutique Frauduleuse',
-          address: 'Alger Centre',
-          latitude: 36.75,
-          longitude: 3.05,
-          phone: '0550123456',
-        });
+        .get('/api/shops/some-shop-id/documents')
+        .set('Authorization', `Bearer ${clientToken}`);
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('FORBIDDEN');
-      expect(response.body.error.message).toContain('MERCHANT');
+      expect(response.body.error.message).toContain('ADMIN');
     });
   });
 });

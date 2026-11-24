@@ -124,7 +124,7 @@ describe('Avatars — Magic Bytes, Taille Max 2 Mo & ID Non Devinable (LOT 5B-1-
       });
     });
 
-    it('getAvatar interroge uniquement avatarId ou avatarUrl courant (jamais user.id) et renvoie 404 pour une URL devinée', async () => {
+    it('getAvatar interroge uniquement avatarId (jamais user.id ni avatarUrl) et renvoie 404 pour une URL devinée', async () => {
       (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
 
       const req: any = { params: { filename: 'usr-victim-uuid.jpg' } };
@@ -134,16 +134,14 @@ describe('Avatars — Magic Bytes, Taille Max 2 Mo & ID Non Devinable (LOT 5B-1-
       await UserController.getAvatar(req, res, next);
 
       const queryWhere = (prisma.user.findFirst as jest.Mock).mock.calls[0][0].where;
-      expect(queryWhere.OR).toEqual([
-        { avatarId: 'usr-victim-uuid' },
-        { avatarUrl: '/api/users/avatars/usr-victim-uuid.jpg' },
-      ]);
-      // Ne doit jamais rechercher par { id: ... }
+      expect(queryWhere).toEqual({ avatarId: 'usr-victim-uuid' });
+      // Ne doit jamais rechercher par { id: ... } ou { avatarUrl: ... }
       expect(JSON.stringify(queryWhere)).not.toContain('"id":');
+      expect(JSON.stringify(queryWhere)).not.toContain('"avatarUrl":');
       expect(next).toHaveBeenCalledWith(expect.any(NotFoundError));
     });
 
-    it('conserve l ancienne URL fonctionnelle uniquement tant qu elle est l avatarUrl courante du propriétaire', async () => {
+    it('renvoie les données binaires stockées en base lorsque avatarId correspond', async () => {
       const fakeBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
       (prisma.user.findFirst as jest.Mock).mockResolvedValue({
         avatarData: fakeBuffer,

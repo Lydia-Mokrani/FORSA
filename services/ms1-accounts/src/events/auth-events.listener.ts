@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { eventBus } from '../services/event-bus';
 import { prisma } from '../config/prisma';
+import { maskPhone } from '../utils/mask-phone';
 import { ChallengePurpose, ChallengeStatus } from '@prisma/client';
 import { hashString } from '../services/challenge.service';
 
@@ -67,7 +68,7 @@ export async function initAuthEventListeners(): Promise<void> {
           ]);
 
           console.log(
-            `[AuthEventListener] ✅ Numéro mis à jour avec succès pour userId=${challenge.userId} (${oldPhone} -> ${payload.phone})`
+            `[AuthEventListener] ✅ Numéro mis à jour avec succès pour userId=${challenge.userId} (${maskPhone(oldPhone)} -> ${maskPhone(payload.phone)})`
           );
 
           // Confirmation au bot Telegram
@@ -149,10 +150,10 @@ export async function initAuthEventListeners(): Promise<void> {
       });
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[AuthEventListener] 🔑 Code OTP généré pour ${payload.phone}: ${code}`);
+        console.log(`[AuthEventListener] Code OTP émis pour ${maskPhone(payload.phone)}`);
       }
 
-      // Publier sur le bus pour envoi par le bot
+      // Publier sur le bus pour envoi par le bot (avec TTL message garanti par le bus)
       await eventBus.publish('telegram.send.otp', {
         chatId: String(payload.chatId),
         code,

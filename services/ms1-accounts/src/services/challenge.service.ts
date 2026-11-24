@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma';
 import { config } from '../config/env';
 import { ChallengePurpose, ChallengeStatus } from '@prisma/client';
 import { normalizeToE164, isValidE164Algerian } from '../utils/phone';
+import { maskPhone } from '../utils/mask-phone';
 import { ApiError, BadRequestError, NotFoundError } from '@forsa/common';
 
 export function hashString(value: string): string {
@@ -69,8 +70,7 @@ export async function createAuthChallenge(
   const deepLink = `https://t.me/${botUsername}?start=${nonce}`;
 
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[ChallengeDev] 🛡️ Nouveau défi créé pour ${phone} (ID: ${challenge.id})`);
-    console.log(`[ChallengeDev] 🔗 DeepLink Telegram: ${deepLink}`);
+    console.log(`[Challenge] Nouveau défi créé pour ${maskPhone(phone)} (ID: ${challenge.id})`);
   }
 
   return {

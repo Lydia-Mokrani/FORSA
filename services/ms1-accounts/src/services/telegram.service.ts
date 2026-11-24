@@ -286,6 +286,16 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
 export async function initTelegramBotSubscriptions(): Promise<void> {
   // Consommation de telegram.send.otp
   await eventBus.subscribe('telegram.send.otp', async (event) => {
+    // Vérification de validité temporelle : drop du message si occurredAt + TTL est dépassé
+    const otpTtlSeconds = parseInt(process.env.OTP_TTL_SECONDS || '300', 10);
+    if (event.occurredAt) {
+      const occurredMs = new Date(event.occurredAt).getTime();
+      if (!isNaN(occurredMs) && Date.now() > occurredMs + otpTtlSeconds * 1000) {
+        console.warn(`[TelegramService] OTP expiré (émis il y a > ${otpTtlSeconds}s). Message abandonné.`);
+        return;
+      }
+    }
+
     const payload = (event.payload || event.data) as {
       chatId: string | number;
       code: string;
@@ -313,6 +323,11 @@ export async function initTelegramBotSubscriptions(): Promise<void> {
  * Démarre le polling automatique du bot Telegram en arrière-plan
  */
 export async function startTelegramBot(): Promise<void> {
+  if (!config.telegramBotEnabled) {
+    console.log('[TelegramService] TELEGRAM_BOT_ENABLED=false. Le polling du bot Telegram est désactivé sur cette instance.');
+    return;
+  }
+
   const token = config.telegramBotToken;
   if (!token) {
     console.log('[TelegramService] TELEGRAM_BOT_TOKEN non configuré. Bot désactivé.');

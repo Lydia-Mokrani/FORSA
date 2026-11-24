@@ -14,6 +14,13 @@ function getRequiredEnv(key: string): string {
   return value;
 }
 
+function parseTelegramBotEnabled(): boolean {
+  if (process.env.TELEGRAM_BOT_ENABLED !== undefined && process.env.TELEGRAM_BOT_ENABLED !== '') {
+    return process.env.TELEGRAM_BOT_ENABLED === 'true';
+  }
+  return true;
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -50,6 +57,7 @@ export const config = {
   // Telegram OTP Bot
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME || (process.env.NODE_ENV === 'production' ? '' : 'forsa_auth_bot'),
+  telegramBotEnabled: parseTelegramBotEnabled(),
 
   // Nominatim Geocoding
   nominatimUrl: process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org/search',
@@ -73,6 +81,9 @@ if (config.nodeEnv === 'production') {
   const ua = process.env.GEOCODER_USER_AGENT;
   if (!ua || ua.trim() === '' || ['forsa-dev', 'dummy', 'default'].includes(ua.trim().toLowerCase())) {
     throw new Error('[MS1-Env] GEOCODER_USER_AGENT valide et non par défaut est obligatoire en environnement de production');
+  }
+  if (process.env.TELEGRAM_BOT_ENABLED === undefined || process.env.TELEGRAM_BOT_ENABLED === '') {
+    throw new Error('[MS1-Env] TELEGRAM_BOT_ENABLED est obligatoire en environnement de production');
   }
 }
 

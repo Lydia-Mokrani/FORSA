@@ -187,6 +187,7 @@ describe('LOT 5A & 5A-fix - Backend Unit Tests', () => {
           process.env.INTERNAL_API_KEY = 'test_internal_key';
           process.env.TELEGRAM_BOT_USERNAME = 'forsa_official_bot';
           process.env.GEOCODER_USER_AGENT = 'FORSA-Production-App/1.0 (contact@forsa.dz)';
+          process.env.TELEGRAM_BOT_ENABLED = 'true';
           const { config } = require('../../src/config/env');
           expect(config.nodeEnv).toBe('production');
         });

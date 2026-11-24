@@ -1,7 +1,7 @@
 /**
  * Factory du bus d'événements MS1.
- * - Si RABBITMQ_ENABLED=false → InMemoryEventBus (dev local sans Docker)
- * - Sinon → RabbitMQClient (production / staging)
+ * - EVENT_BUS_DRIVER=rabbitmq|memory (memory pour tests unitaires/dev local sans Docker)
+ * - Alias déprécié conservé : RABBITMQ_ENABLED=false
  *
  * Usage dans le code : import { eventBus } from './event-bus'
  */
@@ -10,15 +10,24 @@ import { RabbitMQClient, InMemoryEventBus } from '@forsa/common';
 import type { IEventBus } from '@forsa/common';
 import { config } from '../config/env';
 
-function createEventBus(): IEventBus {
-  const enabled = process.env.RABBITMQ_ENABLED !== 'false';
+export function createEventBus(): IEventBus {
+  let driver = process.env.EVENT_BUS_DRIVER?.toLowerCase();
 
-  if (!enabled) {
-    if (process.env.NODE_ENV !== 'production') {
-      return new InMemoryEventBus();
+  // Rétrocompatibilité : prise en compte de l'alias déprécié RABBITMQ_ENABLED
+  if (!driver) {
+    if (process.env.RABBITMQ_ENABLED === 'false') {
+      driver = 'memory';
+    } else {
+      driver = 'rabbitmq';
     }
-    // En production, forcer RabbitMQ même si variable mal réglée
-    console.error('[EventBus] RABBITMQ_ENABLED=false en production est interdit. Passage forcé en RabbitMQ.');
+  }
+
+  if (driver === 'memory') {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ [EventBus] EVENT_BUS_DRIVER=memory est formellement interdit en environnement de production. Forçage en RabbitMQ.');
+      return new RabbitMQClient(config.rabbitmqUrl, 'ms1-accounts');
+    }
+    return new InMemoryEventBus();
   }
 
   return new RabbitMQClient(config.rabbitmqUrl, 'ms1-accounts');

@@ -1,0 +1,50 @@
+version: '3.8'
+
+# ==============================================================================
+# FORSA (WAMS) — Nœud MS5 (Notifications & Passerelle Telegram Officielle)
+# ==============================================================================
+# DOCUMENTED PLACEHOLDER (Préparation Lot 5B-2)
+#
+# Architecture cible :
+# 1. Rôle du microservice MS5 :
+#    - Instance unique (Singleton, replicas: 1) hébergeant l'unique poller Telegram.
+#    - Décharge complètement MS1 du polling et des interactions directes avec l'API Telegram.
+#    - Élimine la contrainte temporaire de dissymétrie (TELEGRAM_BOT_ENABLED=true/false) entre
+#      les instances de MS1.
+# 2. Communication inter-services :
+#    - Asynchrone stricte par messages RabbitMQ (forsa.events).
+#    - MS5 écoute les commandes d'envoi : `telegram.send.otp` et `telegram.send.message`.
+#    - MS5 publie les réceptions de contacts/interactions : `telegram.contact.received`.
+# 3. Traefik & Consul :
+#    - Enregistré dans Consul avec les tags Traefik pour ses endpoints d'API propres
+#      (ex: /api/notifications).
+# ==============================================================================
+
+services:
+  ms5-notifications:
+    # Service activé au Lot 5B-2
+    image: forsa-ms5-notifications:latest
+    container_name: forsa-ms5-notifications
+    restart: unless-stopped
+    ports:
+      - "${MS5_PORT:-3005}:3005"
+    environment:
+      NODE_ENV: production
+      PORT: 3005
+      INSTANCE_ID: ms5-notifications-1
+      # MS5 est l'unique poller Telegram du cluster FORSA
+      TELEGRAM_POLLING_ENABLED: "true"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN requis pour MS5}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME requis}
+      # Connexions d'infrastructure
+      CONSUL_HOST: ${CONSUL_HOST:?CONSUL_HOST requis}
+      CONSUL_PORT: ${CONSUL_PORT:-8500}
+      RABBITMQ_URL: ${RABBITMQ_URL:?RABBITMQ_URL requis}
+      SERVICE_HOST: ${SERVICE_ADDRESS:?SERVICE_ADDRESS requis}
+      SERVICE_PORT: ${MS5_PORT:-3005}
+    networks:
+      - forsa-network
+
+networks:
+  forsa-network:
+    external: true

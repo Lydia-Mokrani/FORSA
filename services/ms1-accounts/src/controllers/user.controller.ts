@@ -13,6 +13,7 @@ import {
 import { prisma } from '../config/prisma';
 import { devDb, isPostgresAlive } from '../services/dev-db.service';
 import { normalizeToE164, isValidE164Algerian } from '../utils/phone';
+import { maskPhone } from '../utils/mask-phone';
 import { avatarFilePath, hasImageSignature } from '../middleware/avatar-upload.middleware';
 import { AuthController } from './auth.controller';
 import { logAudit } from '../services/audit.service';
@@ -281,7 +282,7 @@ export class UserController {
         },
       });
 
-      // Publier l'événement pour que le bot Telegram envoie l'OTP
+      // Publier l'événement pour que le bot Telegram envoie l'OTP (avec TTL message garanti par le bus)
       await eventBus.publish('telegram.send.otp', {
         chatId: user.telegramChatId,
         code,
@@ -290,7 +291,7 @@ export class UserController {
       }).catch((e) => console.warn('[EventBus] Erreur publish telegram.send.otp:', e.message));
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[ChangePhoneDev] 🔑 Code confirmation étape 1 pour ${user.phoneE164}: ${code}`);
+        console.log(`[ChangePhone] Demande de confirmation étape 1 émise pour ${maskPhone(user.phoneE164)}`);
       }
 
       await logAudit({
@@ -471,17 +472,11 @@ export class UserController {
       }
 
       const idWithoutExt = filename.replace(/\.[^.]+$/, '');
-      const expectedUrl = `/api/users/avatars/${filename}`;
 
-      // 1. Recherche stricte par avatarId aléatoire ou URL courante du propriétaire (jamais par user.id)
+      // 1. Recherche stricte par avatarId uniquement (Lot 5B-1b: dataset réinitialisé, aucune recherche par avatarUrl)
       if (await isPostgresAlive()) {
         const user = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { avatarId: idWithoutExt },
-              { avatarUrl: expectedUrl },
-            ],
-          },
+          where: { avatarId: idWithoutExt },
           select: { avatarData: true, avatarMime: true },
         });
 
@@ -505,9 +500,9 @@ export class UserController {
         throw new NotFoundError('Avatar non trouvé');
       }
 
-      // Fallback devDb
+      // Fallback devDb (recherche stricte par avatarId uniquement)
       const matched = Array.from(devDb.users.values()).find(
-        (u: any) => u.avatarId === idWithoutExt || u.avatarUrl === expectedUrl
+        (u: any) => u.avatarId === idWithoutExt
       ) as any;
 
       if (matched?.avatarData) {

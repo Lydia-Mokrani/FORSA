@@ -1,20 +1,10 @@
 import { app } from './app';
-import { ConsulRegistry } from '@forsa/common';
 import { config } from './config/env';
+import { consul } from './services/consul.service';
 import { initRabbitMQ, rabbitMQ } from './services/rabbitmq.service';
 import { startTelegramBot, stopTelegramBot, initTelegramBotSubscriptions } from './services/telegram.service';
 import { initAuthEventListeners } from './events/auth-events.listener';
 
-// Enregistrement Consul pour la découverte dynamique Traefik
-const consul = new ConsulRegistry({
-  consulUrl: `http://${config.consulHost}:${config.consulPort}`,
-  serviceName: 'ms1-accounts',
-  serviceId: `ms1-accounts-${config.serviceHost.replace(/[^a-zA-Z0-9_-]/g, '-')}-${config.port}`,
-  serviceHost: config.serviceHost,
-  servicePort: config.port,
-  healthPath: '/health',
-  traefikPathPrefixes: ['/api/auth', '/api/users', '/api/shops'],
-});
 
 const server = app.listen(config.port, async () => {
   console.log(`[MS1-Accounts] Serveur démarré avec succès sur le port ${config.port} (Env: ${config.nodeEnv})`);
