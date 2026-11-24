@@ -2,31 +2,31 @@ import React, { useId } from 'react';
 import { cn } from './cn';
 import { Icon } from './Icon';
 
-export interface FieldSelectOption {
-  label: string;
+export interface FieldOption {
   value: string;
+  label: string;
 }
 
-export interface FieldProps extends Omit<React.InputHTMLAttributes<HTMLInputElement | HTMLSelectElement>, 'size'> {
+export interface FieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   helperText?: string;
   error?: string;
   leftIcon?: React.ReactNode;
   rightSlot?: React.ReactNode;
   as?: 'input' | 'select';
-  options?: FieldSelectOption[];
+  options?: FieldOption[];
   containerClassName?: string;
 }
 
 /**
- * Composant Field standardisé (Input / Select) conforme Figma Lot R0.
- * Typographie : Label 14px Medium, Saisie 15px Regular, Aide 12px, Erreur 13px #b3261e.
- * États : default, focus (2px #17664e), error (2px #b3261e), disabled.
+ * Composant Field accessible conforme Figma Lot R0.
+ * Typographie : Label 14px Medium, Saisie 15px Regular, Aide 12px (text-ui-text-70), Erreur 13px (text-ui-error).
+ * États : default (border-ui-field-border), focus (2px border-ui-emerald), error (2px border-ui-error).
+ * Note [NOT IN FIGMA] : L'état disabled (opacity-60 bg-gray-50) est un état interactif WAI-ARIA non formalisé dans les maquettes Figma statiques.
  */
-export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, FieldProps>(
+export const Field = React.forwardRef<HTMLInputElement | HTMLSelectElement, FieldProps>(
   (
     {
-      id: customId,
       label,
       helperText,
       error,
@@ -34,19 +34,19 @@ export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, Fiel
       rightSlot,
       as = 'input',
       options = [],
-      disabled = false,
       className,
       containerClassName,
+      id: customId,
+      disabled,
       children,
       ...props
     },
     ref
   ) => {
-    const generatedId = useId();
-    const id = customId || generatedId;
-    const helperId = helperText ? `${id}-helper` : undefined;
+    const autoId = useId();
+    const id = customId || autoId;
     const errorId = error ? `${id}-error` : undefined;
-
+    const helperId = helperText ? `${id}-helper` : undefined;
     const hasError = Boolean(error);
 
     return (
@@ -54,7 +54,7 @@ export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, Fiel
         {label && (
           <label
             htmlFor={id}
-            className="text-[14px] font-medium text-[#0b2c25] mb-[8px] select-none"
+            className="text-[14px] font-medium text-ui-ink mb-[8px] select-none"
           >
             {label}
           </label>
@@ -62,16 +62,16 @@ export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, Fiel
 
         <div
           className={cn(
-            'relative flex items-center bg-white rounded-[14px] transition-all duration-150',
+            'relative flex items-center bg-white rounded-ui-ctl transition-all duration-150',
             'border',
             hasError
-              ? 'border-[2px] border-[#b3261e]'
-              : 'border-[#e8ebdf] focus-within:border-[2px] focus-within:border-[#17664e]',
+              ? 'border-[2px] border-ui-error'
+              : 'border-ui-field-border focus-within:border-[2px] focus-within:border-ui-emerald',
             disabled && 'opacity-60 bg-gray-50 cursor-not-allowed'
           )}
         >
           {leftIcon && (
-            <div className="pl-[16px] pr-[10px] flex items-center justify-center shrink-0 text-[#0b2c25] pointer-events-none">
+            <div className="pl-[16px] pr-[10px] flex items-center justify-center shrink-0 text-ui-ink pointer-events-none">
               {leftIcon}
             </div>
           )}
@@ -85,7 +85,7 @@ export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, Fiel
                 aria-invalid={hasError}
                 aria-describedby={cn(errorId, helperId) || undefined}
                 className={cn(
-                  'w-full bg-transparent text-[15px] font-normal text-[#0b2c25] outline-none',
+                  'w-full bg-transparent text-[15px] font-normal text-ui-ink outline-none',
                   'py-[15px] cursor-pointer appearance-none',
                   leftIcon ? 'pl-0' : 'pl-[16px]',
                   'pr-[42px]',
@@ -101,7 +101,7 @@ export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, Fiel
                 ))}
                 {children}
               </select>
-              <div className="absolute right-[16px] flex items-center justify-center pointer-events-none text-[#0b2c25]">
+              <div className="absolute right-[16px] flex items-center justify-center pointer-events-none text-ui-ink">
                 {rightSlot || <Icon name="down" size={18} alt="" />}
               </div>
             </div>
@@ -114,8 +114,8 @@ export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, Fiel
                 aria-invalid={hasError}
                 aria-describedby={cn(errorId, helperId) || undefined}
                 className={cn(
-                  'w-full bg-transparent text-[15px] font-normal text-[#0b2c25] outline-none',
-                  'py-[15px] placeholder:text-[#0b2c25]/40',
+                  'w-full bg-transparent text-[15px] font-normal text-ui-ink outline-none',
+                  'py-[15px] placeholder:text-ui-ink/40',
                   leftIcon ? 'pl-0' : 'pl-[16px]',
                   rightSlot ? 'pr-[42px]' : 'pr-[16px]',
                   disabled && 'cursor-not-allowed',
@@ -124,7 +124,7 @@ export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, Fiel
                 {...props}
               />
               {rightSlot && (
-                <div className="absolute right-[16px] flex items-center justify-center text-[#0b2c25]">
+                <div className="absolute right-[16px] flex items-center justify-center text-ui-ink">
                   {rightSlot}
                 </div>
               )}
@@ -136,7 +136,7 @@ export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, Fiel
           <div
             id={errorId}
             role="alert"
-            className="flex items-center gap-[6px] mt-[6px] text-[13px] font-normal text-[#b3261e]"
+            className="flex items-center gap-[6px] mt-[6px] text-[13px] font-normal text-ui-error"
           >
             <Icon name="alertc" size={16} alt="Erreur" />
             <span>{error}</span>
@@ -144,7 +144,7 @@ export const Field = React.forwardRef<HTMLInputElement & HTMLSelectElement, Fiel
         ) : helperText ? (
           <p
             id={helperId}
-            className="mt-[6px] text-[12px] font-normal text-[rgba(11,44,37,0.7)]"
+            className="mt-[6px] text-[12px] font-normal text-ui-text-70 leading-normal"
           >
             {helperText}
           </p>

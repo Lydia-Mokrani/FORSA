@@ -11,7 +11,7 @@ import {
   MapBox,
   Icon,
 } from '../../../components/ui';
-import { useShopGeocode } from '../../shop/useShopGeocode';
+import { useShopGeocode, Coordinates } from '../../shop/useShopGeocode';
 import { SHOP_CATEGORIES } from '../../shop/shopCategories';
 
 export type DerivedUiState = 'addressNotFound' | 'mapUnavailable' | 'saved' | 'nominal';
@@ -84,6 +84,8 @@ function buildOpeningHours(
 
 export const ShopEditPage: React.FC = () => {
   const navigate = useNavigate();
+  // Récupération de l'utilisateur connecté via getStoredUser().
+  // Remarque : Aucun AuthContext React n'existe dans ce projet (authentification gérée par localStorage dans authService.ts).
   const currentUser = getStoredUser();
 
   // États du formulaire
@@ -91,6 +93,7 @@ export const ShopEditPage: React.FC = () => {
   const [originalHours, setOriginalHours] = useState<any>(null);
   const [hoursEdited, setHoursEdited] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState<ShopFormValues>(EMPTY_FORM);
+  const [initialCoordinates, setInitialCoordinates] = useState<Coordinates | null>(null);
 
   // États applicatifs & API
   const [hasExistingShop, setHasExistingShop] = useState(false);
@@ -105,14 +108,16 @@ export const ShopEditPage: React.FC = () => {
   const [tileErrorOccurred, setTileErrorOccurred] = useState(false);
   const [mapKey, setMapKey] = useState(0);
 
-  // Hook de géocodage temps réel
+  // Hook de géocodage sans debounce à la frappe
   const {
     address,
     setAddress,
     geoStatus,
     coordinates,
     handleBlur,
+    handleKeyDown,
     retry,
+    executeLookup,
     setInitialLocation,
   } = useShopGeocode();
 
@@ -151,24 +156,30 @@ export const ShopEditPage: React.FC = () => {
           setOriginalHours(shop.openingHours || null);
           setHasExistingShop(true);
 
-          // Initialiser la position si lat/lng existants
           if (
             typeof shop.latitude === 'number' &&
             typeof shop.longitude === 'number' &&
             shop.address
           ) {
-            setInitialLocation(shop.address, {
+            const coords: Coordinates = {
               latitude: shop.latitude,
               longitude: shop.longitude,
-            });
+            };
+            setInitialCoordinates(coords);
+            setInitialLocation(shop.address, coords);
           } else if (shop.address) {
+            setInitialCoordinates(null);
             setInitialLocation(shop.address, null);
+          } else {
+            setInitialCoordinates(null);
+            setInitialLocation('', null);
           }
         } else if (res.status === 404) {
           // Utilisateur sans boutique : formulaire vierge
           setHasExistingShop(false);
           setForm(EMPTY_FORM);
           setSavedSnapshot(EMPTY_FORM);
+          setInitialCoordinates(null);
           setInitialLocation('', null);
         } else {
           setServerError('Impossible de charger les données de votre commerce.');
@@ -229,7 +240,7 @@ export const ShopEditPage: React.FC = () => {
     [fieldErrors]
   );
 
-  // État UI calculé (dérivé de façon pure, sans état manuel)
+  // État UI calculé (dérivé de façon pure)
   const derivedState: DerivedUiState = useMemo(() => {
     if (geoStatus === 'notFound') {
       return 'addressNotFound';
@@ -249,11 +260,11 @@ export const ShopEditPage: React.FC = () => {
   const isPhoneValid = form.phone.trim().length >= 8;
   const areRequiredFieldsValid = isNameValid && isAddressValid && isPhoneValid;
 
-  // Règles d'activation de la sauvegarde
+  // Règles d'activation du bouton Enregistrer (Part B.4 : actif en 'idle')
   const isSaveEnabled =
     !isSubmitting &&
     geoStatus !== 'searching' &&
-    derivedState !== 'addressNotFound' &&
+    geoStatus !== 'notFound' &&
     areRequiredFieldsValid;
 
   // Réinitialisation du formulaire (Annuler)
@@ -267,9 +278,9 @@ export const ShopEditPage: React.FC = () => {
     setHoursEdited(false);
     setInitialLocation(
       savedSnapshot.address,
-      coordinates && savedSnapshot.address === address ? coordinates : null
+      initialCoordinates && savedSnapshot.address === address ? initialCoordinates : null
     );
-  }, [savedSnapshot, setInitialLocation, coordinates, address]);
+  }, [savedSnapshot, setInitialLocation, initialCoordinates, address]);
 
   // Réessai carte / géocodage
   const handleRetryMap = useCallback(() => {
@@ -278,7 +289,7 @@ export const ShopEditPage: React.FC = () => {
     retry();
   }, [retry]);
 
-  // Détection tuiles défaillantes
+  // Détection tuiles défaillantes (Part B.3 : ne modifie ni coordinates ni geoStatus)
   const handleTileError = useCallback(() => {
     setTileErrorOccurred(true);
   }, []);
@@ -293,11 +304,23 @@ export const ShopEditPage: React.FC = () => {
     setServerError(null);
     setFieldErrors({});
 
-    // Coordonnées confirmées uniquement si trouvées et carte non dégradée
-    const shouldSendCoordinates =
-      derivedState !== 'mapUnavailable' &&
-      geoStatus === 'found' &&
-      coordinates !== null;
+    const isAddressChanged = form.address.trim() !== savedSnapshot.address.trim();
+    const hasStoredCoords = initialCoordinates !== null;
+
+    let currentGeoStatus: 'idle' | 'searching' | 'found' | 'notFound' | 'unavailable' = geoStatus;
+    let currentCoords: Coordinates | null = coordinates;
+
+    // Part B.4 : Si l'adresse a changé et n'a pas été recherchée (idle), exécuter le lookup avant de sauvegarder
+    if (isAddressChanged && currentGeoStatus === 'idle' && form.address.trim().length >= 5) {
+      const lookupResult = await executeLookup(form.address.trim());
+      currentGeoStatus = lookupResult.status;
+      currentCoords = lookupResult.coordinates;
+
+      if (lookupResult.status === 'notFound') {
+        setIsSubmitting(false);
+        return; // Bloque la sauvegarde et affiche l'erreur
+      }
+    }
 
     const payloadOpeningHours = buildOpeningHours(
       originalHours,
@@ -306,6 +329,7 @@ export const ShopEditPage: React.FC = () => {
       hoursEdited
     );
 
+    // Construction du payload : JAMAIS de nulls explicites
     const payload: Record<string, any> = {
       name: form.name.trim(),
       category: form.category.trim() || null,
@@ -315,9 +339,23 @@ export const ShopEditPage: React.FC = () => {
       openingHours: payloadOpeningHours,
       description: form.description.trim() || null,
       logoUrl: form.logoUrl.trim() || null,
-      latitude: shouldSendCoordinates ? coordinates.latitude : null,
-      longitude: shouldSendCoordinates ? coordinates.longitude : null,
     };
+
+    // Part B.2 & B.3 : Règle des coordonnées
+    if (isAddressChanged) {
+      if (currentGeoStatus === 'found' && currentCoords !== null) {
+        payload.latitude = currentCoords.latitude;
+        payload.longitude = currentCoords.longitude;
+      }
+      // Si non confirmé (notFound, unavailable, idle) : omission des clés (le serveur réinitialise à null)
+    } else {
+      // Adresse inchangée
+      if (!hasStoredCoords && currentGeoStatus === 'found' && currentCoords !== null) {
+        payload.latitude = currentCoords.latitude;
+        payload.longitude = currentCoords.longitude;
+      }
+      // Si des coordonnées stockées existent : omission des clés (le serveur les conserve)
+    }
 
     const targetUrl = '/api/shops/me';
     const method = hasExistingShop ? 'PUT' : 'POST';
@@ -336,11 +374,16 @@ export const ShopEditPage: React.FC = () => {
         setIsDirty(false);
         setHasExistingShop(true);
         setSavedSnapshot(form);
+        if (payload.latitude && payload.longitude) {
+          setInitialCoordinates({
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+          });
+        }
         if (data?.shop?.openingHours) {
           setOriginalHours(data.shop.openingHours);
         }
       } else if (res.status === 400 && data?.errors) {
-        // Erreurs de validation champs
         const mappedErrors: Record<string, string> = {};
         if (Array.isArray(data.errors)) {
           data.errors.forEach((err: any) => {
@@ -374,11 +417,11 @@ export const ShopEditPage: React.FC = () => {
 
   // Déterminer le statut à transmettre à MapBox
   const mapBoxStatus = useMemo(() => {
+    if (tileErrorOccurred || geoStatus === 'unavailable') return 'down';
     if (derivedState === 'addressNotFound') return 'empty';
-    if (derivedState === 'mapUnavailable') return 'down';
     if (coordinates) return 'ok';
     return 'empty';
-  }, [derivedState, coordinates]);
+  }, [tileErrorOccurred, geoStatus, derivedState, coordinates]);
 
   // [NOT IN FIGMA] Skeleton de chargement initial
   if (isLoadingShop) {
@@ -494,6 +537,7 @@ export const ShopEditPage: React.FC = () => {
                   value={form.address}
                   onChange={(e) => onAddressInputChange(e.target.value)}
                   onBlur={handleBlur}
+                  onKeyDown={handleKeyDown}
                   placeholder="Ex. : 10 Rue Didouche Mourad, Alger"
                   helperText={
                     derivedState !== 'addressNotFound'

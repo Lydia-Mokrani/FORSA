@@ -9,9 +9,9 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Composant Card conforme aux spécifications Figma Lot R0.
- * Fond blanc, bordure 1.5px #dbf0dd, rayon 24px, padding 28px (20px sur mobile).
- * En-tête : Badge icône rond (fond mint #eef7ec, bordure #e8ebdf) + titre (20px Medium desktop / 18px SemiBold mobile).
+ * Composant Card standardisé conforme aux maquettes Figma Lot R0.
+ * Fond blanc, bordure 1.5px border-ui-card-border (#dbf0dd), rayon 24px (rounded-ui-card), padding 28px (20px sur mobile).
+ * En-tête : Badge icône rond (fond mint bg-ui-mint, bordure border-ui-field-border) + titre (20px Medium desktop / 18px SemiBold mobile).
  */
 export const Card: React.FC<CardProps> = ({
   title,
@@ -27,7 +27,7 @@ export const Card: React.FC<CardProps> = ({
   return (
     <div
       className={cn(
-        'bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] font-poppins text-left',
+        'bg-white border-[1.5px] border-ui-card-border rounded-ui-card font-poppins text-left',
         'p-[20px] md:p-[28px]',
         'shadow-[0px_4px_16px_rgba(11,44,37,0.04)]',
         className
@@ -43,12 +43,12 @@ export const Card: React.FC<CardProps> = ({
         >
           <div className="flex items-center gap-[12px] md:gap-[14px]">
             {icon && (
-              <div className="size-[40px] rounded-full bg-[#eef7ec] border border-[#e8ebdf] flex items-center justify-center shrink-0 text-[#0b2c25]">
+              <div className="size-[40px] rounded-full bg-ui-mint border border-ui-field-border flex items-center justify-center shrink-0 text-ui-ink">
                 {icon}
               </div>
             )}
             {title && (
-              <h2 className="text-[18px] md:text-[20px] font-semibold md:font-medium text-[#0b2c25] leading-snug">
+              <h2 className="text-[18px] md:text-[20px] font-semibold md:font-medium text-ui-ink leading-snug">
                 {title}
               </h2>
             )}

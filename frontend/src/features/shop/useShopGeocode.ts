@@ -8,35 +8,35 @@ export interface Coordinates {
   longitude: number;
 }
 
-export interface GeocodeResult {
-  latitude: number;
-  longitude: number;
-  displayName?: string;
-  city?: string;
-  wilaya?: string;
+export interface GeocodeLookupResult {
+  status: 'found' | 'notFound' | 'unavailable';
+  coordinates: Coordinates | null;
+  displayName?: string | null;
 }
 
 export interface UseShopGeocodeOptions {
   initialAddress?: string;
   initialCoordinates?: Coordinates | null;
-  debounceMs?: number;
 }
 
 /**
  * Hook de géocodage temps réel pour la boutique FORSA.
- * Conforme au contrat backend Lot 5A :
- * - Endpoint : GET /api/shops/geocode?q=... (via authFetch)
- * - Statuts : idle | searching | found | notFound | unavailable
- * - Déclenchement : debounce 800ms si address >= 5 caractères, ou immédiat sur blur
- * - Annulation des requêtes précédentes via AbortController
- * - Ignore les réponses obsolètes
+ * Conforme aux spécifications Lot 6A-verify :
+ * - Aucun debounce à la saisie (typing).
+ * - Déclencheurs stricts :
+ *    1. onBlur du champ adresse si le texte a changé depuis le dernier lookup
+ *    2. Touche 'Entrée' dans le champ adresse
+ *    3. Bouton 'Réessayer'
+ *    4. Chargement initial si l'adresse est renseignée sans coordonnées stockées
+ * - Protection par AbortController et annulation au démontage
+ * - Rejet strict des réponses obsolètes (stale-response protection)
+ * - Retour à l'état 'idle' dès que le texte est modifié après une recherche
  */
 export function useShopGeocode({
   initialAddress = '',
   initialCoordinates = null,
-  debounceMs = 800,
 }: UseShopGeocodeOptions = {}) {
-  const [address, setAddress] = useState(initialAddress);
+  const [address, setAddressState] = useState(initialAddress);
   const [geoStatus, setGeoStatus] = useState<GeoStatus>(() => {
     if (initialCoordinates && initialAddress.trim().length >= 5) {
       return 'found';
@@ -46,36 +46,18 @@ export function useShopGeocode({
   const [coordinates, setCoordinates] = useState<Coordinates | null>(initialCoordinates);
   const [displayName, setDisplayName] = useState<string | null>(null);
 
-  // Références pour la gestion des requêtes et de la concurrence
+  // Références d'annulation et de concurrence
   const abortControllerRef = useRef<AbortController | null>(null);
-  const lastQueriedAddressRef = useRef<string>(
+  const lastLookupAddressRef = useRef<string>(
     initialCoordinates && initialAddress.trim().length >= 5 ? initialAddress.trim() : ''
   );
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestCounterRef = useRef<number>(0);
 
   /**
-   * Initialise les coordonnées préexistantes (ex: chargement initial GET /api/shops/me)
-   * Évite une recherche inutile si l'adresse et les coordonnées correspondent.
+   * Exécute la requête vers GET /api/shops/geocode?q=...
+   * Annule la requête précédente et ignore toute réponse désynchronisée.
    */
-  const setInitialLocation = useCallback((addr: string, coords: Coordinates | null) => {
-    const trimmed = addr.trim();
-    setAddress(addr);
-    if (coords && trimmed.length >= 5) {
-      setCoordinates(coords);
-      setGeoStatus('found');
-      lastQueriedAddressRef.current = trimmed;
-    } else {
-      setCoordinates(null);
-      setGeoStatus('idle');
-      lastQueriedAddressRef.current = '';
-    }
-  }, []);
-
-  /**
-   * Exécute la requête de géocodage vers l'API backend FORSA
-   */
-  const executeLookup = useCallback(async (query: string) => {
+  const executeLookup = useCallback(async (query: string): Promise<GeocodeLookupResult> => {
     const trimmed = query.trim();
 
     if (trimmed.length < 5) {
@@ -86,11 +68,11 @@ export function useShopGeocode({
       setCoordinates(null);
       setDisplayName(null);
       setGeoStatus('idle');
-      lastQueriedAddressRef.current = '';
-      return;
+      lastLookupAddressRef.current = '';
+      return { status: 'notFound', coordinates: null };
     }
 
-    // Annule la requête en cours précédente
+    // Annuler la requête en cours
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -98,7 +80,7 @@ export function useShopGeocode({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     const currentRequestId = ++requestCounterRef.current;
-    lastQueriedAddressRef.current = trimmed;
+    lastLookupAddressRef.current = trimmed;
 
     setGeoStatus('searching');
 
@@ -109,52 +91,50 @@ export function useShopGeocode({
         signal: abortController.signal,
       });
 
-      // Si une requête plus récente a été lancée entre-temps, ignorer
+      // Ignorer si une nouvelle requête a été lancée entre temps
       if (currentRequestId !== requestCounterRef.current) {
-        return;
+        return { status: 'unavailable', coordinates: null };
       }
 
       if (res.status === 200) {
         const data = await res.json();
-        // Le backend renvoie { lat, lng, displayName, city, wilaya }
-        // Mapper lat -> latitude, lng -> longitude
         if (typeof data.lat === 'number' && typeof data.lng === 'number') {
-          setCoordinates({
+          const coords: Coordinates = {
             latitude: data.lat,
             longitude: data.lng,
-          });
+          };
+          setCoordinates(coords);
           setDisplayName(data.displayName || null);
           setGeoStatus('found');
+          return { status: 'found', coordinates: coords, displayName: data.displayName };
         } else {
           setCoordinates(null);
           setDisplayName(null);
           setGeoStatus('notFound');
+          return { status: 'notFound', coordinates: null };
         }
       } else if (res.status === 404) {
         setCoordinates(null);
         setDisplayName(null);
         setGeoStatus('notFound');
-      } else if (res.status === 503 || res.status === 429) {
-        // 503 GEOCODER_UNAVAILABLE ou 429 RATE_LIMITED
-        setCoordinates(null);
-        setDisplayName(null);
-        setGeoStatus('unavailable');
+        return { status: 'notFound', coordinates: null };
       } else {
-        // Erreur inattendue
+        // 503, 429 ou toute autre erreur serveur
         setCoordinates(null);
         setDisplayName(null);
         setGeoStatus('unavailable');
+        return { status: 'unavailable', coordinates: null };
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        // Requête annulée normalement, ne rien faire
-        return;
+        return { status: 'unavailable', coordinates: null };
       }
       if (currentRequestId === requestCounterRef.current) {
         setCoordinates(null);
         setDisplayName(null);
         setGeoStatus('unavailable');
       }
+      return { status: 'unavailable', coordinates: null };
     } finally {
       if (currentRequestId === requestCounterRef.current) {
         abortControllerRef.current = null;
@@ -163,54 +143,52 @@ export function useShopGeocode({
   }, []);
 
   /**
-   * Mise à jour de l'adresse avec debounce 800ms
+   * Mise à jour de l'adresse à la saisie (SANS aucun debounce / appel réseau)
+   * Si le texte change après une recherche précédente, retour immédiat au statut 'idle'.
    */
   const handleAddressChange = useCallback(
     (newAddress: string) => {
-      setAddress(newAddress);
-
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-
+      setAddressState(newAddress);
       const trimmed = newAddress.trim();
-      if (trimmed.length < 5) {
+
+      if (trimmed !== lastLookupAddressRef.current) {
+        // L'adresse a été éditée : statut non confirmé (idle)
+        setGeoStatus('idle');
         setCoordinates(null);
         setDisplayName(null);
-        setGeoStatus('idle');
-        lastQueriedAddressRef.current = '';
-        return;
       }
-
-      // Si l'adresse est identique à la dernière requêtée avec succès
-      if (trimmed === lastQueriedAddressRef.current && geoStatus === 'found') {
-        return;
-      }
-
-      debounceTimerRef.current = setTimeout(() => {
-        executeLookup(trimmed);
-      }, debounceMs);
     },
-    [debounceMs, executeLookup, geoStatus]
+    []
   );
 
   /**
-   * Déclenchement immédiat sur blur ou clic 'Réessayer'
+   * Déclencheur onBlur : recherche si l'adresse a changé depuis le dernier lookup
    */
   const handleBlur = useCallback(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-
     const trimmed = address.trim();
-    if (trimmed.length >= 5 && trimmed !== lastQueriedAddressRef.current) {
+    if (trimmed.length >= 5 && trimmed !== lastLookupAddressRef.current) {
       executeLookup(trimmed);
     }
   }, [address, executeLookup]);
 
   /**
-   * Forcer une nouvelle recherche (ex: bouton Réessayer carte down)
+   * Déclencheur onKeyDown : recherche sur touche 'Entrée'
+   */
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const trimmed = address.trim();
+        if (trimmed.length >= 5 && trimmed !== lastLookupAddressRef.current) {
+          executeLookup(trimmed);
+        }
+      }
+    },
+    [address, executeLookup]
+  );
+
+  /**
+   * Déclencheur Réessayer (carte dégradée)
    */
   const retry = useCallback(() => {
     const trimmed = address.trim();
@@ -219,12 +197,34 @@ export function useShopGeocode({
     }
   }, [address, executeLookup]);
 
-  // Nettoyage au démontage
+  /**
+   * Initialisation au montage depuis GET /api/shops/me
+   */
+  const setInitialLocation = useCallback(
+    (addr: string, coords: Coordinates | null) => {
+      const trimmed = addr.trim();
+      setAddressState(addr);
+
+      if (coords && trimmed.length >= 5) {
+        setCoordinates(coords);
+        setGeoStatus('found');
+        lastLookupAddressRef.current = trimmed;
+      } else if (!coords && trimmed.length >= 5) {
+        // Adresse existante sans coordonnées : déclencher le géocodage au montage
+        lastLookupAddressRef.current = '';
+        executeLookup(trimmed);
+      } else {
+        setCoordinates(null);
+        setGeoStatus('idle');
+        lastLookupAddressRef.current = '';
+      }
+    },
+    [executeLookup]
+  );
+
+  // Annulation automatique au démontage
   useEffect(() => {
     return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -238,7 +238,10 @@ export function useShopGeocode({
     coordinates,
     displayName,
     handleBlur,
+    handleKeyDown,
     retry,
+    executeLookup,
     setInitialLocation,
+    lastLookupAddress: lastLookupAddressRef.current,
   };
 }

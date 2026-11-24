@@ -39,9 +39,37 @@ Afin de préserver l'intégrité des écrans existants (pages d'authentification
 | `rounded-ui-panel` | `--radius-ui-panel` | `16px` | `16px` | Non standardisé | Cadre carte, Bannières |
 | `rounded-ui-pill` | `--radius-ui-pill` | `100px` | `100px` | `rounded-full` (9999px) | Badges, Chips, Avatar |
 
+### 1.2 Tableau des Écarts des Tokens Existants (`forsa.*`)
+
+Comme demandé par le prompt R0, voici l'analyse des tokens préexistants dans `tailwind.config.js` (`theme.extend.colors.forsa`) par rapport aux valeurs Figma réelles constatées sur MS1 et leur nombre d'utilisations dans `frontend/src` (Grep) :
+
+| Token Existant | Valeur Actuelle dans Tailwind | Valeur Figma Réelle | Écart Constaté | Nombre d'utilisations (Grep) |
+|---|---|---|---|---|
+| `forsa.dark` | `#0B2C25` | `#0b2c25` | Conforme sur la teinte, mais la classe `text-forsa-dark` n'est quasi jamais utilisée (le code historique utilisait `[#0B2C25]`). | 1 utilisation (`forsa-dark`), 416 brutes |
+| `forsa.leaf` | `#84B140` | Non présent sur MS1 | Vert vif accent externe / catalogue MS2. | 7 utilisations (`forsa-leaf`) |
+| `forsa.emerald` | `#17664E` | `#17664e` | Conforme sur la teinte, mais la classe n'était pas utilisée (126 utilisations brutes en arbitraire). | 0 utilisation (`forsa-emerald`), 126 brutes |
+| `forsa.cream` | `#FFFDF0` | `#fffaf0` | Erreur de teinte (#FFFDF0 au lieu de #FFFAF0). | 1 utilisation (`forsa-cream`), 36 brutes |
+| `forsa.sand` | `#C0B49B` | Non présent sur MS1 | Teinte sable historique. | 1 utilisation (`forsa-sand`) |
+| `forsa.muted` | `#4A5B55` | `rgba(11,44,37,0.7)` | Figma utilise une opacité 70% sur le vert sombre plutôt qu'un gris opaque. | 0 utilisation (`forsa-muted`) |
+| `forsa.border` | `rgba(11, 44, 37, 0.12)` | `#dbf0dd` (cartes) / `#e8ebdf` (inputs) | Bordures neutres Figma ont des teintes vertes/beiges spécifiques au lieu d'une opacité brute. | 0 utilisation (`forsa-border`) |
+| `forsa.success` | `#10B981` | `#17664e` / `#a9d3a0` / `#eef7ec` | Le vert émeraude sombre remplace le vert vif standard Tailwind. | 0 utilisation (`forsa-success`) |
+| `forsa.warning` | `#F59E0B` | `#8a5a00` / `#fff4dc` / `#f0cf8f` | L'ambre Figma est plus foncé (#8a5a00) sur fond crème (#fff4dc). | 0 utilisation (`forsa-warning`) |
+| `forsa.danger` | `#EF4444` | `#b3261e` / `#fdecea` | Le rouge brique Figma (#b3261e) remplace le rouge standard (#EF4444). | 0 utilisation (`forsa-danger`) |
+| `forsa.info` | `#3B82F6` | `#026aa7` / `#f0f9ff` / `#b9e6fe` | Le bleu d'information Figma (#026aa7) remplace le bleu Tailwind standard. | 0 utilisation (`forsa-info`) |
+
+*Règle respectée : Ces tokens historiques n'ont pas été modifiés afin d'éviter toute régression sur les écrans existants hors MS1.*
+
 ---
 
 ## 2. Bibliothèque de Composants Partagés (`frontend/src/components/ui/`)
+
+### 2.1 États et Variantes Complémentaires [NOT IN FIGMA]
+Les maquettes Figma fournies étant statiques, certains états interactifs et fonctionnels indispensables à une expérience utilisateur accessible ont été implémentés et documentés comme suit :
+- **Bouton `danger` et `dangerOutline` :** Les couleurs proviennent du token d'erreur Figma `#b3261e` et son fond `#fdecea` (issus de la Frame `1154:25702`, noeud `2:6389`).
+- **`[NOT IN FIGMA]` Bouton état loading :** Spinner SVG circulaire intégré pour indiquer l'attente d'une réponse asynchrone sans altérer les dimensions du bouton.
+- **`[NOT IN FIGMA]` Field état disabled :** Style `opacity-60 bg-gray-50 cursor-not-allowed` assurant la conformité WAI-ARIA pour les champs verrouillés.
+- **`[NOT IN FIGMA]` Chip état searching :** Pastille "Recherche de la position…" (`variant="neutral"`) affichée pendant l'appel réseau de géocodage.
+- **`[NOT IN FIGMA]` Skeleton de chargement initial :** Éléments de substitution animés affichés pendant l'exécution de `GET /api/shops/me`.
 
 Tous les composants ont été écrits de manière modulaire, typée TypeScript, et accessibles (WAI-ARIA).
 

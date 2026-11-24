@@ -13,10 +13,9 @@ export interface BannerProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Composant Banner contextuel conforme Figma Lot R0.
- * Variantes : success | warn | error | info.
- * Dimensions : Icône 22px, Titre 15px SemiBold, Description 13px, Rayon 16px, Padding 18px.
- * Accessibilité : role="alert" pour error/warn, role="status" sinon.
+ * Composant Banner d'alerte / notification contextuelle conforme Figma Lot R0.
+ * Variantes : success (verte), warn (ambre), error (rouge), info (bleue).
+ * Rayon 16px (ui-panel), padding 18px.
  */
 export const Banner: React.FC<BannerProps> = ({
   variant = 'info',
@@ -38,23 +37,23 @@ export const Banner: React.FC<BannerProps> = ({
     }
   > = {
     success: {
-      container: 'bg-[#eef7ec] border-[#a9d3a0]',
-      title: 'text-[#17664e]',
+      container: 'bg-ui-mint border-ui-success-border',
+      title: 'text-ui-emerald',
       defaultIcon: <Icon name="check-success" size={22} alt="" />,
     },
     warn: {
-      container: 'bg-[#fff4dc] border-[#f0cf8f]',
-      title: 'text-[#8a5a00]',
+      container: 'bg-ui-warn-bg border-ui-warn-border',
+      title: 'text-ui-warn',
       defaultIcon: <Icon name="alert-warn" size={22} alt="" />,
     },
     error: {
-      container: 'bg-[#fdecea] border-[#f8b4b4]',
-      title: 'text-[#b3261e]',
+      container: 'bg-ui-error-bg border-ui-error/30',
+      title: 'text-ui-error',
       defaultIcon: <Icon name="alertc" size={22} alt="" />,
     },
     info: {
-      container: 'bg-[#f0f9ff] border-[#b9e6fe]',
-      title: 'text-[#026aa7]',
+      container: 'bg-ui-info-bg border-ui-info-border',
+      title: 'text-ui-info',
       defaultIcon: <Icon name="info" size={22} alt="" />,
     },
   };
@@ -65,7 +64,7 @@ export const Banner: React.FC<BannerProps> = ({
     <div
       role={isAlert ? 'alert' : 'status'}
       className={cn(
-        'w-full border rounded-[16px] p-[18px] font-poppins text-left',
+        'w-full border rounded-ui-panel p-[18px] font-poppins text-left',
         'flex items-start gap-[14px]',
         style.container,
         className
@@ -81,7 +80,7 @@ export const Banner: React.FC<BannerProps> = ({
           {title}
         </h3>
         {description && (
-          <p className="mt-[4px] text-[13px] font-normal text-[rgba(11,44,37,0.7)] leading-relaxed">
+          <p className="mt-[4px] text-[13px] font-normal text-ui-text-70 leading-relaxed">
             {description}
           </p>
         )}
@@ -92,7 +91,7 @@ export const Banner: React.FC<BannerProps> = ({
           type="button"
           onClick={onClose}
           aria-label="Fermer la notification"
-          className="shrink-0 p-1 text-[rgba(11,44,37,0.5)] hover:text-[#0b2c25] rounded-full transition-colors cursor-pointer"
+          className="shrink-0 p-1 text-ui-ink/50 hover:text-ui-ink rounded-full transition-colors cursor-pointer"
         >
           <svg className="size-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

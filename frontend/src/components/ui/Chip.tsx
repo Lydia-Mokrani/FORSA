@@ -11,7 +11,7 @@ export interface ChipProps extends React.HTMLAttributes<HTMLSpanElement> {
 /**
  * Pastille d'état (Chip / Badge) conforme Figma Lot R0.
  * Variantes : success | error | warn | neutral.
- * Typographie : 12px Medium, Forme : pillule (rounded-full), Accessibilité : role="status".
+ * Typographie : 12px Medium, Forme : pillule (rounded-ui-pill), Accessibilité : role="status".
  */
 export const Chip: React.FC<ChipProps> = ({
   variant = 'neutral',
@@ -21,17 +21,17 @@ export const Chip: React.FC<ChipProps> = ({
   ...props
 }) => {
   const variantStyles: Record<ChipVariant, string> = {
-    success: 'bg-[#eef7ec] text-[#17664e]',
-    error: 'bg-[#fdecea] text-[#b3261e]',
-    warn: 'bg-[#fff4dc] text-[#8a5a00]',
-    neutral: 'bg-[#ecebe6] text-[#0b2c25]',
+    success: 'bg-ui-mint text-ui-emerald',
+    error: 'bg-ui-error-bg text-ui-error',
+    warn: 'bg-ui-warn-bg text-ui-warn',
+    neutral: 'bg-ui-map-down text-ui-ink',
   };
 
   return (
     <span
       role="status"
       className={cn(
-        'inline-flex items-center gap-[6px] px-[12px] py-[6px] rounded-full',
+        'inline-flex items-center gap-[6px] px-[12px] py-[6px] rounded-ui-pill',
         'text-[12px] font-medium font-poppins select-none whitespace-nowrap',
         variantStyles[variant],
         className

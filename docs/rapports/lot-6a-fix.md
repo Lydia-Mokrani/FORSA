@@ -22,9 +22,9 @@
 | Élément | Statut Antérieur (Lot 6A) | Statut Nouveau (Lot 6A-fix) | Détails Techniques |
 |---|---|---|---|
 | **Carte Géographique** | **SIMULÉ** (Mock SVG statique) | **RÉEL** | Utilisation de `react-leaflet` (`MapContainer`, `TileLayer`, `Marker`) avec repère personnalisé `L.divIcon` conforme Figma (cercle vert `#0b2c25`, épingle blanche, étiquette d'adresse flottante). |
-| **Service de Géocodage** | **SIMULÉ** (Heuristiques regex "Fleurs"/"inconnu") | **RÉEL** | Hook pur `useShopGeocode` appelant `GET /api/shops/geocode?q=...` via `authFetch`. Debounce 800ms (si length >= 5), annulation par `AbortController`, déclenchement immédiat sur `onBlur`. |
+| **Service de Géocodage** | **SIMULÉ** (Heuristiques regex "Fleurs"/"inconnu") | **RÉEL** | Hook pur `useShopGeocode` appelant `GET /api/shops/geocode?q=...` via `authFetch`. Déclenchement sur `blur`, touche `Entrée`, bouton `Réessayer` ou chargement initial sans coordonnées. Annulation par `AbortController`. |
 | **Données de Boutique** | **SIMULÉ** (Hardcodé "Maison Gourmande", "MG", etc.) | **RÉEL** | Formulaire vierge par défaut. `GET /api/shops/me` au montage : statut 200 remplit les données réelles ; 404 initialise le mode création vierge. |
-| **Persistance Boutique** | **SIMULÉ** / Partiel | **RÉEL** | `PUT /api/shops/me` (ou `POST /api/shops/me` si première création). Envoi de `latitude` et `longitude` uniquement si confirmées pour l'adresse courante (réinitialisation serveur à `null` sinon). |
+| **Persistance Boutique** | **SIMULÉ** / Partiel | **RÉEL** | `PUT /api/shops/me` (ou `POST /api/shops/me` si première création). Envoi de `latitude` et `longitude` uniquement si confirmées pour l'adresse courante (omission des clés sinon ; le serveur gère la réinitialisation à null). |
 | **Composants d'Interface** | **SIMULÉ** (Ad-hoc inline dans la page) | **RÉEL** | Composants partagés validés R0 (`Header`, `Card`, `Field`, `Button`, `Banner`, `Chip`, `MapBox`, `Icon`, `Avatar`). |
 | **Barre d'Audit / Paramètre `?state=`** | **SIMULÉ** (Injecté dans le bundle prod) | **SUPPRIMÉ** | Élimination complète de la barre d'audit Figma et du paramètre `?state=`. L'état UI est 100% dérivé des données et événements réels. |
 | **Catégories de Commerces** | **SIMULÉ** (Liste dupliquée et désynchronisée) | **RÉEL** | Déplacée dans `frontend/src/features/shop/shopCategories.ts` et partagée entre `RegisterPage.tsx` et `ShopEditPage.tsx`. |
@@ -37,21 +37,21 @@
 ### 3.1 Preuves d'absence des valeurs codées en dur (Grep)
 Recherche sur `frontend/src/features/catalogue/pages/ShopEditPage.tsx` et `frontend/src/features/shop/useShopGeocode.ts` :
 
-| Motif Interdit | Correspondances dans les sources 6A-fix | Correspondances bundle de production (`dist/`) |
+| Motif Interdit | Correspondances dans sources ShopEditPage | Correspondances bundle de production (`dist/`) |
 |---|---|---|
 | `"Maison Gourmande"` | **0** | **0** |
 | `"Fleurs"` | **0** | **0** |
 | `"Fléurs"` | **0** | **0** |
 | `"inconnu"` | **0** | **0** |
-| `state=` (paramètre URL) | **0** | **0** (`[?&]state=` = 0) |
-| `"Aperçu Figma"` | **0** | **0** |
-| `"nominatim"` | **0** | **0** (aucun appel direct externe) |
-| `"/shops/my"` | **0** | **0** dans `ShopEditPage` (appel exclusif à `/api/shops/me`) |
+| `state=` (paramètre URL) | **0** | **0** pour le paramètre URL (`[?&]state=`). Des affectations minifiées `state=` existent dans le runtime React (ex: `memoizedState`). |
+| `"Aperçu Figma"` | **0** | **0** (`Aperçu` isolé existe dans `MerchantDashboardPage.tsx` MS2 : "Voici un aperçu de votre activité..."). |
+| `"nominatim"` | **0** | **0** (aucun appel direct externe). |
+| `"/shops/my"` | **0** | **0** dans `ShopEditPage` (appel exclusif à `/api/shops/me`). `/shops/my` dans le bundle provient uniquement de `RegisterPage.tsx:446`. |
 
 ### 3.2 Métriques du fichier `ShopEditPage.tsx`
 - **Nombre de lignes avant refonte :** 752 lignes
-- **Nombre de lignes après refonte :** 611 lignes
-- **Gain net :** -141 lignes (code plus concis, testable et modulaire grâce aux composants R0)
+- **Nombre de lignes après refonte :** 655 lignes
+- **Gain net :** -97 lignes (code plus concis, testable et modulaire grâce aux composants R0)
 - **Composants R0 exploités :** `Header`, `Card`, `Field`, `Button`, `Banner`, `Chip`, `MapBox`, `Icon`
 
 ### 3.3 Vérification des Compilations
@@ -65,15 +65,14 @@ Recherche sur `frontend/src/features/catalogue/pages/ShopEditPage.tsx` et `front
 Ce plan permet de valider les 5 scénarios fonctionnels clés de la page `/merchant/shop` :
 
 ### Scénario 1 : Adresse valide saisie
-1. **Action :** Saisir une adresse valide connue (ex : `10 Rue Didouche Mourad, Alger`).
+1. **Action :** Saisir une adresse valide connue (ex : `10 Rue Didouche Mourad, Alger`) puis appuyer sur Entrée ou quitter le champ (`blur`).
 2. **Comportement attendu :**
-   - Pendant la saisie : après 800ms de pause (ou lors de la perte de focus `blur`), la pastille affiche brièvement `Recherche de la position…` (état transitoire).
    - Dès la réponse 200 de `/api/shops/geocode` : la carte Leaflet centre le repère avec l'icône verte/blanche et affiche l'étiquette flottante avec l'adresse.
    - La pastille affiche `Position détectée` (vert `success`).
    - Le bouton "Enregistrer les modifications" est actif (`opacity-100`).
 
 ### Scénario 2 : Adresse introuvable / fantaisiste
-1. **Action :** Saisir une adresse inexistante (ex : `Rue Inconnue 999999 Nulle Part`).
+1. **Action :** Saisir une adresse inexistante (ex : `Rue Inconnue 999999 Nulle Part`) puis appuyer sur Entrée ou quitter le champ (`blur`).
 2. **Comportement attendu :**
    - Après l'appel backend renvoyant 404 (`ADDRESS_NOT_FOUND`), l'état UI dérive automatiquement vers `addressNotFound`.
    - L'input adresse passe en bordure rouge d'erreur (2px) avec le message exact Figma : *"Adresse introuvable. Vérifiez la rue et la ville, ou précisez la commune."*.
@@ -88,7 +87,7 @@ Ce plan permet de valider les 5 scénarios fonctionnels clés de la page `/merch
    - Une bannière d'avertissement ambre s'affiche sous l'en-tête : *"Le service de cartes est momentanément indisponible. Vous pouvez enregistrer vos informations : la position sur la carte sera confirmée plus tard."*.
    - Le conteneur de carte affiche l'état dégradé (`MapBox status="down"`) avec fond gris, icône wifi barré et le bouton *"Réessayer"*.
    - La pastille affiche `Position à confirmer` (ambre `warn`).
-   - Le bouton "Enregistrer les modifications" **reste disponible** pour permettre au commerçant de sauvegarder son commerce ; les coordonnées `latitude` et `longitude` sont transmises sous forme `null`.
+   - Le bouton "Enregistrer les modifications" **reste disponible** pour permettre au commerçant de sauvegarder son commerce ; les coordonnées `latitude` et `longitude` sont **omises** du payload (jamais de `null` explicite ; le serveur les réinitialise automatiquement à null sur changement d'adresse).
    - Un clic sur *"Réessayer"* relance la recherche et remonte la carte.
 
 ### Scénario 4 : Enregistrement réussi et reset sur modification
@@ -116,5 +115,20 @@ Ce plan permet de valider les 5 scénarios fonctionnels clés de la page `/merch
    - **Décision :** La page extrait les heures d'ouverture/fermeture par défaut. Si l'utilisateur ne modifie pas ces champs, l'objet horaire complexe d'origine est préservé intact sans écrasement silencieux. S'il les modifie, les jours ouverts sont mis à jour avec ces nouvelles bornes.
 2. **Dépendance partagée `shopCategories.ts` :**  
    - La liste `SHOP_CATEGORIES` a été extraite de `RegisterPage.tsx` pour être centralisée dans `frontend/src/features/shop/shopCategories.ts`. `RegisterPage.tsx` l'importe désormais sans aucun changement visuel ou fonctionnel.
-3. **Tests Unitaires Frontend :**  
-   - Aucun framework de test (Vitest/Jest) n'étant configuré dans le workspace `frontend/`, aucun package supplémentaire n'a été installé conformément aux consignes strictes du prompt. Le bon fonctionnement a été validé par compilation stricte TypeScript (`tsc -b`), build de production sans faille et vérification rigoureuse des signatures.
+3. **Absence d'AuthContext :**  
+   - L'authentification repose sur `localStorage` et les helpers de `authService.ts`. Aucun Context React n'existant pour l'utilisateur, `getStoredUser()` est utilisé directement.
+
+---
+
+## 6. Corrections apportées lors du Lot 6A-verify
+
+Lors de la vérification et clôture des écarts (Lot 6A-verify), les corrections suivantes ont été appliquées :
+1. **Suppression du debounce à la frappe :** Aucun appel réseau ne se déclenche pendant la saisie. Les recherches sont déclenchées uniquement sur `blur`, touche `Entrée`, bouton `Réessayer` ou chargement initial sans coordonnées.
+2. **Règle stricte des coordonnées dans le payload :**
+   - Lookup confirmé pour l'adresse courante : `latitude` et `longitude` envoyées sous forme de nombres.
+   - Adresse inchangée avec coordonnées stockées : `latitude` et `longitude` sont omises (le serveur les conserve).
+   - Adresse modifiée sans confirmation : les clés sont omises (le serveur les réinitialise automatiquement à null). Aucun `null` explicite n'est envoyé.
+3. **Comportement sur erreur de tuiles Leaflet :** `onTileError` ne supprime plus les coordonnées confirmées et ne modifie pas `geoStatus`. La carte bascule en affichage `down` et affiche la bannière d'avertissement, mais la sauvegarde reste active avec transmission des coordonnées confirmées.
+4. **Validation au clic Enregistrer si 'idle' :** Si l'utilisateur clique sur Enregistrer immédiatement après avoir tapé une adresse sans blur préalable, le géocodage est exécuté automatiquement avant d'enregistrer, sans nécessiter un double clic.
+5. **Précision sur les greps dans `dist/` :** Les correspondances pour `Aperçu` proviennent de `MerchantDashboardPage.tsx` (MS2), `/shops/my` provient de `RegisterPage.tsx:446`, et `state=` provient du runtime minifié React/Router. Les fichiers cibles `ShopEditPage.tsx` et `useShopGeocode.ts` ont strictement 0 correspondance.
+6. **Tests unitaires automatisés (Vitest) :** 9 tests unitaires couvrant l'ensemble des scénarios de `useShopGeocode` ont été ajoutés et validés à 100%.
