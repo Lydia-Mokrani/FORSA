@@ -3,7 +3,7 @@
 > **Branche Git :** `feat/ms1-telegram-auth`  
 > **Date :** 24 novembre 2026  
 > **Périmètre :** Frontend uniquement (`frontend/`) — Extraction de la fonction pure `buildShopPayload`, omission des champs optionnels vides à la création, gestion stricte des coordonnées et des URLs, couverture de tests Vitest complète.  
-> **Statut :** Validé à 100% (0 erreur TypeScript, 24/24 tests Vitest réussis, 0 fuite dans `dist/`)
+> **Statut :** Validé à 100% (0 erreur TypeScript, 25/25 tests Vitest réussis, 0 fuite dans `dist/`)
 
 ---
 
@@ -66,7 +66,7 @@ Date:   Tue Nov 24 10:20:56 2026 +0100
     "vitest": "^5.1.1"
   }
 ```
-*Constat :* `vitest`, `jsdom` et `@testing-library/react` sont strictement cantonnés dans `devDependencies`.
+*Constat :* `vitest`, `jsdom` et `@testing-library/react` sont strictement cantonnés dans `devDependencies` et absents des `dependencies`.
 
 ---
 
@@ -125,7 +125,7 @@ Fichier : `services/ms1-accounts/src/controllers/shop.controller.ts`
 
 ### 3. Comportement précédent de la page (ce qui était envoyé)
 
-Dans `frontend/src/features/catalogue/pages/ShopEditPage.tsx` (lignes 333-342 avant le patch) :
+Dans `frontend/src/features/catalogue/pages/ShopEditPage.tsx` (code initial avant l'extraction pure) :
 ```ts
     const payload: Record<string, any> = {
       name: form.name.trim(),
@@ -138,7 +138,7 @@ Dans `frontend/src/features/catalogue/pages/ShopEditPage.tsx` (lignes 333-342 av
       logoUrl: form.logoUrl.trim() || null,
     };
 ```
-*Problèmes identifiés :*
+*Problèmes constatés :*
 1. **Création (`POST`) avec champs optionnels vides :** la page envoyait systématiquement `category: null`, `registryNumber: null`, `description: null`, `logoUrl: null` au lieu d'omettre purement et simplement les clés.
 2. **Champ `logoUrl` :** en cas de saisie invalide (ex: non URL), la valeur brute était envoyée, entraînant l'échec de la validation backend `z.string().url()`.
 
@@ -148,7 +148,7 @@ Dans `frontend/src/features/catalogue/pages/ShopEditPage.tsx` (lignes 333-342 av
 
 1. **Extraction de la fonction pure :** Création de `frontend/src/features/shop/buildShopPayload.ts` et tests dédiés dans `frontend/src/features/shop/buildShopPayload.test.ts`.
 2. **Règles des coordonnées :**
-   - Adresse modifiée + statut géocodage `'found'` avec coordonnées : `latitude` et `longitude` envoyés sous forme de nombres.
+   - Adresse modifiée + statut géocodage `'found'` avec coordonnées : `latitude` et `longitude` envoyés sous forme de nombres (`typeof === 'number'`).
    - Adresse modifiée + statut géocodage non confirmé (`'notFound'`, `'unavailable'`, `'idle'`, `'searching'`) : omission complète des clés (aucun `null` explicite).
    - Adresse inchangée + boutique disposant déjà de coordonnées stockées : omission des clés (le backend préserve les existantes).
    - Adresse inchangée + boutique sans coordonnées stockées + géocodage `'found'` : `latitude` et `longitude` envoyés sous forme de nombres.
@@ -165,6 +165,8 @@ Dans `frontend/src/features/catalogue/pages/ShopEditPage.tsx` (lignes 333-342 av
 5. **Règles des horaires (`openingHours`) :**
    - Si `hoursEdited` est faux : conservation stricte de la référence ou de l'objet d'origine sans altération.
    - Si `hoursEdited` est vrai : reconstruction préservant les clés existantes ou objet `{ open, close }`.
+6. **Suppression de toute logique de payload dans `ShopEditPage` :**
+   - `ShopEditPage` délègue l'intégralité de la construction à `buildShopPayload(form, saved, geo)`.
 
 ---
 
@@ -184,32 +186,30 @@ Exécution de l'ensemble des suites de tests unitaires via `npm run test` :
 
  RUN  v5.1.1 C:/Users/dell/OneDrive/forsa2/frontend
 
- ✓ src/features/shop/useShopGeocode.test.ts (9 tests) 1517ms
-   ✓ useShopGeocode Hook (9)
-     ✓ 200 -> found avec coordonnées mappées 816ms
-     ✓ 404 ADDRESS_NOT_FOUND -> notFound
-     ✓ a stale response is ignored after a newer lookup
-     ✓ abort on unmount
- ✓ src/features/shop/buildShopPayload.test.ts (15 tests) 57ms
-   ✓ isValidUrl (2)
-   ✓ buildOpeningHours (3)
-   ✓ buildShopPayload (10)
-     ✓ omits all optional fields on creation when empty, emitting NO nulls anywhere
-     ✓ omits coordinate keys during update when only phone is changed and shop has stored coordinates
-     ✓ sends both coordinates as numbers when address is changed and geocoding is found
-     ✓ omits coordinate keys completely when address is changed and geocoding is notFound
-     ✓ omits coordinate keys completely when address is changed and geocoding is unavailable
-     ✓ sends null when previously saved optional field is cleared by user
-     ✓ preserves openingHours untouched when user did not edit it
-     ✓ omits logoUrl if it is not a valid http/https URL
-     ✓ includes logoUrl when it is a valid https URL
-     ✓ sends coordinates when address is unchanged but shop had no stored coordinates and geocoding found them
+ ✓ src/features/shop/useShopGeocode.test.ts (9 tests) 168ms
+ ✓ src/features/shop/buildShopPayload.test.ts (16 tests) 20ms
 
  Test Files  2 passed (2)
-      Tests  24 passed (24)
-   Start at  12:09:38
-   Duration  72.43s (environment 77%, import 13%, transform 7%, tests 2%, worker 1%)
+      Tests  25 passed (25)
+   Start at  21:08:24
+   Duration  16.01s (environment 84%, import 13%, transform 2%, tests 1%)
 ```
+
+Détail de la suite `buildShopPayload.test.ts` (16 tests) :
+- `isValidUrl` (2 tests) : acceptation URLs valides et rejet URLs non conformes / non http.
+- `buildOpeningHours` (3 tests) : préservation sans modification, mise à jour si édité, fallback par défaut.
+- `buildShopPayload` (11 tests) :
+  1. `omits all optional fields on creation when empty, emitting NO nulls anywhere`
+  2. `omits coordinate keys during update when only phone is changed and shop has stored coordinates`
+  3. `sends both coordinates as numbers when address is changed and geocoding is found`
+  4. `omits coordinate keys completely when address is changed and geocoding is notFound`
+  5. `omits coordinate keys completely when address is changed and geocoding is unavailable`
+  6. `omits coordinate keys completely when address is changed and geocoding is idle`
+  7. `sends null when previously saved optional field is cleared by user`
+  8. `preserves openingHours untouched when user did not edit it`
+  9. `omits logoUrl if it is not a valid http/https URL`
+  10. `includes logoUrl when it is a valid https URL`
+  11. `sends coordinates when address is unchanged but shop had no stored coordinates and geocoding found them`
 
 ### 3. Build de production (`npm run build`)
 ```text
@@ -221,7 +221,7 @@ transforming...
 ✓ 2297 modules transformed.
 rendering chunks...
 computing gzip size...
-dist/index.html                                       0.79 kB │ gzip:   0.42 kB
+dist/index.html                                       0.79 kB │ gzip:   0.41 kB
 dist/assets/811_imgPhotoProduit3-Bsn3SCoB.png         4.38 kB
 dist/assets/811_imgPhotoProduit1-yDQXraUr.png         6.08 kB
 dist/assets/default-avatar-B8k1NdXT.jpg               7.25 kB
@@ -229,8 +229,8 @@ dist/assets/811_imgFondDeCarte-B22f6OTp.svg          77.38 kB │ gzip:  31.27 k
 dist/assets/login-bg-CUWhhT3-.png                   504.53 kB
 dist/assets/825_imgIllustrationAide-HT4idZ4y.png  1,194.51 kB
 dist/assets/index-C1i9I8GD.css                      105.19 kB │ gzip:  22.68 kB
-dist/assets/index-BYAuy48M.js                       815.21 kB │ gzip: 220.95 kB
-✓ built in 27.43s
+dist/assets/index-Cwhay4sJ.js                       815.39 kB │ gzip: 220.99 kB
+✓ built in 10.68s
 ```
 
 ### 4. Vérification d'étanchéité du bundle (`dist/`)
@@ -239,9 +239,21 @@ Get-ChildItem -Path frontend/dist -Recurse -File | Select-String -Pattern "vites
 ```
 **Résultat : 0 correspondance.** Aucune bibliothèque de test n'a fuité dans le bundle client.
 
+### 5. Re-run des greps stricts sur ShopEditPage et hook
+```text
+=== Pattern: "Maison Gourmande" === -> 0 matches
+=== Pattern: "Fleurs" === -> 0 matches
+=== Pattern: "Fléurs" === -> 0 matches
+=== Pattern: "inconnu" === -> 0 matches
+=== Pattern: "state=" === -> 0 matches
+=== Pattern: "Aperçu" === -> 0 matches
+=== Pattern: "nominatim" === -> 0 matches
+=== Pattern: "/shops/my" === -> 0 matches
+```
+
 ---
 
 ## QUESTIONS & REMARQUES
 
 1. **Nullabilité des champs optionnels :** L'analyse de `services/ms1-accounts/src/controllers/shop.controller.ts` confirme que `description`, `category`, `registryNumber` et `logoUrl` comportent tous `.optional().nullable()`. Par conséquent, l'envoi de `null` explicite lors de la suppression volontaire d'une valeur existante par le commerçant est nativement supporté par le backend sans aucune modification de contrat.
-2. **Optimisation Vitest sous Windows :** L'activation de `isolate: false`, `fileParallelism: false` et `maxWorkers: 1` dans `frontend/vitest.config.ts` permet d'exécuter l'intégralité des suites de tests sans blocage ni timeout de démarrage de workers sous environnement Windows / OneDrive.
+2. **Adresses sans coordonnées préalables :** Si une boutique existait déjà sans coordonnées GPS et que l'utilisateur ne modifie pas son adresse mais qu'un géocodage réussit, les coordonnées géographiques sont automatiquement rattachées et envoyées.

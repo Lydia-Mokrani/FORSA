@@ -211,6 +211,41 @@ describe('buildShopPayload', () => {
     expect('longitude' in payload).toBe(false);
     expect(payload.latitude).toBeUndefined();
     expect(payload.longitude).toBeUndefined();
+    expect(payload.latitude).not.toBeNull();
+    expect(payload.longitude).not.toBeNull();
+  });
+
+  // 5b. address changed + idle (no coordinate keys)
+  it('omits coordinate keys completely when address is changed and geocoding is idle', () => {
+    const saved = {
+      name: 'Boutique Test',
+      phone: '0123456789',
+      address: '10 Rue de la Paix, Paris',
+      hasStoredCoordinates: true,
+      coordinates: { latitude: 48.8566, longitude: 2.3522 },
+    };
+    const form = {
+      name: 'Boutique Test',
+      phone: '0123456789',
+      address: '50 Rue de Rivoli, Paris', // address changed
+      category: '',
+      registryNumber: '',
+      description: '',
+      logoUrl: '',
+    };
+    const geo = {
+      status: 'idle' as const,
+      coordinates: null,
+    };
+    const payload = buildShopPayload(form, saved, geo);
+
+    expect(payload.address).toBe('50 Rue de Rivoli, Paris');
+    expect('latitude' in payload).toBe(false);
+    expect('longitude' in payload).toBe(false);
+    expect(payload.latitude).toBeUndefined();
+    expect(payload.longitude).toBeUndefined();
+    expect(payload.latitude).not.toBeNull();
+    expect(payload.longitude).not.toBeNull();
   });
 
   // 6. cleared optional field (behaviour from point 2)

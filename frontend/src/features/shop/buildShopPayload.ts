@@ -178,19 +178,25 @@ export function buildShopPayload(
     (saved?.latitude != null && saved?.longitude != null)
   );
 
-  const isGeoFound = geo?.status === 'found' && geo?.coordinates != null;
+  const isGeoFound =
+    geo?.status === 'found' &&
+    geo?.coordinates != null &&
+    typeof geo.coordinates.latitude === 'number' &&
+    typeof geo.coordinates.longitude === 'number' &&
+    !isNaN(geo.coordinates.latitude) &&
+    !isNaN(geo.coordinates.longitude);
 
   if (isAddressChanged) {
     if (isGeoFound && geo?.coordinates) {
-      payload.latitude = geo.coordinates.latitude;
-      payload.longitude = geo.coordinates.longitude;
+      payload.latitude = Number(geo.coordinates.latitude);
+      payload.longitude = Number(geo.coordinates.longitude);
     }
     // Si non confirmé (idle, searching, notFound, unavailable) : omission complète
   } else {
     // Adresse inchangée
     if (!hasStoredCoords && isGeoFound && geo?.coordinates) {
-      payload.latitude = geo.coordinates.latitude;
-      payload.longitude = geo.coordinates.longitude;
+      payload.latitude = Number(geo.coordinates.latitude);
+      payload.longitude = Number(geo.coordinates.longitude);
     }
     // Si coordonnées stockées existantes : omission complète (le backend conserve)
   }
