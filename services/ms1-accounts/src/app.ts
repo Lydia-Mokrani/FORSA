@@ -37,9 +37,6 @@ export const createApp = (): Express => {
   app.use('/api/shops', shopRouter);
   app.use('/shops', shopRouter);
 
-  // Fichiers statiques : avatars
-  app.use('/api/users/avatars', express.static(config.avatarDir, { maxAge: '7d' }));
-
   // Gestionnaire global d'erreurs uniforme FORSA
   app.use(errorHandler);
 

@@ -30,17 +30,7 @@ authRouter.get('/public-key', (_req, res) => {
 });
 
 authRouter.get('/jwks', (_req, res) => {
-  res.status(200).json({
-    keys: [
-      {
-        kty: 'RSA',
-        use: 'sig',
-        alg: 'RS256',
-        kid: jwtService.getKeyId(),
-        publicKey: jwtService.getPublicKey(),
-      },
-    ],
-  });
+  res.status(200).json(jwtService.getJwks());
 });
 
 // OAuth social (conservé en interne sans être exposé dans l'UI)

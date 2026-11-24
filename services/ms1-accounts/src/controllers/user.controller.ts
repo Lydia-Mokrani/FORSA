@@ -394,12 +394,14 @@ export class UserController {
       }
 
       const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
-      const newUrl = `/api/users/avatars/${userId}${ext}`;
+      const avatarId = crypto.randomBytes(16).toString('hex');
+      const newUrl = `/api/users/avatars/${avatarId}${ext}`;
 
       if (await isPostgresAlive()) {
         await prisma.user.update({
           where: { id: userId },
           data: {
+            avatarId,
             avatarUrl: newUrl,
             avatarData: buffer,
             avatarMime: req.file.mimetype,
@@ -408,6 +410,7 @@ export class UserController {
       } else {
         const u = devDb.users.get(userId) as any;
         if (u) {
+          u.avatarId = avatarId;
           u.avatarUrl = newUrl;
           u.avatarData = buffer;
           u.avatarMime = req.file.mimetype;
@@ -429,6 +432,7 @@ export class UserController {
         await prisma.user.update({
           where: { id: userId },
           data: {
+            avatarId: null,
             avatarUrl: null,
             avatarData: null,
             avatarMime: null,
@@ -437,6 +441,7 @@ export class UserController {
       } else {
         const u = devDb.users.get(userId) as any;
         if (u) {
+          u.avatarId = null;
           u.avatarUrl = null;
           u.avatarData = null;
           u.avatarMime = null;
@@ -451,47 +456,71 @@ export class UserController {
 
   /**
    * GET /api/users/avatars/:filename
-   * Sert l'avatar depuis la base de données (BYTEA) pour supporter le multi-instance sans volume partagé.
-   * Rétrocompatibilité : fallback sur le disque si l'image existe physiquement.
+   * Sert l'avatar depuis la base de données (BYTEA) via un identifiant aléatoire non devinable (avatarId).
+   * Rétrocompatibilité : l'ancienne URL reste servie uniquement tant qu'elle correspond à l'avatar courant du propriétaire.
    */
   public static async getAvatar(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { filename } = req.params;
-      if (!filename) throw new NotFoundError('Avatar non trouvé');
+      if (
+        !filename ||
+        path.basename(filename) !== filename ||
+        !/^[a-zA-Z0-9._-]+$/.test(filename)
+      ) {
+        throw new NotFoundError('Avatar non trouvé');
+      }
 
-      // 1. Recherche par identifiant ou URL dans la base PostgreSQL
+      const idWithoutExt = filename.replace(/\.[^.]+$/, '');
+      const expectedUrl = `/api/users/avatars/${filename}`;
+
+      // 1. Recherche stricte par avatarId aléatoire ou URL courante du propriétaire (jamais par user.id)
       if (await isPostgresAlive()) {
-        const userId = filename.replace(/\.[^.]+$/, '');
         const user = await prisma.user.findFirst({
           where: {
             OR: [
-              { id: userId },
-              { avatarUrl: { contains: filename } },
+              { avatarId: idWithoutExt },
+              { avatarUrl: expectedUrl },
             ],
           },
           select: { avatarData: true, avatarMime: true },
         });
 
-        if (user && user.avatarData) {
+        if (!user) {
+          throw new NotFoundError('Avatar non trouvé');
+        }
+
+        if (user.avatarData) {
           res.setHeader('Content-Type', user.avatarMime || 'image/jpeg');
           res.setHeader('Cache-Control', 'public, max-age=604800');
           return res.status(200).send(Buffer.from(user.avatarData)) as any;
         }
-      } else {
-        // Fallback devDb
-        const userId = filename.replace(/\.[^.]+$/, '');
-        const u = devDb.users.get(userId) as any;
-        if (u && u.avatarData) {
-          res.setHeader('Content-Type', u.avatarMime || 'image/jpeg');
-          return res.status(200).send(Buffer.from(u.avatarData)) as any;
+
+        // Fallback disque rétrocompatible uniquement si le propriétaire pointe toujours sur cette ancienne URL
+        const legacyPath = avatarFilePath(filename);
+        if (fs.existsSync(legacyPath)) {
+          res.setHeader('Cache-Control', 'public, max-age=604800');
+          return res.sendFile(legacyPath);
         }
+
+        throw new NotFoundError('Avatar non trouvé');
       }
 
-      // 2. Fallback rétrocompatible pour anciens fichiers sur disque local
-      const legacyPath = avatarFilePath(filename);
-      if (fs.existsSync(legacyPath)) {
-        res.setHeader('Cache-Control', 'public, max-age=604800');
-        return res.sendFile(legacyPath);
+      // Fallback devDb
+      const matched = Array.from(devDb.users.values()).find(
+        (u: any) => u.avatarId === idWithoutExt || u.avatarUrl === expectedUrl
+      ) as any;
+
+      if (matched?.avatarData) {
+        res.setHeader('Content-Type', matched.avatarMime || 'image/jpeg');
+        return res.status(200).send(Buffer.from(matched.avatarData)) as any;
+      }
+
+      if (matched) {
+        const legacyPath = avatarFilePath(filename);
+        if (fs.existsSync(legacyPath)) {
+          res.setHeader('Cache-Control', 'public, max-age=604800');
+          return res.sendFile(legacyPath);
+        }
       }
 
       throw new NotFoundError('Avatar non trouvé');

@@ -70,6 +70,7 @@ model User {
   status          UserStatus        @default(ACTIVE)
   email           String?           @unique
   fullName        String?           @map("full_name")
+  avatarId        String?           @unique @map("avatar_id")
   avatarUrl       String?           @map("avatar_url")
   avatarData      Bytes?            @map("avatar_data")
   avatarMime      String?           @map("avatar_mime")

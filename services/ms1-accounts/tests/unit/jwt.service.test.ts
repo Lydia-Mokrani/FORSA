@@ -1,4 +1,6 @@
 import { jwtService, TokenPayload } from '../../src/services/jwt.service';
+import { createApp } from '../../src/app';
+import request from 'supertest';
 import crypto from 'crypto';
 
 describe('JwtService - Unit Tests', () => {
@@ -196,6 +198,77 @@ describe('JwtService - Unit Tests', () => {
       const verifiedBy1 = instance1.verifyAccessToken(token2);
       expect(verifiedBy1.sub).toBe(sampleClientPayload.sub);
       expect(verifiedBy1.role).toBe('CUSTOMER');
+    });
+  });
+
+  describe('JWKS RFC 7517 (n/e) & Vérification sans PEM', () => {
+    const app = createApp();
+
+    it('expose les champs RFC 7517 (kty, n, e, kid, use, alg) + publicKey sur /auth/jwks et /api/auth/jwks sans modifier /auth/public-key', async () => {
+      const [resAuth, resApiAuth, resPem] = await Promise.all([
+        request(app).get('/auth/jwks'),
+        request(app).get('/api/auth/jwks'),
+        request(app).get('/auth/public-key'),
+      ]);
+
+      expect(resPem.status).toBe(200);
+      expect(resPem.headers['content-type']).toContain('text/plain');
+      expect(resPem.text).toContain('-----BEGIN PUBLIC KEY-----');
+
+      for (const res of [resAuth, resApiAuth]) {
+        expect(res.status).toBe(200);
+        expect(Array.isArray(res.body.keys)).toBe(true);
+        expect(res.body.keys.length).toBeGreaterThanOrEqual(1);
+
+        const jwk = res.body.keys[0];
+        expect(jwk.kty).toBe('RSA');
+        expect(typeof jwk.n).toBe('string');
+        expect(jwk.n.length).toBeGreaterThan(100);
+        expect(typeof jwk.e).toBe('string');
+        expect(jwk.e).toBe('AQAB');
+        expect(jwk.kid).toBe(jwtService.getKeyId());
+        expect(jwk.use).toBe('sig');
+        expect(jwk.alg).toBe('RS256');
+        expect(jwk.publicKey).toContain('-----BEGIN PUBLIC KEY-----');
+      }
+    });
+
+    it('vérifie un JWT signé par le service uniquement à partir des champs JWK (n, e) sans utiliser publicKey PEM', async () => {
+      const jwt = require('jsonwebtoken');
+
+      const res = await request(app).get('/api/auth/jwks');
+      expect(res.status).toBe(200);
+
+      // Extraction stricte de kty, n, e uniquement (publicKey PEM volontairement ignoré)
+      const { kty, n, e, kid, alg } = res.body.keys[0];
+      expect(alg).toBe('RS256');
+
+      const verifierFromJwkOnly = crypto.createPublicKey({
+        key: { kty, n, e },
+        format: 'jwk',
+      });
+
+      const token = jwtService.generateAccessToken(sampleMerchantPayload);
+      const [headerB64, payloadB64, sigB64] = token.split('.');
+      const decodedHeader = JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf8'));
+      expect(decodedHeader.kid).toBe(kid);
+
+      // 1. Vérification cryptographique bas niveau via crypto.verify avec le KeyObject construit depuis (n, e)
+      const isSignatureValid = crypto.verify(
+        'RSA-SHA256',
+        Buffer.from(`${headerB64}.${payloadB64}`),
+        verifierFromJwkOnly,
+        Buffer.from(sigB64, 'base64url')
+      );
+      expect(isSignatureValid).toBe(true);
+
+      // 2. Vérification JWT complète avec jsonwebtoken + KeyObject issu de (n, e)
+      const decoded = jwt.verify(token, verifierFromJwkOnly, {
+        algorithms: ['RS256'],
+        issuer: 'forsa-ms1-accounts',
+      }) as TokenPayload;
+      expect(decoded.sub).toBe(sampleMerchantPayload.sub);
+      expect(decoded.shopId).toBe(sampleMerchantPayload.shopId);
     });
   });
 });

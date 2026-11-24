@@ -118,6 +118,46 @@ export class JwtService {
     return this.keyId;
   }
 
+  /**
+   * Construit l'objet JWKS conforme RFC 7517 (kty, n, e, kid, use, alg)
+   * tout en conservant publicKey (PEM) pour rétrocompatibilité interne.
+   */
+  public getJwks(): {
+    keys: Array<{
+      kty: string;
+      n: string;
+      e: string;
+      kid: string;
+      use: 'sig';
+      alg: 'RS256';
+      publicKey: string;
+    }>;
+  } {
+    const jwk = crypto.createPublicKey(this.publicKey).export({ format: 'jwk' }) as {
+      kty?: string;
+      n?: string;
+      e?: string;
+    };
+
+    if (!jwk.n || !jwk.e) {
+      throw new Error('[MS1-JWT] Impossible d\'exporter la clé publique RSA au format JWK (n/e manquants)');
+    }
+
+    return {
+      keys: [
+        {
+          kty: jwk.kty || 'RSA',
+          n: jwk.n,
+          e: jwk.e,
+          kid: this.keyId,
+          use: 'sig',
+          alg: 'RS256',
+          publicKey: this.publicKey,
+        },
+      ],
+    };
+  }
+
   public generateAccessToken(payload: TokenPayload): string {
     return jwt.sign(payload, this.privateKey, {
       algorithm: 'RS256',
