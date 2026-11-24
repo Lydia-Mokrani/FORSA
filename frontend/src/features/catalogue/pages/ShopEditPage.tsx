@@ -13,6 +13,7 @@ import {
 } from '../../../components/ui';
 import { useShopGeocode, Coordinates } from '../../shop/useShopGeocode';
 import { SHOP_CATEGORIES } from '../../shop/shopCategories';
+import { buildShopPayload } from '../../shop/buildShopPayload';
 
 export type DerivedUiState = 'addressNotFound' | 'mapUnavailable' | 'saved' | 'nominal';
 
@@ -58,29 +59,6 @@ function extractHours(openingHours: any): { openTime: string; closeTime: string 
   return { openTime: '08:00', closeTime: '20:00' };
 }
 
-/**
- * Construit l'objet openingHours à persister en préservant le format d'origine.
- */
-function buildOpeningHours(
-  originalHours: any,
-  openTime: string,
-  closeTime: string,
-  hoursEdited: boolean
-): any {
-  if (!hoursEdited && originalHours !== undefined) {
-    return originalHours;
-  }
-  if (originalHours && typeof originalHours === 'object') {
-    const updated: Record<string, any> = { ...originalHours };
-    for (const key of Object.keys(updated)) {
-      if (updated[key] && typeof updated[key] === 'object' && !updated[key].closed) {
-        updated[key] = { ...updated[key], open: openTime, close: closeTime };
-      }
-    }
-    return updated;
-  }
-  return { open: openTime, close: closeTime };
-}
 
 export const ShopEditPage: React.FC = () => {
   const navigate = useNavigate();
@@ -322,40 +300,26 @@ export const ShopEditPage: React.FC = () => {
       }
     }
 
-    const payloadOpeningHours = buildOpeningHours(
-      originalHours,
-      form.openTime || '08:00',
-      form.closeTime || '20:00',
-      hoursEdited
+    // Construction pure du payload via buildShopPayload (Lot 6A-patch)
+    const payload = buildShopPayload(
+      {
+        ...form,
+        originalHours,
+        hoursEdited,
+      },
+      hasExistingShop
+        ? {
+            ...savedSnapshot,
+            hasStoredCoordinates: hasStoredCoords,
+            coordinates: initialCoordinates,
+            openingHours: originalHours,
+          }
+        : null,
+      {
+        status: currentGeoStatus,
+        coordinates: currentCoords,
+      }
     );
-
-    // Construction du payload : JAMAIS de nulls explicites
-    const payload: Record<string, any> = {
-      name: form.name.trim(),
-      category: form.category.trim() || null,
-      registryNumber: form.registryNumber.trim() || null,
-      phone: form.phone.trim(),
-      address: form.address.trim(),
-      openingHours: payloadOpeningHours,
-      description: form.description.trim() || null,
-      logoUrl: form.logoUrl.trim() || null,
-    };
-
-    // Part B.2 & B.3 : Règle des coordonnées
-    if (isAddressChanged) {
-      if (currentGeoStatus === 'found' && currentCoords !== null) {
-        payload.latitude = currentCoords.latitude;
-        payload.longitude = currentCoords.longitude;
-      }
-      // Si non confirmé (notFound, unavailable, idle) : omission des clés (le serveur réinitialise à null)
-    } else {
-      // Adresse inchangée
-      if (!hasStoredCoords && currentGeoStatus === 'found' && currentCoords !== null) {
-        payload.latitude = currentCoords.latitude;
-        payload.longitude = currentCoords.longitude;
-      }
-      // Si des coordonnées stockées existent : omission des clés (le serveur les conserve)
-    }
 
     const targetUrl = '/api/shops/me';
     const method = hasExistingShop ? 'PUT' : 'POST';

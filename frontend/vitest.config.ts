@@ -7,5 +7,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     testTimeout: 10000,
+    isolate: false,
+    fileParallelism: false,
+    maxWorkers: 1,
   },
 });
