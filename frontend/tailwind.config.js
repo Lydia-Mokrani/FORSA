@@ -23,6 +23,28 @@ export default {
           danger: '#EF4444',     // Rejeté, Suspendu, Expiré
           info: '#3B82F6',       // Notification, En cours
         },
+        ui: {
+          // Tokens validés Figma Lot R0 (Namespace isolé)
+          page: '#fffaf0',
+          ink: '#0b2c25',
+          emerald: '#17664e',
+          mint: '#eef7ec',
+          'card-border': '#dbf0dd',
+          'field-border': '#e8ebdf',
+          'success-border': '#a9d3a0',
+          error: '#b3261e',
+          'error-bg': '#fdecea',
+          warn: '#8a5a00',
+          'warn-bg': '#fff4dc',
+          'warn-border': '#f0cf8f',
+          'map-ok': '#dfeadb',
+          'map-down': '#ecebe6',
+          'text-70': 'rgba(11, 44, 37, 0.7)',
+          'text-80': 'rgba(11, 44, 37, 0.8)',
+          info: '#026aa7',
+          'info-bg': '#f0f9ff',
+          'info-border': '#b9e6fe',
+        },
         glass: {
           DEFAULT: 'rgba(255, 255, 255, 0.40)',
           card: 'rgba(255, 255, 255, 0.42)',
@@ -40,6 +62,10 @@ export default {
         'btn': '16px',
         'input': '14px',
         'pill': '9999px',
+        'ui-card': '24px',
+        'ui-ctl': '14px',
+        'ui-panel': '16px',
+        'ui-pill': '100px',
       },
       boxShadow: {
         'glass': '0 20px 40px -15px rgba(11, 44, 37, 0.10)',

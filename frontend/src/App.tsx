@@ -35,6 +35,11 @@ import {
   AccountSuspendedPage,
 } from './features/auth';
 
+// Dev Gallery (Lot R0) - STRICTEMENT réservé au mode développement
+const DevUiGallery = import.meta.env.DEV
+  ? React.lazy(() => import('./dev/DevUiGallery'))
+  : null;
+
 export const App: React.FC = () => {
   return (
     <LocationProvider>
@@ -102,6 +107,18 @@ export const App: React.FC = () => {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/merchant/status" element={<MerchantStatusPage />} />
           <Route path="/account/suspended" element={<AccountSuspendedPage />} />
+
+          {/* DEV ONLY ROUTE (Lot R0) */}
+          {import.meta.env.DEV && DevUiGallery && (
+            <Route
+              path="/dev/ui"
+              element={
+                <React.Suspense fallback={<div className="p-8">Chargement de la galerie UI...</div>}>
+                  <DevUiGallery />
+                </React.Suspense>
+              }
+            />
+          )}
 
           {/* FALLBACK */}
           <Route path="*" element={<Navigate to="/" replace />} />
