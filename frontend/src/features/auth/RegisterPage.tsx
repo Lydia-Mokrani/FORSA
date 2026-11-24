@@ -26,20 +26,11 @@ import {
   authFetch,
 } from './services/authService';
 
+import { SHOP_CATEGORIES } from '../shop/shopCategories';
+
 type ClientStep = 'FORM' | 'WAITING_TELEGRAM' | 'VERIFY_OTP';
 type MerchantStep = 1 | 2 | 3;
 type MerchantAuthStep = 'FORM' | 'WAITING_TELEGRAM' | 'VERIFY_OTP' | 'AUTH_DONE';
-
-const SHOP_CATEGORIES = [
-  'Boulangerie & Pâtisserie',
-  'Superette & Épicerie',
-  'Primeur & Fruits / Légumes',
-  'Boucherie & Traiteur',
-  'Poissonnerie',
-  'Pâtisserie & Salon de thé',
-  'Restauration rapide',
-  'Autre commerce alimentaire',
-];
 
 interface DaySchedule {
   closed: boolean;
