@@ -1,43 +1,64 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import loginBg from '../../assets/login-bg.png';
-import clockPendingIcon from '../../assets/icons/illustration-clock-pending.svg';
-import checkmarkIcon from '../../assets/icons/checkmark-circle-02.svg';
-import infoCircleIcon from '../../assets/icons/information-circle.svg';
-import arrowRightIcon from '../../assets/icons/arrow-right.svg';
-import { getCurrentUser, getStoredUser, logout, ShopInfo } from './services/authService';
+import {
+  Stepper,
+  Card,
+  Banner,
+  Button,
+  Chip,
+  Icon,
+} from '../../components/ui';
+import {
+  getCurrentUser,
+  getStoredUser,
+  logout,
+  getShopVerification,
+  ShopInfo,
+  ShopVerificationStatus,
+} from './services/authService';
 
 export const MerchantStatusPage: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [shop, setShop] = useState<ShopInfo | null>(null);
-  const [userStatus, setUserStatus] = useState<string>('ACTIVE');
+  const [verification, setVerification] = useState<ShopVerificationStatus | null>(null);
 
   useEffect(() => {
+    let mounted = true;
     const fetchStatus = async () => {
       try {
         const user = await getCurrentUser();
-        setUserStatus(user.status);
         if (user.status === 'SUSPENDED') {
           navigate('/account/suspended', { replace: true });
           return;
         }
+
         if (user.shop) {
-          setShop(user.shop);
+          if (mounted) setShop(user.shop);
         } else {
-          // Si aucun shop n'est encore lié
           const stored = getStoredUser();
-          if (stored?.shop) setShop(stored.shop);
+          if (stored?.shop && mounted) setShop(stored.shop);
+        }
+
+        // Récupérer le statut détaillé de vérification
+        try {
+          const verifData = await getShopVerification();
+          if (mounted) setVerification(verifData);
+        } catch {
+          // Si l'endpoint n'est pas encore disponible, se baser sur user.shop
         }
       } catch {
         const stored = getStoredUser();
-        if (stored?.shop) setShop(stored.shop);
+        if (stored?.shop && mounted) setShop(stored.shop);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     fetchStatus();
+    return () => {
+      mounted = false;
+    };
   }, [navigate]);
 
   const handleLogout = async () => {
@@ -45,143 +66,198 @@ export const MerchantStatusPage: React.FC = () => {
     navigate('/login?role=merchant');
   };
 
-  const status = shop?.verificationStatus || 'PENDING';
+  const status =
+    verification?.status ||
+    shop?.verificationStatus ||
+    (shop as any)?.status ||
+    'PENDING';
+
+  const rejectReason =
+    verification?.rejectReason ||
+    (shop as any)?.rejectReason ||
+    null;
+
+  const stepperSteps = [
+    { title: 'Dossier soumis' },
+    { title: 'Vérification en cours' },
+    { title: 'Boutique activée' },
+  ];
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white overflow-x-hidden">
-      {/* Fond photo officiel Figma (Image bokeh feuille verte + overlay #FFFAF0 à 28%) */}
-      <div aria-hidden className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <img src={loginBg} alt="" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[#FFFAF0]/28" />
-      </div>
-
+    <div className="relative min-h-screen w-full bg-ui-auth-bg flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-ui-emerald selection:text-white overflow-x-hidden">
       {/* En-tête officiel */}
-      <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-4">
-        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
+      <header className="relative z-10 w-full max-w-4xl flex items-center justify-between mb-8 px-2 sm:px-4">
+        <Link
+          to="/"
+          className="text-[24px] font-extrabold tracking-tight text-ui-ink hover:opacity-90 transition"
+        >
           FORSA
         </Link>
-        <span className="hidden sm:inline text-[14px] font-medium text-[#0B2C25]/85">
+        <span className="hidden sm:inline text-[14px] font-medium text-ui-ink/80">
           Espace Commerçant
         </span>
       </header>
 
-      {/* Carte Statut */}
-      <main className="relative z-10 w-full max-w-[540px] backdrop-blur-[20px] bg-white/40 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-12 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col items-center text-center gap-6 my-auto">
+      {/* Carte Statut principale */}
+      <main className="relative z-10 w-full max-w-[560px] bg-white border border-ui-field-border rounded-[32px] p-6 sm:p-10 shadow-sm flex flex-col items-center text-center gap-6 my-auto">
         {loading ? (
           <div className="py-12 flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-3 border-[#17664E] border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-[#0B2C25]/70">Chargement de votre dossier...</p>
+            <div className="size-8 border-3 border-ui-emerald border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-ui-text-70">Chargement de votre dossier...</p>
           </div>
         ) : (
           <>
-            {/* Cas PENDING (Figma Frame 12) */}
+            {/* ── ÉTAT 1 : PENDING ── */}
             {status === 'PENDING' && (
-              <>
-                <div className="w-24 h-24 rounded-full bg-white/80 border border-[#0B2C25]/15 flex items-center justify-center shadow-inner">
-                  <img src={clockPendingIcon} alt="En attente" className="w-14 h-14" />
+              <div className="w-full flex flex-col items-center gap-6">
+                <div className="size-20 rounded-full bg-ui-mint flex items-center justify-center text-ui-emerald">
+                  <Icon name="clock" size={36} />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <span className="inline-block mx-auto text-xs font-semibold px-3 py-1 rounded-full bg-[#E89234]/15 text-[#C06A14] border border-[#E89234]/30">
-                    Vérification en cours
-                  </span>
-                  <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[30px] leading-tight">
+                <div className="space-y-2">
+                  <Chip variant="warn">Vérification en cours</Chip>
+                  <h1 className="text-2xl sm:text-[28px] font-bold text-ui-ink leading-tight">
                     Votre dossier est entre nos mains !
                   </h1>
-                  <p className="text-[14px] text-[#0B2C25]/75 max-w-md mx-auto leading-relaxed">
-                    Notre équipe vérifie vos pièces justificatives sous <strong className="font-semibold text-[#0B2C25]">24h à 48h ouvrées</strong>. Vous recevrez une notification Telegram dès validation.
+                  <p className="text-sm text-ui-text-70 max-w-md mx-auto leading-relaxed">
+                    Notre équipe vérifie vos pièces justificatives sous{' '}
+                    <strong className="text-ui-ink font-semibold">24h à 48h ouvrées</strong>.
+                    Vous recevrez une notification dès validation.
                   </p>
                 </div>
 
-                <div className="w-full bg-white/60 border border-[#0B2C25]/10 rounded-2xl p-4 text-left flex flex-col gap-2">
-                  <div className="flex justify-between items-center text-xs text-[#0B2C25]/60">
+                {/* Stepper de progression R0b */}
+                <div className="w-full pt-2 pb-1">
+                  <Stepper steps={stepperSteps} current={1} />
+                </div>
+
+                {/* Récapitulatif commerce */}
+                <div className="w-full bg-stone-50 border border-ui-field-border rounded-ui-ctl p-4 text-left space-y-2">
+                  <div className="flex justify-between items-center text-xs text-ui-text-70">
                     <span>Commerce déclaré</span>
-                    <span className="font-medium text-[#0B2C25]">{shop?.name || 'Mon commerce'}</span>
+                    <span className="font-semibold text-ui-ink">
+                      {shop?.name || 'Mon commerce'}
+                    </span>
                   </div>
-                  <div className="flex justify-between items-center text-xs text-[#0B2C25]/60">
+                  <div className="flex justify-between items-center text-xs text-ui-text-70">
                     <span>Accès au tableau de bord</span>
-                    <span className="font-medium text-[#E89234]">En attente d'approbation</span>
+                    <span className="font-medium text-amber-800">
+                      En attente d'approbation
+                    </span>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-3 w-full">
-                  <Link
-                    to="/"
-                    className="w-full h-[52px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2 transition shadow-md"
+                  <Button
+                    variant="primary"
+                    onClick={() => navigate('/')}
                   >
-                    <span>Explorer l'application FORSA</span>
+                    Explorer l'application FORSA
+                  </Button>
+
+                  <Link
+                    to="/merchant/documents"
+                    className="text-xs font-semibold text-ui-emerald hover:underline py-1"
+                  >
+                    Consulter les pièces justificatives transmises
                   </Link>
 
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="text-xs font-medium text-[#0B2C25]/60 hover:text-[#0B2C25] hover:underline transition"
+                    className="text-xs text-ui-text-70 hover:text-ui-ink hover:underline transition pt-1"
                   >
                     Se déconnecter
                   </button>
                 </div>
-              </>
+              </div>
             )}
 
-            {/* Cas APPROVED */}
+            {/* ── ÉTAT 2 : APPROVED ── */}
             {status === 'APPROVED' && (
-              <>
-                <div className="w-20 h-20 rounded-full bg-emerald-100 border border-emerald-500/20 flex items-center justify-center shadow-md">
-                  <img src={checkmarkIcon} alt="Approuvé" className="w-10 h-10 text-emerald-700" />
+              <div className="w-full flex flex-col items-center gap-6">
+                <div className="size-20 rounded-full bg-ui-mint flex items-center justify-center text-ui-emerald">
+                  <Icon name="check-success" size={36} />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <span className="inline-block mx-auto text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-800 border border-emerald-500/30">
-                    Boutique validée
-                  </span>
-                  <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[30px] leading-tight">
+                <div className="space-y-2">
+                  <Chip variant="success">Boutique validée</Chip>
+                  <h1 className="text-2xl sm:text-[30px] font-bold text-ui-ink leading-tight">
                     Félicitations !
                   </h1>
-                  <p className="text-[14px] text-[#0B2C25]/75 max-w-md mx-auto leading-relaxed">
-                    Votre dossier a été validé avec succès. Vous pouvez dès maintenant publier vos premiers paniers anti-gaspillage.
+                  <p className="text-sm text-ui-text-70 max-w-md mx-auto leading-relaxed">
+                    Votre dossier a été validé avec succès. Vous pouvez dès maintenant publier
+                    vos premières offres anti-gaspillage.
                   </p>
                 </div>
 
-                <Link
-                  to="/merchant/dashboard"
-                  className="w-full h-[52px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 transition shadow-md"
-                >
-                  <span>Accéder à mon tableau de bord</span>
-                  <img src={arrowRightIcon} alt="" className="w-5 h-5" />
-                </Link>
-              </>
+                <div className="flex flex-col gap-3 w-full pt-2">
+                  <Button
+                    variant="primary"
+                    onClick={() => navigate('/merchant/dashboard')}
+                  >
+                    Accéder à mon tableau de bord &rarr;
+                  </Button>
+
+                  <Link
+                    to="/merchant/documents"
+                    className="text-xs font-semibold text-ui-emerald hover:underline"
+                  >
+                    Voir mes documents validés
+                  </Link>
+                </div>
+              </div>
             )}
 
-            {/* Cas REJECTED */}
+            {/* ── ÉTAT 3 : REJECTED ── */}
             {status === 'REJECTED' && (
-              <>
-                <div className="w-20 h-20 rounded-full bg-rose-100 border border-rose-500/20 flex items-center justify-center shadow-md">
-                  <span className="text-3xl text-rose-700">✕</span>
+              <div className="w-full flex flex-col items-center gap-6">
+                <div className="size-20 rounded-full bg-ui-error-bg flex items-center justify-center text-ui-error">
+                  <Icon name="alert-circle" size={36} />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <span className="inline-block mx-auto text-xs font-semibold px-3 py-1 rounded-full bg-rose-500/15 text-rose-800 border border-rose-500/30">
-                    Dossier non validé
-                  </span>
-                  <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
+                <div className="space-y-2">
+                  <Chip variant="error">Dossier non validé</Chip>
+                  <h1 className="text-2xl sm:text-[28px] font-bold text-ui-ink leading-tight">
                     Votre dossier nécessite une correction
                   </h1>
-                  <p className="text-[14px] text-[#0B2C25]/75 max-w-md mx-auto leading-relaxed">
-                    Certaines pièces transmises ne sont pas conformes ou illisibles. Veuillez contacter le support ou renvoyer vos documents.
+                  <p className="text-sm text-ui-text-70 max-w-md mx-auto leading-relaxed">
+                    Certaines pièces transmises ne sont pas conformes ou sont illisibles.
+                    Veuillez mettre à jour vos documents pour finaliser votre inscription.
                   </p>
+                </div>
+
+                {/* Motif de rejet réel depuis l'API */}
+                <div className="w-full text-left">
+                  <Banner
+                    variant="error"
+                    title="Motif du rejet"
+                    description={
+                      rejectReason ||
+                      'Certaines pièces transmises ne sont pas conformes ou illisibles. Veuillez vérifier vos documents et les soumettre à nouveau.'
+                    }
+                  />
                 </div>
 
                 <div className="flex flex-col gap-3 w-full">
-                  <Link
-                    to="/register?role=merchant&step=3"
-                    className="w-full h-[52px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2 transition shadow-md"
+                  {/* Correction bug : le lien pointe vers /merchant/documents/resubmit */}
+                  <Button
+                    variant="primary"
+                    onClick={() => navigate('/merchant/documents/resubmit')}
                   >
-                    <span>Mettre à jour mes documents</span>
+                    Mettre à jour mes documents
+                  </Button>
+
+                  <Link
+                    to="/merchant/documents"
+                    className="text-xs font-semibold text-ui-emerald hover:underline"
+                  >
+                    Consulter le détail de mes pièces transmises
                   </Link>
 
                   <a
                     href="mailto:support@forsa-dz.com"
-                    className="text-xs font-medium text-[#17664E] hover:underline"
+                    className="text-xs text-ui-text-70 hover:underline pt-1"
                   >
                     Contacter le support FORSA
                   </a>
@@ -189,54 +265,65 @@ export const MerchantStatusPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="text-xs font-medium text-[#0B2C25]/60 hover:text-[#0B2C25] hover:underline pt-2"
+                    className="text-xs text-ui-text-70 hover:text-ui-ink hover:underline pt-1"
                   >
                     Se déconnecter
                   </button>
                 </div>
-              </>
+              </div>
             )}
 
-            {/* Cas SUSPENDED */}
+            {/* ── ÉTAT 4 : SUSPENDED ── */}
             {status === 'SUSPENDED' && (
-              <>
-                <div className="w-20 h-20 rounded-full bg-amber-100 border border-amber-500/20 flex items-center justify-center shadow-md">
-                  <img src={infoCircleIcon} alt="Suspendu" className="w-10 h-10 text-amber-700" />
+              <div className="w-full flex flex-col items-center gap-6">
+                <div className="size-20 rounded-full bg-ui-error-bg flex items-center justify-center text-ui-error">
+                  <Icon name="alert-warn" size={36} />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <span className="inline-block mx-auto text-xs font-semibold px-3 py-1 rounded-full bg-amber-500/15 text-amber-800 border border-amber-500/30">
-                    Compte suspendu
-                  </span>
-                  <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
-                    Activité suspendue temporairement
+                <div className="space-y-2">
+                  <Chip variant="error">Activité suspendue</Chip>
+                  <h1 className="text-2xl sm:text-[28px] font-bold text-ui-ink leading-tight">
+                    Boutique suspendue temporairement
                   </h1>
-                  <p className="text-[14px] text-[#0B2C25]/75 max-w-md mx-auto leading-relaxed">
-                    L'accès à votre espace commerçant a été suspendu par l'administration. Veuillez contacter notre équipe d'assistance pour régulariser votre situation.
+                  <p className="text-sm text-ui-text-70 max-w-md mx-auto leading-relaxed">
+                    L'accès à votre espace commerçant a été suspendu par l'administration.
+                    Veuillez contacter notre assistance pour régulariser votre situation.
                   </p>
                 </div>
 
-                <a
-                  href="mailto:support@forsa-dz.com"
-                  className="w-full h-[52px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2 transition shadow-md"
-                >
-                  <span>Contacter le support FORSA</span>
-                </a>
+                <div className="w-full text-left">
+                  <Banner
+                    variant="warn"
+                    title="Régularisation requise"
+                    description="Vos offres ont été masquées temporairement. Contactez notre équipe pour réactiver votre boutique."
+                  />
+                </div>
 
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="text-xs font-medium text-[#0B2C25]/60 hover:text-[#0B2C25] hover:underline"
-                >
-                  Se déconnecter
-                </button>
-              </>
+                <div className="flex flex-col gap-3 w-full pt-2">
+                  <a
+                    href="mailto:support@forsa-dz.com?subject=Recours boutique suspendue"
+                    className="w-full"
+                  >
+                    <Button variant="primary" fullWidth>
+                      Contacter l'assistance FORSA
+                    </Button>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="text-xs text-ui-text-70 hover:text-ui-ink hover:underline pt-1"
+                  >
+                    Se déconnecter
+                  </button>
+                </div>
+              </div>
             )}
           </>
         )}
       </main>
 
-      <div className="relative z-10 w-full max-w-6xl h-8" />
+      <div className="relative z-10 w-full max-w-4xl h-8" />
     </div>
   );
 };

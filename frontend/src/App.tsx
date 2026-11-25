@@ -38,6 +38,8 @@ import {
   RegisterPage,
   MerchantStatusPage,
   AccountSuspendedPage,
+  MerchantDocumentsPage,
+  DocumentResubmitPage,
 } from './features/auth';
 
 // Dev Gallery (Lot R0) - STRICTEMENT réservé au mode développement
@@ -114,6 +116,8 @@ export const App: React.FC = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/merchant/status" element={<MerchantStatusPage />} />
+          <Route path="/merchant/documents" element={<MerchantDocumentsPage />} />
+          <Route path="/merchant/documents/resubmit" element={<DocumentResubmitPage />} />
           <Route path="/account/suspended" element={<AccountSuspendedPage />} />
 
           {/* DEV ONLY ROUTE (Lot R0) */}

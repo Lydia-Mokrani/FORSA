@@ -417,3 +417,61 @@ export async function switchUserMode(targetRole: 'CUSTOMER' | 'MERCHANT'): Promi
   }
   return data;
 }
+
+export interface ShopVerificationStatus {
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
+  rejectReason?: string | null;
+  submittedAt?: string;
+  reviewedAt?: string | null;
+}
+
+export interface ShopDocumentItem {
+  id: string;
+  type: 'commercial_register' | 'tax_id' | 'storefront' | string;
+  status: 'VALIDATED' | 'REJECTED' | 'PENDING';
+  reason?: string | null;
+  uploadedAt: string;
+  url?: string;
+}
+
+/**
+ * GET /api/shops/me/verification
+ * Récupère le statut officiel de vérification et le motif de rejet éventuel
+ */
+export async function getShopVerification(): Promise<ShopVerificationStatus> {
+  const res = await authFetch('/api/shops/me/verification', { method: 'GET' });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || 'Impossible de récupérer le statut de vérification.');
+  }
+  return data;
+}
+
+/**
+ * GET /api/shops/me/documents
+ * Récupère la liste des pièces justificatives téléversées
+ */
+export async function getShopDocuments(): Promise<{ documents: ShopDocumentItem[] }> {
+  const res = await authFetch('/api/shops/me/documents', { method: 'GET' });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || 'Impossible de récupérer les documents.');
+  }
+  return data?.documents ? data : { documents: Array.isArray(data) ? data : [] };
+}
+
+/**
+ * POST /api/shops/me/documents
+ * Envoi multipart des pièces justificatives
+ */
+export async function uploadShopDocuments(formData: FormData): Promise<any> {
+  const res = await authFetch('/api/shops/me/documents', {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || 'Erreur lors de l’envoi des documents.');
+  }
+  return data;
+}
