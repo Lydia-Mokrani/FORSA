@@ -8,3 +8,8 @@ export * from './Chip';
 export * from './Avatar';
 export * from './Header';
 export * from './MapBox';
+export * from './Modal';
+export * from './BottomSheet';
+export * from './ResponsiveDialog';
+export * from './Stepper';
+export * from './Dropzone';

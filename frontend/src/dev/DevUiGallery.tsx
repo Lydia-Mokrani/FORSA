@@ -9,6 +9,11 @@ import {
   Header,
   MapBox,
   Icon,
+  Modal,
+  BottomSheet,
+  ResponsiveDialog,
+  Stepper,
+  Dropzone,
 } from '../components/ui';
 
 /**
@@ -23,6 +28,14 @@ export default function DevUiGallery() {
   const [mapStatus, setMapStatus] = useState<'ok' | 'empty' | 'down'>('ok');
   const [fieldVal, setFieldVal] = useState('Maison Gourmande');
   const [selectVal, setSelectVal] = useState('boulangerie');
+
+  // États pour les nouveaux composants R0b
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isResponsiveOpen, setIsResponsiveOpen] = useState(false);
+  const [stepperStep, setStepperStep] = useState(1);
+  const [dropzoneFile, setDropzoneFile] = useState<File | null>(null);
+  const [dropzoneError, setDropzoneError] = useState<string | undefined>(undefined);
 
   return (
     <div className="min-h-screen bg-ui-page p-6 md:p-12 font-sans text-ui-ink">
@@ -366,7 +379,36 @@ export default function DevUiGallery() {
                 />
               </Card>
 
+              <Card
+                icon={<Icon name="file" size={20} />}
+                title="Documents & Stepper (Mobile)"
+              >
+                <div className="space-y-4">
+                  <Stepper
+                    current={stepperStep}
+                    steps={[
+                      { title: 'Compte' },
+                      { title: 'Commerce' },
+                      { title: 'Documents' },
+                    ]}
+                  />
+                  <Dropzone
+                    label="Registre de commerce"
+                    value={dropzoneFile}
+                    onFile={setDropzoneFile}
+                    error={dropzoneError}
+                  />
+                </div>
+              </Card>
+
               <div className="flex flex-col gap-3 pt-2">
+                <Button
+                  variant="primary"
+                  fullWidth
+                  onClick={() => setIsResponsiveOpen(true)}
+                >
+                  Ouvrir ResponsiveDialog (BottomSheet)
+                </Button>
                 <Button variant="primary" fullWidth leftIcon={<Icon name="check" size={18} />}>
                   Enregistrer les modifications
                 </Button>
@@ -377,6 +419,223 @@ export default function DevUiGallery() {
             </div>
           </div>
         </section>
+
+        {/* Section 8 : Modal, BottomSheet & ResponsiveDialog (Lot R0b) */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-l-4 border-ui-emerald pl-3 text-ui-ink">
+            8. Dialogues & Modales (Modal, BottomSheet, ResponsiveDialog)
+          </h2>
+          <div className="p-6 bg-white rounded-ui-card border border-ui-card-border space-y-4 shadow-sm">
+            <p className="text-sm text-ui-text-70">
+              Modales accessibles conformes Figma avec gestion Focus Trap, fermeture Échap / clic fond, et bascule responsive.
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+                Ouvrir Modal (Desktop)
+              </Button>
+              <Button variant="secondary" onClick={() => setIsSheetOpen(true)}>
+                Ouvrir BottomSheet (Mobile)
+              </Button>
+              <Button variant="primary" onClick={() => setIsResponsiveOpen(true)}>
+                Ouvrir ResponsiveDialog
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 9 : Stepper (Lot R0b) */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-l-4 border-ui-emerald pl-3 text-ui-ink">
+            9. Stepper (Progression Inscription & Statuts)
+          </h2>
+          <div className="p-6 bg-white rounded-ui-card border border-ui-card-border space-y-6 shadow-sm">
+            <div className="flex items-center justify-between pb-4 border-b border-ui-field-border">
+              <span className="text-sm font-medium">Étape active : {stepperStep + 1} / 3</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  disabled={stepperStep === 0}
+                  onClick={() => setStepperStep((s) => Math.max(0, s - 1))}
+                >
+                  Précédent
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={stepperStep === 2}
+                  onClick={() => setStepperStep((s) => Math.min(2, s + 1))}
+                >
+                  Suivant
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-ui-text-70 uppercase tracking-wide">
+                Affichage Horizontal (Inscription Commerçant)
+              </h3>
+              <Stepper
+                current={stepperStep}
+                steps={[
+                  { title: 'Compte', description: 'Informations gérant' },
+                  { title: 'Commerce', description: 'Informations boutique' },
+                  { title: 'Documents', description: 'Justificatifs légaux' },
+                ]}
+              />
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-ui-field-border">
+              <h3 className="text-sm font-semibold text-ui-text-70 uppercase tracking-wide">
+                Affichage Vertical (Statut Validation Commerçant)
+              </h3>
+              <Stepper
+                orientation="vertical"
+                current={stepperStep}
+                steps={[
+                  { title: 'Inscrit', description: 'Votre demande est enregistrée' },
+                  { title: 'Documents envoyés', description: 'Pièces justificatives reçues' },
+                  { title: 'En cours de vérification', description: 'Examen par nos équipes' },
+                ]}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Section 10 : Dropzone (Lot R0b) */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-l-4 border-ui-emerald pl-3 text-ui-ink">
+            10. Dropzone (Zone Drag-and-Drop & Pré-contrôle 5 Mo)
+          </h2>
+          <div className="p-6 bg-white rounded-ui-card border border-ui-card-border space-y-6 shadow-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-sm font-semibold text-ui-ink mb-3">
+                  Zone interactive (PDF, JPG, PNG - 5 Mo max)
+                </h3>
+                <Dropzone
+                  label="Registre de commerce (C2)"
+                  helperText="Format PDF ou image scannée lisible"
+                  value={dropzoneFile}
+                  onFile={setDropzoneFile}
+                  error={dropzoneError}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-ui-ink mb-3">
+                  Contrôles de simulation d'erreur
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setDropzoneError('Le document est illisible ou tronqué.')}
+                  >
+                    Simuler Erreur Serveur
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setDropzoneError(undefined)}
+                  >
+                    Effacer Erreur
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setDropzoneFile(null)}
+                  >
+                    Vider Fichier
+                  </Button>
+                </div>
+                <div className="p-3 bg-ui-mint rounded-ui-ctl text-xs text-ui-ink space-y-1">
+                  <p><strong>Fichier actif :</strong> {dropzoneFile ? `${dropzoneFile.name} (${(dropzoneFile.size / 1024).toFixed(1)} Ko)` : 'Aucun'}</p>
+                  <p><strong>Erreur affichée :</strong> {dropzoneError || 'Aucune'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 11 : Token ui.auth-bg */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold border-l-4 border-ui-emerald pl-3 text-ui-ink">
+            11. Fond Solide Auth [DECISION HYB] (`ui.auth-bg` = #dce1d0)
+          </h2>
+          <div className="p-6 bg-white rounded-ui-card border border-ui-card-border shadow-sm space-y-4">
+            <p className="text-sm text-ui-text-70">
+              Remplacement du fond photo bokeh par la couleur unie <code>#dce1d0</code>.
+            </p>
+            <div className="p-6 rounded-ui-card bg-ui-auth-bg border border-ui-field-border flex items-center justify-between">
+              <span className="font-semibold text-ui-ink">
+                Aperçu fond bg-ui-auth-bg (#dce1d0) — Contraste texte WCAG AAA (11.28:1)
+              </span>
+              <span className="px-3 py-1 bg-white rounded-full text-xs font-medium text-ui-ink border border-ui-card-border">
+                Token ui.auth-bg
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* Instances Modales */}
+        <Modal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          title="Confirmation Modal (Desktop)"
+          description="Ceci est une boîte de dialogue accessible avec focus trap et fermeture Échap."
+          actions={
+            <>
+              <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+                Annuler
+              </Button>
+              <Button variant="primary" onClick={() => setIsModalOpen(false)}>
+                Confirmer
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-ui-text-70">
+            Contenu du modal interactif. Le focus est maintenu à l'intérieur tant que le modal est ouvert.
+          </p>
+        </Modal>
+
+        <BottomSheet
+          isOpen={isSheetOpen}
+          onClose={() => setIsSheetOpen(false)}
+          title="Fiche Mobile (BottomSheet)"
+          description="Glisse depuis le bas de l'écran avec poignée de glissement."
+          actions={
+            <>
+              <Button variant="primary" fullWidth onClick={() => setIsSheetOpen(false)}>
+                Action principale
+              </Button>
+              <Button variant="secondary" fullWidth onClick={() => setIsSheetOpen(false)}>
+                Fermer
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-ui-text-70">
+            Composant dédié aux interactions mobiles confortables au pouce.
+          </p>
+        </BottomSheet>
+
+        <ResponsiveDialog
+          isOpen={isResponsiveOpen}
+          onClose={() => setIsResponsiveOpen(false)}
+          title="Dialogue Responsive Unifié"
+          description="S'affiche en Modal sur grand écran et en BottomSheet sur mobile (< 768px)."
+          actions={
+            <>
+              <Button variant="secondary" onClick={() => setIsResponsiveOpen(false)}>
+                Fermer
+              </Button>
+              <Button variant="primary" onClick={() => setIsResponsiveOpen(false)}>
+                Valider
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-ui-text-70">
+            Adapte son comportement et son animation selon la largeur du viewport.
+          </p>
+        </ResponsiveDialog>
       </div>
     </div>
   );

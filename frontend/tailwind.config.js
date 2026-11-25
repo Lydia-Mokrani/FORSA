@@ -44,6 +44,7 @@ export default {
           info: '#026aa7',
           'info-bg': '#f0f9ff',
           'info-border': '#b9e6fe',
+          'auth-bg': '#dce1d0',
         },
         glass: {
           DEFAULT: 'rgba(255, 255, 255, 0.40)',
