@@ -24,6 +24,7 @@ export const Banner: React.FC<BannerProps> = ({
   icon,
   onClose,
   className,
+  children,
   ...props
 }) => {
   const isAlert = variant === 'error' || variant === 'warn';
@@ -86,6 +87,7 @@ export const Banner: React.FC<BannerProps> = ({
             {description}
           </p>
         )}
+        {children}
       </div>
 
       {onClose && (

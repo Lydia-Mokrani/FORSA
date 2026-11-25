@@ -267,6 +267,54 @@ export async function verifyTelegramAuth(
   return data;
 }
 
+export interface GoogleAuthResponse {
+  user: AuthUser;
+  accessToken: string;
+  refreshToken: string;
+  expiresIn?: number;
+}
+
+/**
+ * POST /api/auth/google
+ * Authentifie l'utilisateur via le jeton Google idToken émis par GIS.
+ * Stocke l'accessToken en mémoire et le refreshToken dans le stockage local de manière
+ * strictement identique au flux Telegram.
+ * L'idToken n'est jamais stocké ni consigné dans les logs.
+ */
+export async function loginWithGoogle(idToken: string): Promise<GoogleAuthResponse> {
+  const res = await fetch('/api/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  });
+
+  let data: any = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Réponse non-JSON (ex: 502/504 ou 404 HTML)
+  }
+
+  if (!res.ok) {
+    const errorMsg = data?.error?.message || data?.message || 'Connexion Google indisponible.';
+    const err: any = new Error(errorMsg);
+    err.status = res.status;
+    err.code = data?.error?.code || data?.code;
+    throw err;
+  }
+
+  // Stockage identique à verifyTelegramAuth
+  setAccessToken(data.accessToken);
+  if (data.refreshToken) {
+    setStoredRefreshToken(data.refreshToken);
+  }
+  if (data.user) {
+    setStoredUser(data.user);
+  }
+
+  return data;
+}
+
 /**
  * POST /api/auth/logout
  */

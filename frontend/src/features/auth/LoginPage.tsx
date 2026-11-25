@@ -22,9 +22,12 @@ import {
   startTelegramAuth,
   getTelegramChallengeStatus,
   verifyTelegramAuth,
+  loginWithGoogle,
   getPostLoginRedirect,
   AuthUser,
 } from './services/authService';
+import { mapGoogleAuthError } from './utils/googleAuthError';
+import { loadGoogleIdentityScript } from './utils/googleIdentity';
 
 type Step = 'PHONE' | 'WAITING_TELEGRAM' | 'VERIFY_OTP' | 'LOCKED';
 
@@ -62,8 +65,48 @@ export const LoginPage: React.FC = () => {
 
   // Social Login (Google & Apple - Décisions Hyb)
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-  const isGoogleAvailable = Boolean(googleClientId.trim());
+  const [isGisReady, setIsGisReady] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleErrorLink, setGoogleErrorLink] = useState<{ text: string; href: string } | null>(null);
+
+  // Le bouton Google reste désactivé avec "Bientôt disponible" tant que VITE_GOOGLE_CLIENT_ID
+  // est vide ou que le script GIS n'a pas pu être chargé (pas de crash, pas d'erreur console).
+  const isGoogleAvailable = Boolean(googleClientId.trim()) && isGisReady;
+
+  const onGoogleCredentialRef = useRef<(cred: string) => Promise<void>>(() => Promise.resolve());
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!googleClientId.trim()) {
+      setIsGisReady(false);
+      return;
+    }
+
+    loadGoogleIdentityScript().then((loaded) => {
+      if (!isMounted) return;
+      if (loaded && window.google?.accounts?.id) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: googleClientId.trim(),
+            callback: (response) => {
+              if (response?.credential) {
+                onGoogleCredentialRef.current(response.credential);
+              }
+            },
+          });
+          setIsGisReady(true);
+        } catch {
+          setIsGisReady(false);
+        }
+      } else {
+        setIsGisReady(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [googleClientId]);
 
   useEffect(() => {
     if (searchParams.get('role') === 'merchant') setRole('MERCHANT');
@@ -131,6 +174,7 @@ export const LoginPage: React.FC = () => {
   const toggleRole = () => {
     setRole((prev) => (prev === 'CUSTOMER' ? 'MERCHANT' : 'CUSTOMER'));
     setErrorMessage(null);
+    setGoogleErrorLink(null);
   };
 
   /**
@@ -149,6 +193,7 @@ export const LoginPage: React.FC = () => {
   const handleStartTelegram = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMessage(null);
+    setGoogleErrorLink(null);
 
     const normalized = validateAndNormalizePhone(phoneInput);
     if (!normalized) {
@@ -351,38 +396,40 @@ export const LoginPage: React.FC = () => {
   /**
    * Câblage Google Identity Services (Lot G1 préparé)
    */
-  const handleGoogleLogin = async () => {
-    if (!isGoogleAvailable) return;
+  const onGoogleCredential = async (credential: string) => {
     setGoogleLoading(true);
     setErrorMessage(null);
+    setGoogleErrorLink(null);
 
     try {
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (res.status === 404) {
-        setErrorMessage('Compte introuvable. Veuillez créer votre compte FORSA.');
+      const data = await loginWithGoogle(credential);
+      if (data.user?.status === 'SUSPENDED') {
+        navigate('/account/suspended');
         return;
       }
-      if (res.status === 403) {
-        setErrorMessage('Votre adresse e-mail n’est pas encore vérifiée.');
-        return;
+      handleAuthSuccess(data.user);
+    } catch (err: any) {
+      const registerPath = role === 'MERCHANT' ? '/register?role=merchant' : '/register?role=client';
+      const mapped = mapGoogleAuthError(err, registerPath);
+      setErrorMessage(mapped.message);
+      if (mapped.link) {
+        setGoogleErrorLink(mapped.link);
       }
-      if (!res.ok) {
-        setErrorMessage('Connexion Google momentanément indisponible.');
-        return;
-      }
-
-      const data = await res.json();
-      if (data.user) {
-        handleAuthSuccess(data.user);
-      }
-    } catch {
-      setErrorMessage('Service de connexion Google indisponible.');
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    onGoogleCredentialRef.current = onGoogleCredential;
+  });
+
+  const handleGoogleLogin = () => {
+    if (!isGoogleAvailable || googleLoading) return;
+    setErrorMessage(null);
+    setGoogleErrorLink(null);
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.prompt();
     }
   };
 
@@ -460,7 +507,19 @@ export const LoginPage: React.FC = () => {
               <Banner
                 variant="error"
                 description={errorMessage}
-              />
+                className="w-full text-left"
+              >
+                {googleErrorLink && (
+                  <div className="mt-2">
+                    <Link
+                      to={googleErrorLink.href}
+                      className="text-[13px] font-semibold text-ui-emerald hover:underline inline-flex items-center gap-1"
+                    >
+                      {googleErrorLink.text} →
+                    </Link>
+                  </div>
+                )}
+              </Banner>
             )}
 
             <form onSubmit={handleStartTelegram} className="flex flex-col gap-4 w-full">

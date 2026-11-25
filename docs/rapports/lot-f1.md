@@ -81,14 +81,18 @@ Conformément à la directive de Hyb, toutes les pages du flux d'authentificatio
 
 ---
 
-## 4. Boutons Sociaux (Google & Apple) [DECISIONS HYB]
+## 4. Boutons Sociaux (Google & Apple) [DECISIONS HYB & STATUT HONNÊTE]
 
-1. **Google (Réservé aux comptes existants) :**
-   - Bouton stylisé avec l'icône officielle Figma `google.svg`.
-   - Câblé derrière la variable d'environnement `VITE_GOOGLE_CLIENT_ID`.
-   - Quand `VITE_GOOGLE_CLIENT_ID` est vide ou non définie, le bouton est automatiquement désactivé avec la mention visible "Bientôt disponible" (`disabled aria-disabled="true"`).
-   - Fichier `frontend/.env.example` créé avec `VITE_GOOGLE_CLIENT_ID=`.
-   - Gestion des codes retours prête pour le Lot G1 : 404 (compte inexistant), 403 (e-mail non vérifié), 401/503.
+1. **Google (Réservé aux comptes existants — Préparation Lot G1) :**
+   - **Chargement lazy GIS :** Script officiel `https://accounts.google.com/gsi/client` chargé dynamiquement à la demande sans aucune dépendance npm tierce (`loadGoogleIdentityScript()`).
+   - **État inactif par défaut :** Tant que `VITE_GOOGLE_CLIENT_ID` est vide ou que le script n'a pas pu être chargé (ex. coupure réseau), le bouton reste strictement désactivé (`disabled`, `aria-disabled="true"`) avec le tag visible "Bientôt disponible" et `onClick={isGoogleAvailable ? handleGoogleLogin : undefined}` (aucun crash, aucune erreur console).
+   - **Flux d'authentification :** Quand activé et initialisé avec `VITE_GOOGLE_CLIENT_ID`, le clic déclenche `window.google.accounts.id.prompt()`. Dès réception du credential Google, le frontend envoie `{ idToken }` à `POST /api/auth/google` via le service commun `authService.ts` (`loginWithGoogle`), assurant le stockage des jetons (`forsa_access_token`, `forsa_refresh_token`, `forsa_user`) et les redirections post-connexion identiques au flux Telegram. L'`idToken` n'est jamais persisté ni journalisé après l'appel.
+   - **Mappage d'erreur fonctionnel pur :** La fonction pure `mapGoogleAuthError(err, registerPath)` (couverte par 10 tests unitaires) gère les erreurs selon le code renvoyé dans le corps JSON (`err.code`), et non par le statut HTTP seul :
+     * `ACCOUNT_NOT_FOUND` (404 avec code JSON) : "Aucun compte associé à cette adresse Google. Inscrivez-vous d'abord pour accéder à FORSA." accompagné du lien d'inscription adapté au rôle (`/register?role=client` ou `/register?role=merchant`).
+     * `EMAIL_NOT_VERIFIED` (403 avec code JSON) : message d'avertissement explicite sur l'e-mail non vérifié.
+     * `INVALID_GOOGLE_TOKEN` (400), `GOOGLE_NOT_CONFIGURED` (503), erreurs réseau, 5xx ou toute 404 standard : message générique "Connexion Google indisponible."
+   - **Précision honnête (Backend non existant) :** La route backend `/api/auth/google` **n'existe pas encore** (son implémentation relève du Lot G1). Aujourd'hui, tout appel renvoie une 404 standard (sans body `{ code: 'ACCOUNT_NOT_FOUND' }`), qui est désormais fidèlement traitée comme une indisponibilité générique sans jamais induire l'utilisateur en erreur en lui prétendant que son compte n'existe pas.
+
 2. **Apple (Design uniquement, jamais fonctionnel) :**
    - Bouton purement visuel avec l'icône officielle Figma `apple.svg`.
    - Verrouillé en permanence : `disabled aria-disabled="true"`, badge "Bientôt disponible".

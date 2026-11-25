@@ -6,18 +6,19 @@
 
 ---
 
-## 1. Inventaire des Maquettes Figma & Audit des Sections
+## 1. Inventaire des Écrans & État d'audit Figma (Statut honnête)
 
-Conformément aux règles du projet, l'audit visuel a été mené en lecture seule :
+> [!NOTE] Précision d'audit Figma
+> Les écrans ci-dessous ont été construits à partir des tokens design R0/R0b, des spécifications textuelles et du code existant. Les frames Figma correspondantes n'ont pas été inspectées directement via l'API Figma (aucun Node ID non confirmé).
 
-| Section / Écran | Node ID | Nom du Frame Figma | Statut d'audit | Implémentation / Justification |
-| :--- | :--- | :--- | :--- | :--- |
-| **Statut Commerçant** | `1150:28299` | Compte commerçant / Statut | Audit code & tokens | 4 états conformes (PENDING, APPROVED, REJECTED, SUSPENDED) |
-| **Statut En attente** | `1150:28300` | Statut Pending Stepper | Audit code & tokens | Intégration du composant `Stepper` (3 étapes) |
-| **Statut Rejeté** | `1150:28305` | Statut Rejeté | Audit code & tokens | Remplacement emoji par SVG token erreur, lien vers resubmit |
-| **Pièces Justificatives** | `1150:28320` | Liste des documents | Audit code & tokens | `/merchant/documents` (badges de conformité, motif de rejet) |
-| **Mise à jour pièces** | `1150:28340` | Téléversement documents | Audit code & tokens | `/merchant/documents/resubmit` avec `Dropzone` 5 Mo |
-| **Compte Suspendu** | `785:21652` | Écran Suspension | Audit par nom | Harmonisation visuelle sur fond `#dce1d0` (`ui.auth-bg`) |
+| Section / Écran | Statut d'audit Figma | Implémentation / Justification |
+| :--- | :--- | :--- |
+| **Statut Commerçant** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | 4 états conformes (PENDING, APPROVED, REJECTED, SUSPENDED) |
+| **Statut En attente (Stepper)** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | Intégration du composant `Stepper` (3 étapes) |
+| **Statut Rejeté** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | Remplacement emoji par SVG token erreur, lien vers resubmit |
+| **Pièces Justificatives** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | `/merchant/documents` (badges de conformité, motif de rejet) |
+| **Mise à jour pièces** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | `/merchant/documents/resubmit` avec `Dropzone` 5 Mo |
+| **Compte Suspendu** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | Harmonisation visuelle sur fond `#dce1d0` (`ui.auth-bg`) |
 
 ---
 

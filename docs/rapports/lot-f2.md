@@ -6,20 +6,21 @@
 
 ---
 
-## 1. Inventaire des Maquettes Figma & État d'audit
+## 1. Inventaire des Écrans & État d'audit Figma (Statut honnête)
 
-Conformément aux directives communes, les sections Figma ont été inspectées en mode consultation sans modification de maquette :
+> [!NOTE] Précision d'audit Figma
+> Les écrans ci-dessous ont été construits à partir des tokens design R0/R0b, des spécifications textuelles et du code existant. Les frames Figma correspondantes n'ont pas été inspectées directement via l'API Figma (aucun Node ID non confirmé).
 
-| Section / Écran | Node ID | Nom du Frame Figma | Statut d'audit | Implémentation / Justification |
-| :--- | :--- | :--- | :--- | :--- |
-| **Bascule de Mode** | `1155:25968` | Mode commerçant / Bascule | Audit code & tokens | 4 états réels conformes (`/settings/mode`) |
-| **Bascule - Dialogue** | `1155:25969` | Modal confirmation bascule | Audit code & tokens | `ResponsiveDialog` avec actions Annuler / Confirmer |
-| **Bascule - Restreint** | `1155:25970` | Mode restreint non validé | Audit code & tokens | `Banner variant="warn"` + redirection `/merchant/status` |
-| **Profil Client** | `617:5056` | Mon espace / Profil | Audit par nom & R0 | Restylé sur tokens R0/R0b, zéro `#B22222`, zéro `rounded-[20px]` |
-| **Profil - Badge vérifié** | `756:21210` | Pastille vérifiée | Audit par nom | `Chip` "Commerçant vérifié" conditionnel (MERCHANT & APPROVED) |
-| **Profil - Changement Tél** | `825:21500` | Modal 2-Step Phone Change | Audit par nom | Remplacé par `ResponsiveDialog`, correction défaut UX |
-| **Paramètres Généraux** | `793:23356` | Écran Paramètres & Sessions | Audit par nom | `/settings` avec Telegram lié, sessions réelles, déconnexion |
-| **Zone Sensible** | `793:23400` | Désactivation & Suppression | Audit par nom | Shell UI `/settings/account` avec boutons `[NOT WIRED]` |
+| Section / Écran | Statut d'audit Figma | Implémentation / Justification |
+| :--- | :--- | :--- |
+| **Bascule de Mode** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | 4 états réels conformes (`/settings/mode`) |
+| **Bascule - Dialogue de confirmation** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | `ResponsiveDialog` avec actions Annuler / Confirmer |
+| **Bascule - Mode restreint** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | `Banner variant="warn"` + redirection `/merchant/status` |
+| **Profil Client** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | Restylé sur tokens R0/R0b, zéro `#B22222`, zéro `rounded-[20px]` |
+| **Profil - Pastille commerçant vérifié** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | `Chip` "Commerçant vérifié" conditionnel (MERCHANT & APPROVED) |
+| **Profil - Changement de numéro** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | Remplacé par `ResponsiveDialog`, correction défaut UX |
+| **Paramètres Généraux & Sessions** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | `/settings` avec Telegram lié, sessions réelles, déconnexion |
+| **Zone Sensible du Compte** | NOT READ (construit à partir des tokens, specs et du code existant, frame Figma non inspectée via API) | Shell UI `/settings/account` avec boutons `[NOT WIRED]` |
 
 ---
 
@@ -53,32 +54,49 @@ Implémentation des **4 états Figma** :
 
 ---
 
-## 3. Audit des Liens de la Sidebar (Décision Hyb)
+## 3. Audit des Liens de Navigation extrait du CODE
 
-Conformément à la consigne, les composants de navigation du coéquipier MS2 (`ClientLayout.tsx`, `MerchantSidebar.tsx`, `Navbar.tsx`, `Footer.tsx`) ont été conservés tels quels sans modification de routes.
+Conformément à la consigne, les composants de navigation du coéquipier MS2 n'ont pas été modifiés. L'audit ci-dessous est extrait directement du code source (`MerchantSidebar.tsx`, `Navbar.tsx`, `Footer.tsx`).
 
-Tableau de correspondance des liens de navigation vers les routes d'`App.tsx` :
+### A. Navigation Commerçant (`MerchantSidebar.tsx` — `variant="merchant"`)
+Le tableau constant `MERCHANT_ITEMS` dans le code source déclare exactement 5 éléments :
 
-| Composant Source | Libellé / Cible | Route Cible | Existe dans `App.tsx` ? | Statut du Lien |
-| :--- | :--- | :--- | :--- | :--- |
-| `MerchantSidebar.tsx` | Accueil | `/` | OUI (`HomePage`) | Actif |
-| `MerchantSidebar.tsx` | Carte | `/map` | OUI (`ShopsMapViewPage`) | Actif |
-| `MerchantSidebar.tsx` | Mes réservations | `/reservations` | OUI (Route réservations) | Actif |
-| `MerchantSidebar.tsx` | Notifications | `/notifications` | OUI (Route notifications) | Actif |
-| `MerchantSidebar.tsx` | Profil | `/profile` | OUI (`ProfilePage`) | Actif |
-| `MerchantSidebar.tsx` | Tableau de bord | `/merchant/dashboard` | OUI (`MerchantDashboardPage`) | Actif |
-| `MerchantSidebar.tsx` | Ajouter une offre | `/merchant/create-offer` | OUI (`CreateOfferPage`) | Actif |
-| `MerchantSidebar.tsx` | Compte | `/merchant/shop` | OUI (`ShopEditPage`) | Actif |
-| `MerchantSidebar.tsx` | Avis | *(sans lien)* | N/A | Inactif (sans href) |
-| `MerchantSidebar.tsx` | Réservations | *(sans lien)* | N/A | Inactif (sans href) |
-| `ClientLayout.tsx` | Logo FORSA | `/` | OUI (`HomePage`) | Actif |
-| `ClientLayout.tsx` | Carte | `/map` | OUI (`ShopsMapViewPage`) | Actif |
-| `ClientLayout.tsx` | Mon Profil | `/profile` | OUI (`ProfilePage`) | Actif |
-| `Footer.tsx` | Explorer les paniers | `/explore` | OUI (`ExploreOffersPage`) | Actif |
-| `Footer.tsx` | Carte interactive | `/map` | OUI (`ShopsMapViewPage`) | Actif |
-| `Footer.tsx` | Gérer mon stock | `/merchant/my-offers` | OUI (`MyOffersPage`) | Actif |
+| Libellé | Propriété `to` dans le code | Route Cible `App.tsx` | Statut réel dans le code |
+| :--- | :--- | :--- | :--- |
+| **Tableau de bord** | `'/merchant/dashboard'` | `/merchant/dashboard` | **Actif** (`NavLink`) |
+| **Ajouter une offre** | `'/merchant/create-offer'` | `/merchant/create-offer` | **Actif** (`NavLink`) |
+| **Avis** | *non définie* | *Aucune route* | **Sans lien** (`<div>` inerte sans `to` ni `href`, page MS2/MS3 non construite) |
+| **Compte** | `'/merchant/shop'` | `/merchant/shop` | **Actif** (`NavLink`) |
+| **Réservations** | *non définie* | *Aucune route* | **Sans lien** (`<div>` inerte sans `to` ni `href`, page MS2/MS3 non construite) |
 
-**Constat :** Aucun lien mort non routé n'est actif dans l'application.
+> [!WARNING] Statut des liens commerçant
+> Dans la sidebar commerçant, **"Avis"** et **"Réservations"** ne disposent d'aucun lien ni de route cible dans `App.tsx` (les pages métier associées n'ont pas encore été développées par les équipes MS2/MS3). Ils sont rendus sous forme d'éléments `<div>` inertes sans `to`.
+
+---
+
+### B. Navigation Client (`MerchantSidebar.tsx` — `variant="client"`)
+Lorsque la sidebar est utilisée en variante client, les liens déclarés sont :
+
+| Libellé | Route Cible (`to`) | Route déclarée dans `App.tsx` ? | Statut réel |
+| :--- | :--- | :--- | :--- |
+| **Accueil** | `/` | OUI (`HomePage`) | Actif (`NavLink`) |
+| **Carte** | `/map` | OUI (`ShopsMapViewPage`) | Actif (`NavLink`) |
+| **Mes réservations** | `/reservations` | OUI (route protégée) | Actif (`NavLink`) |
+| **Notifications** | `/notifications` | OUI (route protégée) | Actif (`NavLink`) |
+| **Profil** | `/profile` | OUI (`ProfilePage`) | Actif (`NavLink`) |
+
+---
+
+### C. Navigation `Navbar.tsx` (En-tête)
+- Logo FORSA : `/`
+- Liens Client : `/` (Accueil), `/explore` (Paniers), `/map` (Carte), `/profile` (Profil)
+- Liens Commerçant : `/merchant/dashboard`, `/merchant/my-offers`, `/merchant/create-offer`
+
+---
+
+### D. Navigation `Footer.tsx` (Pied de page)
+- Liens Découverte : `/explore`, `/map`, `/explore?category=bakeries`, `/explore?category=restaurants`
+- Liens Commerçant : `/merchant/dashboard`, `/merchant/create-offer`, `/merchant/my-offers`
 
 ---
 
