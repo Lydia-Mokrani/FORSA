@@ -15,16 +15,28 @@ import { formatAlgerianMobileDisplay } from '../profile/ProfilePage';
 import figmaHeaderLocation from '../../assets/figma/b027565f-330c-438d-8e75-763aa35119eb.svg';
 import figmaHeaderBell from '../../assets/figma/b5a3fed0-7e75-428d-bde2-d289d8362364.svg';
 import figmaUnreadIndicator from '../../assets/figma/f90091a6-8256-4c7b-808d-68b1b56f5b67.svg';
-import figmaFoodAvatar from '../../assets/figma/e7f7445d-b6d0-4bf3-973d-ffa1d0affdba.png';
-import figmaSecurityCheckHeader from '../../assets/figma/b87a8d0b-7c1b-4134-bb71-946f25054c86.svg';
-import figmaSquareLock from '../../assets/figma/766987c9-e94d-451d-a32a-815d83d1808c.svg';
+import figmaPhotoDeProfil from '../../assets/figma/cebf2a13-fa3b-4285-999d-9bea0d4088d2.png';
+// Connexion card header = shield icon
+import figmaShieldHeader from '../../assets/figma/f3d3d3ca-c043-4140-a9b6-b3f5977e9b44.svg';
+// Mot de passe row = lock icon
+import figmaLockIcon from '../../assets/figma/8fd61fdd-abc3-4158-b727-0c6f505f112e.svg';
+// Double authentification row = security shield (same shield)
 import figmaSecurityShield from '../../assets/figma/f3d3d3ca-c043-4140-a9b6-b3f5977e9b44.svg';
+// Vérifications card header = email/envelope icon
+import figmaEnvelopeHeader from '../../assets/figma/4e0ca208-ef69-4dd2-9bde-c10bb6518573.svg';
+// E-mail row
+import figmaEmailRow from '../../assets/figma/4e0ca208-ef69-4dd2-9bde-c10bb6518573.svg';
+// Téléphone row = smartphone
 import figmaSmartPhone from '../../assets/figma/7a071d75-6b5e-4ca3-bf0f-bf7f1d4ce5d5.svg';
+// Appareils card header = smartphone icon
+import figmaDevicesHeader from '../../assets/figma/7a071d75-6b5e-4ca3-bf0f-bf7f1d4ce5d5.svg';
+// Zone sensible card header = lock icon
+import figmaZoneSensibleHeader from '../../assets/figma/8fd61fdd-abc3-4158-b727-0c6f505f112e.svg';
+// User remove = delete account
+import figmaUserRemove from '../../assets/figma/39c5264b-942a-4178-951e-ca1e06cca756.svg';
 import figmaTickVerified from '../../assets/figma/1d2b4ddf-2542-4439-8351-dd7b9bcdadaa.svg';
 import figmaArrowRight from '../../assets/figma/c32400fc-8feb-4136-aa27-17c7f5716641.svg';
-import figmaLaptopPhone from '../../assets/figma/800a9037-b5da-43ba-9867-917cddd0c20b.svg';
 import figmaLogoutIcon from '../../assets/figma/77c997e8-0d8f-4270-adf3-349d202bb23c.svg';
-import figmaUserRemove from '../../assets/figma/39c5264b-942a-4178-951e-ca1e06cca756.svg';
 
 function formatDeviceName(rawDevice?: string, userAgent?: string): string {
   if (rawDevice && rawDevice !== 'Appareil Web' && rawDevice.trim().length > 0) {
@@ -276,15 +288,23 @@ export const SecuritySettingsPage: React.FC = () => {
             {/* Circular User Avatar Photo (994:20868) */}
             <div
               onClick={() => navigate('/profile')}
-              className="relative size-[48px] rounded-full overflow-hidden shrink-0 border border-black/5 shadow-xs cursor-pointer hover:opacity-90 transition"
+              className="relative size-[48px] rounded-full overflow-hidden shrink-0 bg-[#eef7ec] border border-black/5 shadow-xs cursor-pointer hover:opacity-90 transition flex items-center justify-center"
               data-node-id="994:20868"
               title="Mon profil"
             >
-              <img
-                src={figmaFoodAvatar}
-                alt="Avatar"
-                className="size-full object-cover"
-              />
+              {(user as any)?.avatarUrl || (user as any)?.photo ? (
+                <img
+                  src={(user as any)?.avatarUrl || (user as any)?.photo}
+                  alt="Avatar"
+                  className="size-full object-cover rounded-full"
+                />
+              ) : (
+                <img
+                  src={figmaPhotoDeProfil}
+                  alt="Avatar"
+                  className="size-full object-cover rounded-full"
+                />
+              )}
             </div>
           </div>
         </div>
@@ -301,7 +321,7 @@ export const SecuritySettingsPage: React.FC = () => {
             >
               <div className="flex items-center gap-[12px] w-full" data-node-id="994:20872" data-name="En-tête de carte">
                 <div className="size-[44px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="994:20873">
-                  <img src={figmaSecurityCheckHeader} alt="" className="size-[22px]" />
+                  <img src={figmaShieldHeader} alt="" className="size-[22px]" />
                 </div>
                 <h2 className="font-medium text-[20px] text-[#0b2c25]" data-node-id="994:20875">
                   Connexion
@@ -313,7 +333,7 @@ export const SecuritySettingsPage: React.FC = () => {
               {/* Ligne Mot de passe (994:20877) */}
               <div className="flex items-center gap-[12px] py-[12px] px-2 hover:bg-[#fffaf0] rounded-[16px] transition w-full" data-node-id="994:20877">
                 <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0" data-node-id="994:20878">
-                  <img src={figmaSquareLock} alt="" className="size-[20px]" />
+                  <img src={figmaLockIcon} alt="" className="size-[20px]" />
                 </div>
                 <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20880">
                   <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20881">
@@ -376,7 +396,7 @@ export const SecuritySettingsPage: React.FC = () => {
             >
               <div className="flex items-center gap-[12px] w-full" data-node-id="994:20895" data-name="En-tête de carte">
                 <div className="size-[44px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="994:20896">
-                  <img src={figmaSecurityCheckHeader} alt="" className="size-[22px]" />
+                  <img src={figmaEnvelopeHeader} alt="" className="size-[22px]" />
                 </div>
                 <h2 className="font-medium text-[20px] text-[#0b2c25]" data-node-id="994:20898">
                   Vérifications
@@ -392,7 +412,7 @@ export const SecuritySettingsPage: React.FC = () => {
                 data-node-id="994:20900"
               >
                 <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="994:20901">
-                  <span className="font-semibold text-xs text-[#0b2c25]">@</span>
+                  <img src={figmaEmailRow} alt="" className="size-[20px]" />
                 </div>
                 <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20903">
                   <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20904">
@@ -449,7 +469,7 @@ export const SecuritySettingsPage: React.FC = () => {
             >
               <div className="flex items-center gap-[12px] w-full" data-node-id="994:20921" data-name="En-tête de carte">
                 <div className="size-[44px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="994:20922">
-                  <img src={figmaSmartPhone} alt="" className="size-[22px]" />
+                  <img src={figmaDevicesHeader} alt="" className="size-[22px]" />
                 </div>
                 <h2 className="font-medium text-[20px] text-[#0b2c25]" data-node-id="994:20924">
                   Appareils
@@ -465,7 +485,11 @@ export const SecuritySettingsPage: React.FC = () => {
                 data-node-id="994:20926"
               >
                 <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="994:20927">
-                  <img src={figmaLaptopPhone} alt="" className="size-[20px]" />
+                  {/* Laptop/sessions icon — inline SVG */}
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2 13.5H18M4 13.5V5.5C4 4.95 4.45 4.5 5 4.5H15C15.55 4.5 16 4.95 16 5.5V13.5M1 15.5H19C19 14.4 18.1 13.5 17 13.5H3C1.9 13.5 1 14.4 1 15.5Z" stroke="#0B2C25" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M8.5 15.5H11.5" stroke="#0B2C25" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
                 </div>
                 <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20929">
                   <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20930">
@@ -512,7 +536,7 @@ export const SecuritySettingsPage: React.FC = () => {
             >
               <div className="flex items-center gap-[12px] w-full" data-node-id="994:20943" data-name="En-tête de carte">
                 <div className="size-[44px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="994:20944">
-                  <img src={figmaSquareLock} alt="" className="size-[22px]" />
+                  <img src={figmaZoneSensibleHeader} alt="" className="size-[22px]" />
                 </div>
                 <h2 className="font-medium text-[20px] text-[#0b2c25]" data-node-id="994:20946">
                   Zone sensible
@@ -640,7 +664,7 @@ export const SecuritySettingsPage: React.FC = () => {
               {sessions.map((sess) => (
                 <div key={sess.id || sess.device} className="p-3.5 flex items-center justify-between gap-3 bg-[#fffaf0]">
                   <div className="flex items-center gap-3 min-w-0">
-                    <img src={figmaLaptopPhone} alt="" className="size-5 shrink-0" />
+                    <img src={figmaDevicesHeader} alt="" className="size-5 shrink-0" />
                     <div className="min-w-0">
                       <p className="font-semibold text-xs text-[#0B2C25] truncate">
                         {sess.device || 'Appareil Web'}
