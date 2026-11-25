@@ -3,23 +3,23 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, logout, AuthUser } from '../auth/services/authService';
 
-// Figma Icons
-import figmaHeaderLocation from '../../assets/figma/b027565f-330c-438d-8e75-763aa35119eb.svg';
-import figmaHeaderBell from '../../assets/figma/b5a3fed0-7e75-428d-bde2-d289d8362364.svg';
-import figmaUnreadIndicator from '../../assets/figma/f90091a6-8256-4c7b-808d-68b1b56f5b67.svg';
-import figmaFoodAvatar from '../../assets/figma/e7f7445d-b6d0-4bf3-973d-ffa1d0affdba.png';
-import figmaPhotoDeProfil from '../../assets/figma/cebf2a13-fa3b-4285-999d-9bea0d4088d2.png';
-import figmaUserCircleHeader from '../../assets/figma/b87a8d0b-7c1b-4134-bb71-946f25054c86.svg';
-import figmaSquareLock from '../../assets/figma/766987c9-e94d-451d-a32a-815d83d1808c.svg';
-import figmaArrowRight from '../../assets/figma/c32400fc-8feb-4136-aa27-17c7f5716641.svg';
-import figmaSecurity from '../../assets/figma/f3d3d3ca-c043-4140-a9b6-b3f5977e9b44.svg';
-import figmaSmartPhone from '../../assets/figma/7a071d75-6b5e-4ca3-bf0f-bf7f1d4ce5d5.svg';
-import figmaBellPref from '../../assets/figma/35d17c56-ab7f-49cf-a83b-baf44452276a.svg';
-import figmaLogoutRed from '../../assets/figma/77c997e8-0d8f-4270-adf3-349d202bb23c.svg';
-import figmaTickVerified from '../../assets/figma/1d2b4ddf-2542-4439-8351-dd7b9bcdadaa.svg';
-import figmaHeadset from '../../assets/figma/8eaa0dd1-a209-4631-80e5-6b0b56cfcdef.svg';
-import figmaHelpCircle from '../../assets/figma/d6fca788-5ed1-454e-8ba6-4ff82594934d.svg';
-import figmaInfoCircle from '../../assets/figma/df40b582-8ce2-4c44-80e9-d8de30d4b670.svg';
+// Figma Icons (exact from Figma 994:20744)
+import figmaHeaderLocation from '../../assets/figma/423cff92-c550-42d1-b4fe-371a5535cf1a.svg';
+import figmaHeaderBell from '../../assets/figma/c23b074e-1229-436c-9d23-a01534e8e968.svg';
+import figmaUnreadIndicator from '../../assets/figma/7b49c9a6-2c16-4353-a466-57742c6a7ba9.svg';
+import figmaFoodAvatar from '../../assets/figma/2b6c7bd1-5d3c-41bf-9e66-f19424baa74e.png';
+import figmaPhotoDeProfil from '../../assets/figma/35776968-16f2-47d7-bee8-022b315658ba.png';
+import figmaUserCircleHeader from '../../assets/figma/0fdf24b7-51f9-4635-a2f9-af2bc8060d40.svg';
+import figmaReservationsTicket from '../../assets/figma/10c96e64-188f-49c1-ada2-3dc381159365.svg';
+import figmaArrowRight from '../../assets/figma/03823da1-a693-434e-b36b-a5dbf3b1e9cb.svg';
+import figmaSecurity from '../../assets/figma/b20b8dcc-9360-4b87-9be2-cf72038bfbf3.svg';
+import figmaSmartPhone from '../../assets/figma/df47d7c6-a8ac-4730-a87b-c249af84ade2.svg';
+import figmaBellPref from '../../assets/figma/274f6b9e-5b2a-4962-bad0-86f50e84ff6a.svg';
+import figmaLogoutRed from '../../assets/figma/ea302c06-cd3d-47f0-863b-1147a7951587.svg';
+import figmaTickVerified from '../../assets/figma/ba854eb3-8ae3-4295-8f91-411a250ed859.svg';
+import figmaHeadset from '../../assets/figma/c0842e12-1b58-41c5-928a-ea55c0da7b24.svg';
+import figmaHelpCircle from '../../assets/figma/0d77419f-d49b-4fcf-bc22-50ccb152951c.svg';
+import figmaInfoCircle from '../../assets/figma/63d30b3d-6dd2-4964-b4d1-065c45b60062.svg';
 
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -168,7 +168,7 @@ export const SettingsPage: React.FC = () => {
                 data-node-id="994:20766"
               >
                 <div className="size-[40px] shrink-0 flex items-center justify-center" data-node-id="994:20767">
-                  <img src={figmaSquareLock} alt="" className="size-[40px]" />
+                  <img src={figmaReservationsTicket} alt="" className="size-[40px]" />
                 </div>
                 <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20769">
                   <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20770">

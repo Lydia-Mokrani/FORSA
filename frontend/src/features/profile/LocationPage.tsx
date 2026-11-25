@@ -8,22 +8,27 @@ import 'leaflet/dist/leaflet.css';
 import { useLocation, UserLocation } from '../catalogue/context/LocationContext';
 import { updateUserProfile } from '../auth/services/authService';
 
-// Figma Icons import
-import figmaSearch from '../../assets/figma/1c04f287-7cb8-4ddb-86a5-22104e20e639.svg';
-import figmaGPSButton from '../../assets/figma/987d478f-1c51-4083-9708-6e9bf076c2ff.svg';
-import figmaPastillePin from '../../assets/figma/cc0d09a2-dcb3-4b82-8612-9a85beaaaec2.svg';
-import figmaDarkPin from '../../assets/figma/66b0aa85-93c0-4cc1-b6bd-139fee5de91f.svg';
-import figmaCompassGps from '../../assets/figma/dda2f6ee-aca2-407f-9a09-a7a46a752009.svg';
-import figmaMyPosPin from '../../assets/figma/e9783857-3efc-4c3e-b5fd-8d4fc87d2d1d.svg';
-import figmaArrowRight from '../../assets/figma/2a1c7007-85a2-4361-b158-6c3901ee6239.svg';
-import figmaEditPen from '../../assets/figma/1aa61277-bb85-4813-8006-2d5bae937b08.svg';
-import figmaBuildingCity from '../../assets/figma/7d0a46f1-5aa3-474a-a2ae-310e522dceb3.svg';
-import figmaCityIcon from '../../assets/figma/2556b715-bc6f-4b54-9446-a09ca2d4f416.svg';
-import figmaInfoCircle from '../../assets/figma/358c3b70-e044-4420-8a62-12e67cc84fd5.svg';
-import figmaHeaderLocation from '../../assets/figma/b027565f-330c-438d-8e75-763aa35119eb.svg';
-import figmaHeaderBell from '../../assets/figma/b5a3fed0-7e75-428d-bde2-d289d8362364.svg';
-import figmaUnreadIndicator from '../../assets/figma/f90091a6-8256-4c7b-808d-68b1b56f5b67.svg';
-import figmaFoodAvatar from '../../assets/figma/e7f7445d-b6d0-4bf3-973d-ffa1d0affdba.png';
+// Figma Icons import (exact from Figma 1364:92388)
+import figmaSearch from '../../assets/figma/c65bafca-341b-4fe5-968e-65a0de5bec39.svg';
+import figmaGPSButton from '../../assets/figma/e1cc85d5-a256-42a0-9991-7c976cd3b299.svg';
+import figmaPastillePin from '../../assets/figma/ea730f30-6ef9-4733-a04b-19e79562dedb.svg';
+import figmaDarkPin from '../../assets/figma/0e29a951-8d67-497f-a720-34df5da206e8.svg';
+import figmaCompassGps from '../../assets/figma/14bd55d7-da40-4ba7-aca1-855d96e20022.svg';
+import figmaMyPosPin from '../../assets/figma/2cb86fc2-63c1-4768-acfb-6e40570e1564.svg';
+import figmaArrowRight from '../../assets/figma/182b13de-96de-4db6-ace9-27f8b3452cd5.svg';
+import figmaEditPen from '../../assets/figma/ceaa11a0-c7ec-4c45-b400-110118730436.svg';
+import figmaBuildingCity from '../../assets/figma/47825d12-022f-4299-b004-e00799788adb.svg';
+import figmaCityIcon from '../../assets/figma/3134dacd-de7a-46f4-be2f-9dc4783004a2.svg';
+import figmaInfoCircle from '../../assets/figma/39d236e1-c4a7-45f9-b398-1b31b286b216.svg';
+import figmaHeaderLocation from '../../assets/figma/1cbde86d-466a-42db-a381-6f1483cf7a01.svg';
+import figmaHeaderBell from '../../assets/figma/fdec917d-047b-45c5-a7f0-c4a70094cba6.svg';
+import figmaUnreadIndicator from '../../assets/figma/8e948e5b-bcd1-41df-b768-9851ca53ff42.svg';
+import figmaFoodAvatar from '../../assets/figma/a723cc94-1cb3-4997-94a9-8399651e86c8.png';
+import figmaPhotoProduit0 from '../../assets/figma/9f985b2c-fa91-4724-99ad-de6465d66ff9.png';
+import figmaPhotoProduit1 from '../../assets/figma/c8d4929e-46fa-4ab0-a413-1ad141bd9461.png';
+import figmaPhotoProduit2 from '../../assets/figma/ecfc8b9e-acaa-42b2-ad97-493538b595bb.png';
+import figmaPhotoProduit3 from '../../assets/figma/33df1824-d707-421e-a0f5-0d97061d1c67.png';
+import figmaPhotoProduit4 from '../../assets/figma/6c55e7fd-90af-4d43-b8e0-7a62de231897.png';
 
 const ALGERIAN_WILAYAS = [
   { code: '01', name: 'Adrar', lat: 27.8742, lng: -0.2939 },
@@ -88,11 +93,12 @@ const ALGERIAN_WILAYAS = [
 
 // Commerces partenaires de démonstration sur la carte (Figma 1364:92691 - 1364:92703)
 const SAMPLE_SHOPS = [
-  { id: 's1', name: 'La Boulangerie', lat: 36.7580, lng: 3.0640, isPrimary: true },
-  { id: 's2', name: 'Pâtisserie Nour', lat: 36.7490, lng: 3.0510 },
-  { id: 's3', name: 'Laiterie Atlas', lat: 36.7620, lng: 3.0720 },
-  { id: 's4', name: 'Boulangerie du Parc', lat: 36.7440, lng: 3.0610 },
-  { id: 's5', name: 'Pâtisserie Rose', lat: 36.7420, lng: 3.0480 },
+  { id: 's1', name: 'La Boulangerie', lat: 36.7580, lng: 3.0640, isPrimary: true, photo: figmaPhotoProduit1 },
+  { id: 's2', name: 'Pâtisserie Nour', lat: 36.7490, lng: 3.0510, photo: figmaPhotoProduit0 },
+  { id: 's3', name: 'Laiterie Atlas', lat: 36.7620, lng: 3.0720, photo: figmaPhotoProduit2 },
+  { id: 's4', name: 'Boulangerie du Parc', lat: 36.7440, lng: 3.0610, photo: figmaPhotoProduit4 },
+  { id: 's5', name: 'Pâtisserie Rose', lat: 36.7420, lng: 3.0480, photo: figmaPhotoProduit0 },
+  { id: 's6', name: 'Épicerie El Baraka', lat: 36.7530, lng: 3.0420, photo: figmaPhotoProduit3 },
 ];
 
 function createLocationMarkerIcon(label?: string): L.DivIcon {
@@ -100,79 +106,96 @@ function createLocationMarkerIcon(label?: string): L.DivIcon {
   const labelHtml = display
     ? `<div style="
         position: absolute;
-        bottom: 46px;
+        bottom: 30px;
         left: 50%;
         transform: translateX(-50%);
-        background: #ffffff;
-        border-radius: 100px;
-        padding: 5px 12px;
-        font-size: 11px;
-        font-weight: 600;
-        color: #0b2c25;
+        font-family: Poppins, sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        color: rgba(11, 44, 37, 0.85);
         white-space: nowrap;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.18);
-        border: 1px solid rgba(11,44,37,0.15);
         pointer-events: none;
-        font-family: inherit;
       ">${display}</div>`
     : '';
 
   return L.divIcon({
     className: 'forsa-user-marker',
     html: `
-      <div style="position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+      <div style="position: relative; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
         ${labelHtml}
         <div style="
-          width: 40px;
-          height: 40px;
-          border-radius: 100px;
-          background: #0b2c25;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #286EEB;
           border: 3px solid #ffffff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 12px rgba(11,44,37,0.4);
-        ">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="3 11 22 2 13 21 11 13 3 11"/>
-          </svg>
-        </div>
+          box-shadow: 0 2px 8px rgba(40,110,235,0.4);
+        "></div>
       </div>
     `,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
   });
 }
 
-function createShopMarkerIcon(name: string, isPrimary = false): L.DivIcon {
-  const bg = isPrimary ? '#0b2c25' : '#ffffff';
-  const color = isPrimary ? '#ffffff' : '#0b2c25';
-  const border = isPrimary ? 'border: 2px solid #17664e;' : 'border: 1px solid rgba(11,44,37,0.2);';
+function createShopMarkerIcon(name: string, photo: string, isPrimary = false): L.DivIcon {
+  if (isPrimary) {
+    return L.divIcon({
+      className: 'forsa-shop-marker',
+      html: `
+        <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+          <div style="
+            background: #0b2c25;
+            color: #ffffff;
+            font-family: Poppins, sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 10px;
+            white-space: nowrap;
+            margin-bottom: 4px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+          ">${name}</div>
+          <div style="
+            width: 76px;
+            height: 76px;
+            border-radius: 38px;
+            border: 4px solid #17664e;
+            background: #ffffff;
+            box-shadow: 0 3px 4px rgba(0,0,0,0.18);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <img src="${photo}" style="width: 62px; height: 62px; border-radius: 31px; object-fit: cover;" alt="${name}" />
+          </div>
+        </div>
+      `,
+      iconSize: [80, 110],
+      iconAnchor: [40, 85],
+    });
+  }
 
   return L.divIcon({
     className: 'forsa-shop-marker',
     html: `
       <div style="
-        background: ${bg};
-        color: ${color};
-        ${border}
-        border-radius: 100px;
-        padding: 4px 10px;
-        font-size: 11px;
-        font-weight: 600;
+        width: 60px;
+        height: 60px;
+        border-radius: 30px;
+        background: #ffffff;
+        box-shadow: 0 3px 4px rgba(0,0,0,0.18);
+        overflow: hidden;
         display: flex;
         align-items: center;
-        gap: 6px;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.15);
-        white-space: nowrap;
-        pointer-events: auto;
+        justify-content: center;
       ">
-        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${isPrimary ? '#6ee7b7' : '#17664e'};"></span>
-        <span>${name}</span>
+        <img src="${photo}" style="width: 50px; height: 50px; border-radius: 25px; object-fit: cover;" alt="${name}" />
       </div>
     `,
-    iconSize: [120, 26],
-    iconAnchor: [60, 13],
+    iconSize: [60, 60],
+    iconAnchor: [30, 30],
   });
 }
 
@@ -572,7 +595,7 @@ export const LocationPage: React.FC = () => {
                   <Marker
                     key={shop.id}
                     position={[shop.lat, shop.lng]}
-                    icon={createShopMarkerIcon(shop.name, shop.isPrimary)}
+                    icon={createShopMarkerIcon(shop.name, shop.photo, shop.isPrimary)}
                   />
                 ))}
               </MapContainer>
