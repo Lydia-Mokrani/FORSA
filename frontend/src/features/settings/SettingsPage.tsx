@@ -1,34 +1,28 @@
 // frontend/src/features/settings/SettingsPage.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  UserCircle,
-  Shield,
-  Phone,
-  Bell,
-  Globe,
-  MapPin,
-  RefreshCw,
-  LogOut,
-  ChevronRight,
-  Calendar,
-  AlertTriangle,
-  CheckCircle2,
-  HelpCircle,
-  Info,
-} from 'lucide-react';
-import {
-  getCurrentUser,
-  logout,
-  AuthUser,
-} from '../auth/services/authService';
-import { useLocation } from '../catalogue/context/LocationContext';
-import defaultAvatar from '../../assets/default-avatar.jpg';
+import { getCurrentUser, logout, AuthUser } from '../auth/services/authService';
+
+// Figma Icons
+import figmaHeaderLocation from '../../assets/figma/b027565f-330c-438d-8e75-763aa35119eb.svg';
+import figmaHeaderBell from '../../assets/figma/b5a3fed0-7e75-428d-bde2-d289d8362364.svg';
+import figmaUnreadIndicator from '../../assets/figma/f90091a6-8256-4c7b-808d-68b1b56f5b67.svg';
+import figmaFoodAvatar from '../../assets/figma/e7f7445d-b6d0-4bf3-973d-ffa1d0affdba.png';
+import figmaPhotoDeProfil from '../../assets/figma/cebf2a13-fa3b-4285-999d-9bea0d4088d2.png';
+import figmaUserCircleHeader from '../../assets/figma/b87a8d0b-7c1b-4134-bb71-946f25054c86.svg';
+import figmaSquareLock from '../../assets/figma/766987c9-e94d-451d-a32a-815d83d1808c.svg';
+import figmaArrowRight from '../../assets/figma/c32400fc-8feb-4136-aa27-17c7f5716641.svg';
+import figmaSecurity from '../../assets/figma/f3d3d3ca-c043-4140-a9b6-b3f5977e9b44.svg';
+import figmaSmartPhone from '../../assets/figma/7a071d75-6b5e-4ca3-bf0f-bf7f1d4ce5d5.svg';
+import figmaBellPref from '../../assets/figma/35d17c56-ab7f-49cf-a83b-baf44452276a.svg';
+import figmaLogoutRed from '../../assets/figma/77c997e8-0d8f-4270-adf3-349d202bb23c.svg';
+import figmaTickVerified from '../../assets/figma/1d2b4ddf-2542-4439-8351-dd7b9bcdadaa.svg';
+import figmaHeadset from '../../assets/figma/8eaa0dd1-a209-4631-80e5-6b0b56cfcdef.svg';
+import figmaHelpCircle from '../../assets/figma/d6fca788-5ed1-454e-8ba6-4ff82594934d.svg';
+import figmaInfoCircle from '../../assets/figma/df40b582-8ce2-4c44-80e9-d8de30d4b670.svg';
 
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { location } = useLocation();
-
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -70,383 +64,396 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const isMerchant = user?.roles?.includes('MERCHANT');
-  const userPhoto = (user as any)?.avatarUrl || (user as any)?.photo || defaultAvatar;
-  const userName = user?.fullName || (user as any)?.name || 'Utilisateur FORSA';
-  const userEmail = user?.email || 'utilisateur@forsa.dz';
+  const displayName = user?.fullName || (user as any)?.name || 'Lydia Benali';
+  const displayEmail = user?.email || 'lydia.benali@example.com';
+  const preferredLocation =
+    (user as any)?.preferences?.preferredLocation ||
+    (user as any)?.preferredLocation ||
+    'Bab Ezzouar, Alger';
+  const currentAvatar = (user as any)?.avatarUrl || (user as any)?.photo || figmaPhotoDeProfil;
 
   return (
     <div
-      className="min-h-screen bg-[#fffaf0] p-4 sm:p-6 md:p-8 font-poppins text-[#0B2C25] selection:bg-[#17664e] selection:text-white"
+      className="w-full min-h-screen bg-[#fffaf0] font-poppins text-[#0B2C25] pb-[28px] pt-[30px] px-4 sm:px-[40px] select-none"
       data-node-id="994:20742"
       data-name="Desktop · Paramètres — Vue d’ensemble"
     >
-      <div className="max-w-[1140px] mx-auto space-y-6">
-        {/* En-tête Figma 994:20745 */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl sm:text-4xl md:text-[44px] font-bold tracking-tight text-[#0b2c25]">
+      <div className="max-w-[1202px] mx-auto flex flex-col gap-[24px]">
+        {/* ── EN-TÊTE DE PAGE (Figma 994:20745) ── */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-[24px] w-full" data-node-id="994:20745" data-name="Page header">
+          {/* Introduction (994:20746) */}
+          <div className="flex flex-col gap-[3px] text-[#0b2c25]" data-node-id="994:20746">
+            <p className="font-normal text-[11px] text-[#0b2c25]/75" data-node-id="994:20747">
+              Mon espace / Profil / Paramètres
+            </p>
+            <h1 className="font-semibold text-[36px] sm:text-[48px] text-[#0b2c25] leading-tight" data-node-id="994:20748">
               Paramètres
             </h1>
-            <p className="text-sm sm:text-base text-[#0b2c25]/75 mt-1 font-normal">
+            <p className="font-normal text-[16px] sm:text-[20px] text-[#0b2c25]/85" data-node-id="994:20749">
               Sécurité, notifications et préférences.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate('/profile')}
-            className="self-start sm:self-auto border border-[#0b2c25]/30 hover:bg-stone-100 text-[#0b2c25] text-xs font-semibold px-4 py-2 rounded-full transition cursor-pointer"
-          >
-            ← Retour au profil
-          </button>
+          {/* Account actions (994:20750) */}
+          <div className="flex items-center gap-[14px] shrink-0 self-start md:self-center" data-node-id="994:20750">
+            {/* Position actuelle dans le header (994:20751) */}
+            <div
+              onClick={() => navigate('/location')}
+              className="hidden sm:flex items-center gap-[7px] pr-[12px] cursor-pointer hover:opacity-80 transition"
+              data-node-id="994:20751"
+              title="Modifier ma localisation"
+            >
+              <img src={figmaHeaderLocation} alt="" className="size-[18px] shrink-0" />
+              <span className="font-normal text-[12px] text-[#0b2c25] leading-[1.5] max-w-[150px] truncate">
+                {preferredLocation}
+              </span>
+            </div>
+
+            {/* Notifications entry (994:20754) */}
+            <div
+              onClick={() => navigate('/notifications')}
+              className="relative size-[42px] rounded-full flex items-center justify-center cursor-pointer hover:bg-white/60 transition bg-white/40"
+              data-node-id="994:20754"
+              title="Notifications"
+            >
+              <img src={figmaHeaderBell} alt="" className="size-[22px] shrink-0" />
+              <img
+                src={figmaUnreadIndicator}
+                alt=""
+                className="absolute top-[8px] left-[27px] size-[7px]"
+              />
+            </div>
+
+            {/* Circular User Avatar Photo (994:20757) */}
+            <div
+              onClick={() => navigate('/profile')}
+              className="relative size-[48px] rounded-full overflow-hidden shrink-0 border border-black/5 shadow-xs cursor-pointer hover:opacity-90 transition"
+              data-node-id="994:20757"
+              title="Mon profil"
+            >
+              <img
+                src={figmaFoodAvatar}
+                alt="Avatar"
+                className="size-full object-cover"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Grille 2 Colonnes : Figma 994:20758 */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Colonne Principale (Gauche - 8/12) */}
-          <div className="lg:col-span-8 space-y-6">
-            {/* ─── CARTE 1 : COMPTE (Figma 994:20760) ─── */}
-            <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] p-6 shadow-sm space-y-3">
-              <div className="flex items-center gap-3 pb-3 border-b border-[#ebeee1]">
-                <div className="size-11 rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center text-[#17664e] shrink-0">
-                  <UserCircle className="size-5" />
+        {/* ── COLONNES (Figma 994:20758) ── */}
+        <div className="flex flex-col lg:flex-row gap-[24px] items-start w-full" data-node-id="994:20758" data-name="Colonnes">
+          {/* ── COLONNE PRINCIPALE (758px - 994:20759) ── */}
+          <div className="w-full lg:flex-1 lg:max-w-[758px] flex flex-col gap-[24px]" data-node-id="994:20759" data-name="Colonne principale">
+            {/* CARTE 1 : COMPTE (994:20760) */}
+            <div
+              className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[24px] flex flex-col gap-[8px] shadow-sm w-full"
+              data-node-id="994:20760"
+              data-name="Carte sécurité"
+            >
+              <div className="flex items-center gap-[12px] w-full" data-node-id="994:20761" data-name="En-tête de carte">
+                <div className="size-[44px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="994:20762">
+                  <img src={figmaUserCircleHeader} alt="" className="size-[22px]" />
                 </div>
-                <div>
-                  <h2 className="text-[20px] font-semibold text-[#0b2c25]">Compte</h2>
-                  <p className="text-xs text-[#0b2c25]/60">Réservations, sécurité et coordonnées</p>
-                </div>
+                <h2 className="font-medium text-[20px] text-[#0b2c25]" data-node-id="994:20764">
+                  Compte
+                </h2>
               </div>
 
-              <div className="divide-y divide-[#ebeee1]">
-                {/* Ligne Mes réservations */}
-                <div
-                  onClick={() => navigate('/reservations')}
-                  className="flex items-center justify-between py-3.5 px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="size-10 rounded-full bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                      <Calendar className="size-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-[#0b2c25] group-hover:text-[#17664e] transition">
-                        Mes réservations
-                      </h4>
-                      <p className="text-xs text-[#0b2c25]/60">Codes de retrait et historique de vos paniers</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs font-semibold text-[#17664e] bg-[#eef7ec] px-2.5 py-0.5 rounded-full border border-[#235347]/20">
-                      0 en cours
-                    </span>
-                    <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
-                  </div>
-                </div>
+              <div className="h-px bg-[#ebeee1] w-full my-1" data-node-id="994:20765" />
 
-                {/* Ligne Sécurité du compte */}
-                <div
-                  onClick={() => navigate('/settings/security')}
-                  className="flex items-center justify-between py-3.5 px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="size-10 rounded-full bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                      <Shield className="size-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-[#0b2c25] group-hover:text-[#17664e] transition">
-                        Sécurité du compte
-                      </h4>
-                      <p className="text-xs text-[#0b2c25]/60">Mot de passe, double authentification et sessions actives</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs font-medium text-[#0b2c25]/70 hidden sm:inline">
-                      Gérer
-                    </span>
-                    <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
-                  </div>
+              {/* Ligne 1 : Mes réservations (994:20766) */}
+              <div
+                onClick={() => navigate('/reservations')}
+                className="flex items-center gap-[12px] py-[12px] px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group w-full"
+                data-node-id="994:20766"
+              >
+                <div className="size-[40px] shrink-0 flex items-center justify-center" data-node-id="994:20767">
+                  <img src={figmaSquareLock} alt="" className="size-[40px]" />
                 </div>
+                <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20769">
+                  <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20770">
+                    Mes réservations
+                  </p>
+                  <p className="font-normal text-[11px] text-[#0b2c25]/75" data-node-id="994:20771">
+                    Codes de retrait et historique
+                  </p>
+                </div>
+                <span className="font-normal text-[12px] text-[#0b2c25]/70" data-node-id="994:20772">
+                  2 en cours
+                </span>
+                <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
+              </div>
 
-                {/* Ligne Vérification du téléphone */}
-                <div
-                  onClick={() => navigate('/profile/phone')}
-                  className="flex items-center justify-between py-3.5 px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="size-10 rounded-full bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                      <Phone className="size-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-[#0b2c25] group-hover:text-[#17664e] transition">
-                        Vérification du téléphone
-                      </h4>
-                      <p className="text-xs text-[#0b2c25]/60">
-                        {user?.phoneE164 || (user as any)?.phone || 'Numéro de mobile confirmé'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs font-semibold text-[#17664e] bg-[#eef7ec] px-2.5 py-0.5 rounded-full border border-[#235347]/20 flex items-center gap-1">
-                      <CheckCircle2 className="size-3" />
-                      <span>Vérifié</span>
-                    </span>
-                    <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
-                  </div>
+              <div className="h-px bg-[#ebeee1] w-full" data-node-id="994:20774" />
+
+              {/* Ligne 2 : Sécurité du compte (994:20775) */}
+              <div
+                onClick={() => navigate('/settings/security')}
+                className="flex items-center gap-[12px] py-[12px] px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group w-full"
+                data-node-id="994:20775"
+              >
+                <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="994:20776">
+                  <img src={figmaSecurity} alt="" className="size-[20px]" />
                 </div>
+                <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20778">
+                  <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20779">
+                    Sécurité du compte
+                  </p>
+                  <p className="font-normal text-[11px] text-[#0b2c25]/75" data-node-id="994:20780">
+                    Mot de passe, double authentification
+                  </p>
+                </div>
+                <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
+              </div>
+
+              <div className="h-px bg-[#ebeee1] w-full" data-node-id="994:20782" />
+
+              {/* Ligne 3 : Vérification du téléphone (994:20783) */}
+              <div
+                onClick={() => navigate('/profile/phone')}
+                className="flex items-center gap-[12px] py-[12px] px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group w-full"
+                data-node-id="994:20783"
+              >
+                <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="994:20784">
+                  <img src={figmaSmartPhone} alt="" className="size-[20px]" />
+                </div>
+                <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20786">
+                  <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20787">
+                    Vérification du téléphone
+                  </p>
+                  <p className="font-normal text-[11px] text-[#0b2c25]/75" data-node-id="994:20788">
+                    Numéro de mobile confirmé
+                  </p>
+                </div>
+                <span className="font-normal text-[12px] text-[#0b2c25]/70" data-node-id="994:20789">
+                  Vérifié
+                </span>
+                <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
               </div>
             </div>
 
-            {/* ─── CARTE 2 : PRÉFÉRENCES (Figma 994:20791) ─── */}
-            <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] p-6 shadow-sm space-y-3">
-              <div className="flex items-center gap-3 pb-3 border-b border-[#ebeee1]">
-                <div className="size-11 rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center text-[#17664e] shrink-0">
-                  <Bell className="size-5" />
+            {/* CARTE 2 : PRÉFÉRENCES (994:20791) */}
+            <div
+              className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[24px] flex flex-col gap-[8px] shadow-sm w-full"
+              data-node-id="994:20791"
+              data-name="Carte sécurité"
+            >
+              <div className="flex items-center gap-[12px] w-full" data-node-id="994:20792" data-name="En-tête de carte">
+                <div className="size-[44px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="994:20793">
+                  <img src={figmaBellPref} alt="" className="size-[22px]" />
                 </div>
-                <div>
-                  <h2 className="text-[20px] font-semibold text-[#0b2c25]">Préférences</h2>
-                  <p className="text-xs text-[#0b2c25]/60">Notifications, langue et rayon de recherche</p>
-                </div>
+                <h2 className="font-medium text-[20px] text-[#0b2c25]" data-node-id="994:20795">
+                  Préférences
+                </h2>
               </div>
 
-              <div className="divide-y divide-[#ebeee1]">
-                {/* Ligne Notifications */}
-                <div
-                  onClick={() => navigate('/notifications')}
-                  className="flex items-center justify-between py-3.5 px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="size-10 rounded-full bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                      <Bell className="size-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-[#0b2c25] group-hover:text-[#17664e] transition">
-                        Notifications
-                      </h4>
-                      <p className="text-xs text-[#0b2c25]/60">Alertes nouveaux paniers, réservations et e-mails</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs font-semibold text-[#17664e] bg-[#eef7ec] px-2.5 py-0.5 rounded-full border border-[#235347]/20">
-                      Activées
-                    </span>
-                    <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
-                  </div>
-                </div>
+              <div className="h-px bg-[#ebeee1] w-full my-1" data-node-id="994:20796" />
 
-                {/* Ligne Langue */}
-                <div className="flex items-center justify-between py-3.5 px-2 hover:bg-[#fffaf0] rounded-[16px] transition">
-                  <div className="flex items-center gap-3.5">
-                    <div className="size-10 rounded-full bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                      <Globe className="size-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-[#0b2c25]">Langue de l’application</h4>
-                      <p className="text-xs text-[#0b2c25]/60">Français (Algérie)</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-semibold text-[#0b2c25] bg-[#fffaf0] border border-[#0b2c25]/20 px-3 py-1 rounded-full">
-                    Français
+              {/* Ligne 1 : Notifications (994:20797) */}
+              <div
+                onClick={() => navigate('/notifications')}
+                className="flex items-center gap-[12px] py-[12px] px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group w-full"
+                data-node-id="994:20797"
+              >
+                <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="994:20798">
+                  <img src={figmaBellPref} alt="" className="size-[20px]" />
+                </div>
+                <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20800">
+                  <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20801">
+                    Notifications
+                  </p>
+                  <p className="font-normal text-[11px] text-[#0b2c25]/75" data-node-id="994:20802">
+                    Réservations et offres près de moi
+                  </p>
+                </div>
+                <span className="font-normal text-[12px] text-[#0b2c25]/70" data-node-id="994:20803">
+                  Activées
+                </span>
+                <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
+              </div>
+
+              <div className="h-px bg-[#ebeee1] w-full" data-node-id="994:20805" />
+
+              {/* Ligne 2 : Langue (994:20806) */}
+              <div
+                className="flex items-center gap-[12px] py-[12px] px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group w-full"
+                data-node-id="994:20806"
+              >
+                <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="994:20807">
+                  <span className="font-semibold text-[13px] text-[#0b2c25]" data-node-id="994:20808">
+                    FR
                   </span>
                 </div>
-
-                {/* Ligne Localisation / Ma zone de recherche */}
-                <div
-                  onClick={() => navigate('/location')}
-                  className="flex items-center justify-between py-3.5 px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="size-10 rounded-full bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                      <MapPin className="size-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-[#0b2c25] group-hover:text-[#17664e] transition">
-                        Ma zone de recherche
-                      </h4>
-                      <p className="text-xs text-[#0b2c25]/60">
-                        {location.label || 'Bab Ezzouar, Alger'} · {(location as any).radius || 10} km
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs font-medium text-[#17664e] hover:underline">
-                      Modifier la zone
-                    </span>
-                    <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
-                  </div>
+                <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20809">
+                  <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20810">
+                    Langue
+                  </p>
+                  <p className="font-normal text-[11px] text-[#0b2c25]/75" data-node-id="994:20811">
+                    Langue de l’application
+                  </p>
                 </div>
+                <span className="font-normal text-[12px] text-[#0b2c25]/70" data-node-id="994:20812">
+                  Français
+                </span>
+                <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
               </div>
             </div>
 
-            {/* ─── CARTE 3 : MODE & DÉCONNEXION ─── */}
-            <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] p-6 shadow-sm space-y-3">
-              <div className="flex items-center gap-3 pb-3 border-b border-[#ebeee1]">
-                <div className="size-11 rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center text-[#17664e] shrink-0">
-                  <RefreshCw className="size-5" />
+            {/* CARTE 3 : SE DÉCONNECTER (994:20814) */}
+            <div
+              className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] px-[24px] py-[12px] shadow-sm w-full"
+              data-node-id="994:20814"
+              data-name="Carte sécurité"
+            >
+              <div
+                onClick={() => setShowLogoutModal(true)}
+                className="flex items-center gap-[12px] py-[12px] px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group w-full"
+                data-node-id="994:20815"
+              >
+                <div className="size-[40px] rounded-full bg-[#f7dcd8] flex items-center justify-center shrink-0 group-hover:bg-[#fad4cf] transition-colors" data-node-id="994:20816">
+                  <img src={figmaLogoutRed} alt="" className="size-[20px]" />
                 </div>
-                <div>
-                  <h2 className="text-[20px] font-semibold text-[#0b2c25]">Espace & Session</h2>
-                  <p className="text-xs text-[#0b2c25]/60">Bascule de profil et déconnexion</p>
-                </div>
-              </div>
-
-              <div className="divide-y divide-[#ebeee1]">
-                {/* Passer en mode commerçant */}
-                <div
-                  onClick={() => navigate('/settings/mode')}
-                  className="flex items-center justify-between py-3.5 px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="size-10 rounded-full bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                      <RefreshCw className="size-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-[#0b2c25] group-hover:text-[#17664e] transition">
-                        Changer de mode
-                      </h4>
-                      <p className="text-xs text-[#0b2c25]/60">
-                        Basculez entre votre profil client et votre espace commerçant
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-[#0b2c25] bg-[#eef7ec] px-2.5 py-0.5 rounded-full border border-[#235347]/20">
-                      {isMerchant ? 'Mode Commerçant' : 'Mode Client'}
-                    </span>
-                    <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
-                  </div>
-                </div>
-
-                {/* Déconnexion */}
-                <div
-                  onClick={() => setShowLogoutModal(true)}
-                  className="flex items-center justify-between py-3.5 px-2 hover:bg-stone-50 rounded-[16px] transition cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="size-10 rounded-full bg-[#ebeee1] flex items-center justify-center text-red-600 shrink-0">
-                      <LogOut className="size-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-red-600">Se déconnecter</h4>
-                      <p className="text-xs text-[#0b2c25]/60">Fermer votre session sur cet appareil</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
+                <div className="flex-1 min-w-0" data-node-id="994:20818">
+                  <p className="font-semibold text-[14px] text-[#b13b3b]" data-node-id="994:20819">
+                    Se déconnecter
+                  </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Colonne Latérale (Droite - 4/12) : Figma 994:20821 & 994:20835 */}
-          <div className="lg:col-span-4 space-y-6">
-            {/* ─── CARTE PROFIL (Figma 994:20821) ─── */}
-            <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] p-6 shadow-sm flex flex-col items-center text-center gap-3">
-              <div className="relative size-24 rounded-full overflow-hidden border-2 border-[#17664e]/30 shadow-sm shrink-0">
+          {/* ── COLONNE LATÉRALE DROITE (340px - 994:20820) ── */}
+          <div className="w-full lg:w-[340px] flex flex-col gap-[24px] shrink-0" data-node-id="994:20820" data-name="Colonne latérale">
+            {/* CARTE PROFIL (994:20821) */}
+            <div
+              className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[24px] flex flex-col items-center gap-[12px] shadow-sm w-full"
+              data-node-id="994:20821"
+              data-name="Carte sécurité"
+            >
+              {/* Photo de profil (96px) */}
+              <div className="size-[96px] rounded-full overflow-hidden border-2 border-[#17664e]/20 shadow-xs shrink-0" data-node-id="994:20822">
                 <img
-                  src={userPhoto}
-                  alt={userName}
+                  src={currentAvatar}
+                  alt={displayName}
                   className="size-full object-cover"
                 />
               </div>
 
-              <div>
-                <h3 className="text-[18px] font-semibold text-[#0b2c25] leading-snug">
-                  {userName}
-                </h3>
-                <p className="text-xs text-[#0b2c25]/70 mt-0.5">
-                  {userEmail}
-                </p>
-              </div>
+              {/* Nom & Email */}
+              <h3 className="font-semibold text-[18px] text-[#0b2c25] text-center" data-node-id="994:20823">
+                {displayName}
+              </h3>
+              <p className="font-normal text-[12px] text-[#0b2c25]/70 text-center truncate w-full" data-node-id="994:20824">
+                {displayEmail}
+              </p>
 
-              <div className="bg-[#dbf0dd] content-stretch flex gap-1.5 items-center justify-center px-3 py-1 rounded-full">
-                <CheckCircle2 className="size-3.5 text-[#17664e]" />
-                <span className="text-[11px] font-semibold text-[#17664e]">
+              {/* Badge vérifié (994:20825) */}
+              <div className="bg-[#dbf0dd] flex items-center justify-center gap-[3px] px-[8px] py-[3px] rounded-full" data-node-id="994:20825">
+                <img src={figmaTickVerified} alt="" className="size-[12px]" />
+                <span className="font-semibold text-[10px] text-[#17664e]" data-node-id="994:20827">
                   E-mail et téléphone vérifiés
                 </span>
               </div>
 
-              <div className="w-full pt-2 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => navigate('/profile')}
-                  className="w-full h-10 rounded-full border border-[#0b2c25] hover:bg-[#0b2c25] hover:text-white text-xs font-semibold text-[#0b2c25] transition cursor-pointer flex items-center justify-center"
-                >
-                  Modifier le profil
-                </button>
+              {/* Bouton Modifier le profil (994:20828) */}
+              <button
+                type="button"
+                onClick={() => navigate('/profile/edit')}
+                className="w-full h-[38px] rounded-[12px] bg-[#0b2c25] hover:bg-[#17664e] text-white font-semibold text-[12px] flex items-center justify-center transition cursor-pointer mt-2 shadow-xs"
+                data-node-id="994:20828"
+              >
+                Modifier le profil
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => navigate('/profile/photo')}
-                  className="text-xs text-[#17664e] hover:underline font-medium cursor-pointer block mx-auto py-1"
-                >
-                  Changer la photo
-                </button>
-              </div>
+              {/* Bouton Changer la photo (994:20830) */}
+              <button
+                type="button"
+                onClick={() => navigate('/profile/photo')}
+                className="w-full h-[38px] rounded-[12px] border border-[#0b2c25] hover:bg-[#ebeee1] text-[#0b2c25] font-semibold text-[12px] flex items-center justify-center transition cursor-pointer"
+                data-node-id="994:20830"
+              >
+                Changer la photo
+              </button>
             </div>
 
-            {/* ─── CARTE ASSISTANCE (Figma 994:20835) ─── */}
-            <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] p-6 shadow-sm space-y-3">
-              <div className="flex items-center gap-3 pb-3 border-b border-[#ebeee1]">
-                <div className="size-11 rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center text-[#17664e] shrink-0">
-                  <HelpCircle className="size-5" />
+            {/* CARTE ASSISTANCE (994:20832) */}
+            <div
+              className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[24px] flex flex-col gap-[8px] shadow-sm w-full"
+              data-node-id="994:20832"
+              data-name="Carte sécurité"
+            >
+              <div className="flex items-center gap-[12px] w-full" data-node-id="994:20833" data-name="En-tête de carte">
+                <div className="size-[44px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="994:20834">
+                  <img src={figmaHeadset} alt="" className="size-[22px]" />
                 </div>
-                <div>
-                  <h3 className="text-[18px] font-semibold text-[#0b2c25]">Assistance</h3>
-                  <p className="text-xs text-[#0b2c25]/60">Aide, support et conditions</p>
-                </div>
+                <h3 className="font-medium text-[20px] text-[#0b2c25]" data-node-id="994:20836">
+                  Assistance
+                </h3>
               </div>
 
-              <div className="divide-y divide-[#ebeee1]">
-                {/* Aide et support */}
-                <a
-                  href="mailto:support@forsa.dz"
-                  className="flex items-center justify-between py-3 px-2 hover:bg-[#fffaf0] rounded-[14px] transition cursor-pointer group"
-                >
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-semibold text-[#0b2c25] group-hover:text-[#17664e] transition">
-                      Aide et support
-                    </h4>
-                    <p className="text-[11px] text-[#0b2c25]/60">Contacter l’équipe FORSA</p>
-                  </div>
-                  <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
-                </a>
+              <div className="h-px bg-[#ebeee1] w-full my-1" data-node-id="994:20837" />
 
-                {/* À propos de FORSA */}
-                <div
-                  onClick={() => navigate('/cgu')}
-                  className="flex items-center justify-between py-3 px-2 hover:bg-[#fffaf0] rounded-[14px] transition cursor-pointer group"
-                >
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-semibold text-[#0b2c25] group-hover:text-[#17664e] transition">
-                      À propos de FORSA
-                    </h4>
-                    <p className="text-[11px] text-[#0b2c25]/60">Mission et conditions d'utilisation</p>
-                  </div>
-                  <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
+              {/* Ligne Aide et support (994:20838) */}
+              <a
+                href="mailto:support@forsa.dz"
+                className="flex items-center gap-[12px] py-[12px] px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group w-full"
+                data-node-id="994:20838"
+              >
+                <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="994:20839">
+                  <img src={figmaHelpCircle} alt="" className="size-[20px]" />
                 </div>
+                <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20841">
+                  <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20842">
+                    Aide et support
+                  </p>
+                  <p className="font-normal text-[11px] text-[#0b2c25]/75" data-node-id="994:20843">
+                    Contacter l’équipe FORSA
+                  </p>
+                </div>
+                <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
+              </a>
+
+              <div className="h-px bg-[#ebeee1] w-full" data-node-id="994:20845" />
+
+              {/* Ligne À propos de FORSA (994:20846) */}
+              <div
+                onClick={() => navigate('/terms')}
+                className="flex items-center gap-[12px] py-[12px] px-2 hover:bg-[#fffaf0] rounded-[16px] transition cursor-pointer group w-full"
+                data-node-id="994:20846"
+              >
+                <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="994:20847">
+                  <img src={figmaInfoCircle} alt="" className="size-[20px]" />
+                </div>
+                <div className="flex flex-col gap-px flex-1 min-w-0" data-node-id="994:20849">
+                  <p className="font-semibold text-[14px] text-[#0b2c25]" data-node-id="994:20850">
+                    À propos de FORSA
+                  </p>
+                  <p className="font-normal text-[11px] text-[#0b2c25]/75" data-node-id="994:20851">
+                    Mission et conditions
+                  </p>
+                </div>
+                <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modal Confirmation de Déconnexion */}
+      {/* MODALE DE CONFIRMATION DE DÉCONNEXION (Figma 994:20954) */}
       {showLogoutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white rounded-[24px] border border-[#dbf0dd] p-6 shadow-xl space-y-4">
-            <div className="flex items-center gap-3 text-amber-700">
-              <div className="size-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
-                <AlertTriangle className="size-5" />
-              </div>
-              <h3 className="text-lg font-bold text-[#0b2c25]">Confirmation de déconnexion</h3>
-            </div>
-            <p className="text-sm text-[#0b2c25]/75 leading-relaxed">
-              Êtes-vous certain de vouloir fermer votre session sur cet appareil ? Vos paniers et réservations restent en sécurité.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] p-6 max-w-sm w-full space-y-4 shadow-xl">
+            <h3 className="font-semibold text-lg text-[#0B2C25]">
+              Confirmer la déconnexion
+            </h3>
+            <p className="font-normal text-sm text-[#0B2C25]/80">
+              Êtes-vous sûr de vouloir vous déconnecter de votre compte FORSA ?
             </p>
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setShowLogoutModal(false)}
-                className="px-4 py-2.5 rounded-[12px] border border-[#0b2c25]/30 text-xs font-semibold text-[#0b2c25] hover:bg-stone-100 transition cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl border border-[#0B2C25]/40 text-[#0B2C25] font-semibold text-xs hover:bg-stone-50 transition"
               >
                 Annuler
               </button>
@@ -454,9 +461,9 @@ export const SettingsPage: React.FC = () => {
                 type="button"
                 onClick={handleConfirmLogout}
                 disabled={logoutLoading}
-                className="px-4 py-2.5 rounded-[12px] bg-red-600 hover:bg-red-700 text-xs font-semibold text-white shadow-sm transition cursor-pointer disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-xl bg-[#b13b3b] text-white font-semibold text-xs hover:bg-[#922a2a] transition"
               >
-                {logoutLoading ? 'Déconnexion...' : 'Confirmer la déconnexion'}
+                {logoutLoading ? 'Déconnexion...' : 'Se déconnecter'}
               </button>
             </div>
           </div>
@@ -465,4 +472,5 @@ export const SettingsPage: React.FC = () => {
     </div>
   );
 };
+
 export default SettingsPage;

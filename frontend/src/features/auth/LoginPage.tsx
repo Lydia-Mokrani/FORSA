@@ -491,9 +491,11 @@ export const LoginPage: React.FC = () => {
       {/* Modal overlay de succès conforme Figma */}
       {isSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b2c25]/40 backdrop-blur-xs">
-          <div className="w-full max-w-md backdrop-blur-[20px] bg-white/90 border-[1.2px] border-[rgba(255,255,255,0.7)] rounded-[28px] p-8 flex flex-col items-center text-center gap-4 shadow-xl">
-            <div className="size-16 rounded-full bg-[#eaf6eb] border border-[#17664e]/20 text-[#17664e] flex items-center justify-center shadow-xs">
-              <Icon name="check-success" size={32} />
+          <div className="w-full max-w-md backdrop-blur-[20px] bg-white/95 border-[1.2px] border-[rgba(255,255,255,0.7)] rounded-[28px] p-8 flex flex-col items-center text-center gap-4 shadow-xl">
+            <div className="size-16 rounded-full bg-[#dbf0dd] border-2 border-[#17664e] text-[#17664e] flex items-center justify-center shadow-sm">
+              <svg className="size-8 text-[#17664e]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
             </div>
             <h2 className="text-2xl font-bold text-[#0b2c25]">Connexion réussie !</h2>
             <p className="text-sm text-[rgba(11,44,37,0.7)]">

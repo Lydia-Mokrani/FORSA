@@ -6,23 +6,24 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { useLocation, UserLocation } from '../catalogue/context/LocationContext';
-import {
-  MapPin,
-  Navigation,
-  Search,
-  Building2,
-  Sliders,
-  Check,
-  Info,
-  Compass,
-  CheckCircle2,
-  Loader2,
-  Store,
-  ChevronRight,
-  Edit2,
-  X,
-} from 'lucide-react';
 import { updateUserProfile } from '../auth/services/authService';
+
+// Figma Icons import
+import figmaSearch from '../../assets/figma/1c04f287-7cb8-4ddb-86a5-22104e20e639.svg';
+import figmaGPSButton from '../../assets/figma/987d478f-1c51-4083-9708-6e9bf076c2ff.svg';
+import figmaPastillePin from '../../assets/figma/cc0d09a2-dcb3-4b82-8612-9a85beaaaec2.svg';
+import figmaDarkPin from '../../assets/figma/66b0aa85-93c0-4cc1-b6bd-139fee5de91f.svg';
+import figmaCompassGps from '../../assets/figma/dda2f6ee-aca2-407f-9a09-a7a46a752009.svg';
+import figmaMyPosPin from '../../assets/figma/e9783857-3efc-4c3e-b5fd-8d4fc87d2d1d.svg';
+import figmaArrowRight from '../../assets/figma/2a1c7007-85a2-4361-b158-6c3901ee6239.svg';
+import figmaEditPen from '../../assets/figma/1aa61277-bb85-4813-8006-2d5bae937b08.svg';
+import figmaBuildingCity from '../../assets/figma/7d0a46f1-5aa3-474a-a2ae-310e522dceb3.svg';
+import figmaCityIcon from '../../assets/figma/2556b715-bc6f-4b54-9446-a09ca2d4f416.svg';
+import figmaInfoCircle from '../../assets/figma/358c3b70-e044-4420-8a62-12e67cc84fd5.svg';
+import figmaHeaderLocation from '../../assets/figma/b027565f-330c-438d-8e75-763aa35119eb.svg';
+import figmaHeaderBell from '../../assets/figma/b5a3fed0-7e75-428d-bde2-d289d8362364.svg';
+import figmaUnreadIndicator from '../../assets/figma/f90091a6-8256-4c7b-808d-68b1b56f5b67.svg';
+import figmaFoodAvatar from '../../assets/figma/e7f7445d-b6d0-4bf3-973d-ffa1d0affdba.png';
 
 const ALGERIAN_WILAYAS = [
   { code: '01', name: 'Adrar', lat: 27.8742, lng: -0.2939 },
@@ -229,6 +230,19 @@ export const LocationPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [successBanner, setSuccessBanner] = useState(false);
   const [showAddressInput, setShowAddressInput] = useState(false);
+  const [showCitySelect, setShowCitySelect] = useState(false);
+
+  const userAvatar = (() => {
+    try {
+      const cached = localStorage.getItem('forsa_user');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const u = parsed.user || parsed;
+        return u.avatarUrl || null;
+      }
+    } catch {}
+    return null;
+  })();
 
   // Détection GPS
   const handleUseGPS = () => {
@@ -265,7 +279,7 @@ export const LocationPage: React.FC = () => {
       (err) => {
         console.warn('GPS error:', err);
         setGpsLoading(false);
-        alert('Impossible d’accéder à votre position GPS. Veuillez vérifier vos autorisations ou choisir une wilaya.');
+        alert('Impossible d’accéder à votre position GPS. Veuillez vérifier vos autorisations ou choisir une ville.');
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -302,14 +316,14 @@ export const LocationPage: React.FC = () => {
       );
       const data = await res.json();
       if (data && data.length > 0) {
-        const lat = parseFloat(data[0].lat);
-        const lng = parseFloat(data[0].lon);
+        const item = data[0];
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lon);
         setSelectedLat(lat);
         setSelectedLng(lng);
-        const parts = data[0].display_name.split(',');
-        setSelectedLabel(parts.slice(0, 3).join(',').trim());
+        setSelectedLabel(item.display_name.split(',')[0]);
       } else {
-        alert('Adresse introuvable en Algérie. Veuillez préciser ou sélectionner une wilaya.');
+        alert('Aucune adresse trouvée pour cette recherche en Algérie.');
       }
     } catch {
       alert('Erreur lors de la recherche.');
@@ -318,57 +332,67 @@ export const LocationPage: React.FC = () => {
     }
   };
 
-  // Sélection d'une wilaya
+  // Sélection de wilaya
   const handleSelectWilaya = (wilayaName: string) => {
-    const w = ALGERIAN_WILAYAS.find((item) => item.name === wilayaName);
-    if (!w) return;
-    setSelectedLat(w.lat);
-    setSelectedLng(w.lng);
-    setSelectedLabel(`${w.name}, Algérie`);
+    const found = ALGERIAN_WILAYAS.find((w) => w.name === wilayaName);
+    if (found) {
+      setSelectedLat(found.lat);
+      setSelectedLng(found.lng);
+      setSelectedLabel(`${found.name}, Algérie`);
+      setShowCitySelect(false);
+    }
   };
 
   // Sauvegarde
   const handleSave = async () => {
     setSaving(true);
+    const newLoc: UserLocation = {
+      lat: selectedLat,
+      lng: selectedLng,
+      label: selectedLabel,
+    };
+    (newLoc as any).radius = radiusKm;
+
+    setLocation(newLoc);
+
     try {
-      const updatedLoc: UserLocation & { radius: number } = {
-        lat: selectedLat,
-        lng: selectedLng,
-        label: selectedLabel,
-        radius: radiusKm,
+      const cached = localStorage.getItem('forsa_user');
+      let currentPrefs: any = {};
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          currentPrefs = parsed.preferences || {};
+        } catch {}
+      }
+
+      const updatedPrefs = {
+        ...currentPrefs,
+        preferredLocation: selectedLabel,
+        preferredCoordinates: { lat: selectedLat, lng: selectedLng },
+        searchRadiusKm: radiusKm,
       };
 
-      setLocation(updatedLoc);
+      await updateUserProfile({
+        preferredLocation: selectedLabel,
+        searchRadiusKm: radiusKm,
+      });
 
-      // Immédiatement mettre à jour le cache local forsa_user
-      try {
-        const cached = localStorage.getItem('forsa_user');
-        if (cached) {
+      if (cached) {
+        try {
           const parsed = JSON.parse(cached);
-          const u = parsed.user || parsed;
-          if (!u.preferences) u.preferences = {};
-          u.preferences.preferredLocation = selectedLabel;
-          u.preferences.searchRadiusKm = radiusKm;
-          u.preferredLocation = selectedLabel;
+          parsed.preferredLocation = selectedLabel;
+          parsed.preferences = updatedPrefs;
           localStorage.setItem('forsa_user', JSON.stringify(parsed));
-        }
-      } catch {}
-
-      // Persistance backend si connecté
-      const token = localStorage.getItem('forsa_access_token');
-      if (token) {
-        await updateUserProfile({
-          preferredLocation: selectedLabel,
-          searchRadiusKm: radiusKm,
-        }).catch((e) => console.warn('Erreur sauvegarde profil:', e));
+        } catch {}
       }
 
       setSuccessBanner(true);
       setTimeout(() => {
         navigate('/profile');
-      }, 900);
+      }, 1200);
     } catch (err: any) {
       console.error(err);
+      navigate('/profile');
     } finally {
       setSaving(false);
     }
@@ -376,322 +400,401 @@ export const LocationPage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen bg-[#fffaf0] p-4 sm:p-6 md:p-8 font-poppins text-[#0B2C25] selection:bg-[#17664e] selection:text-white"
+      className="w-full min-h-screen bg-[#fffaf0] font-poppins text-[#0B2C25] pb-[28px] pt-[30px] px-4 sm:px-[40px] select-none"
       data-node-id="1364:92386"
       data-name="Desktop · Localisation — Ma localisation"
     >
-      <div className="max-w-[1140px] mx-auto space-y-5">
-        {/* En-tête Figma 1364:92389 */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl sm:text-4xl md:text-[44px] font-bold tracking-tight text-[#0b2c25]">
+      <div className="max-w-[1202px] mx-auto flex flex-col gap-[24px]">
+        {/* ── EN-TÊTE DE PAGE (Figma 1364:92389) ── */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-[24px] w-full" data-node-id="1364:92389" data-name="Page header">
+          {/* Introduction (1364:92390) */}
+          <div className="flex flex-col gap-[3px] text-[#0b2c25]" data-node-id="1364:92390">
+            <p className="font-normal text-[11px] text-[#0b2c25]/75" data-node-id="1364:92391">
+              Mon espace / Profil / Modifier le profil / Ma localisation
+            </p>
+            <h1 className="font-semibold text-[36px] sm:text-[48px] text-[#0b2c25] leading-tight" data-node-id="1364:92392">
               Ma localisation
             </h1>
-            <p className="text-sm sm:text-base text-[#0b2c25]/75 mt-1 font-normal">
+            <p className="font-normal text-[16px] sm:text-[20px] text-[#0b2c25]/85" data-node-id="1364:92393">
               Choisissez la zone où trouver les offres près de vous.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate('/profile')}
-            className="self-start sm:self-auto border border-[#0b2c25]/30 hover:bg-stone-100 text-[#0b2c25] text-xs font-semibold px-4 py-2 rounded-full transition cursor-pointer"
-          >
-            ← Retour au profil
-          </button>
+          {/* Account actions (1364:92394) */}
+          <div className="flex items-center gap-[14px] shrink-0 self-start md:self-center" data-node-id="1364:92394">
+            {/* Position actuelle dans le header (1364:92395) */}
+            <div
+              onClick={() => navigate('/location')}
+              className="hidden sm:flex items-center gap-[7px] pr-[12px] cursor-pointer hover:opacity-80 transition"
+              data-node-id="1364:92395"
+              title="Modifier ma localisation"
+            >
+              <img src={figmaHeaderLocation} alt="" className="size-[18px] shrink-0" />
+              <span className="font-normal text-[12px] text-[#0b2c25] leading-[1.5] max-w-[150px] truncate">
+                {selectedLabel}
+              </span>
+            </div>
+
+            {/* Notifications entry (1364:92398) */}
+            <div
+              onClick={() => navigate('/notifications')}
+              className="relative size-[42px] rounded-full flex items-center justify-center cursor-pointer hover:bg-white/60 transition bg-white/40"
+              data-node-id="1364:92398"
+              title="Notifications"
+            >
+              <img src={figmaHeaderBell} alt="" className="size-[22px] shrink-0" />
+              <img
+                src={figmaUnreadIndicator}
+                alt=""
+                className="absolute top-[8px] left-[27px] size-[7px]"
+              />
+            </div>
+
+            {/* Circular User Avatar (1364:92401) */}
+            <div
+              onClick={() => navigate('/profile')}
+              className="relative size-[44px] rounded-full overflow-hidden shrink-0 bg-[#0B2C25] text-white flex items-center justify-center border border-black/5 shadow-xs cursor-pointer hover:opacity-90 transition"
+              data-node-id="1364:92401"
+              title="Mon profil"
+            >
+              {userAvatar ? (
+                <img src={userAvatar} alt="Avatar" className="size-full object-cover" />
+              ) : (
+                <svg className="size-[22px] text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              )}
+            </div>
+          </div>
         </div>
 
+        {/* Bannière de confirmation */}
         {successBanner && (
           <div className="p-4 rounded-[16px] bg-[#eef7ec] border border-[#235347]/30 text-[#0b2c25] flex items-center gap-3 shadow-xs">
-            <CheckCircle2 className="size-5 text-[#17664e] shrink-0" />
-            <p className="text-sm font-medium">
+            <span className="size-2 rounded-full bg-[#17664e] shrink-0 animate-ping" />
+            <p className="text-sm font-semibold text-[#17664e]">
               Votre zone de recherche a été enregistrée avec succès ! Redirection vers votre profil...
             </p>
           </div>
         )}
 
-        {/* Grille Colonnes : Figma 1364:92402 (Carte carte à gauche + Panneau à droite) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* ─── COLONNE GAUCHE : VRAIE CARTE INTERACTIVE LEAFLET (Figma 1364:92403) ─── */}
-          <div className="lg:col-span-7 flex flex-col w-full">
-            <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] overflow-hidden relative h-[520px] lg:h-[730px] shadow-sm flex flex-col">
-              {/* Barre de recherche flottante sur carte (Figma 1364:92707) */}
-              <div className="absolute top-4 left-4 right-4 z-[1000]">
-                <form
-                  onSubmit={handleSearchSubmit}
-                  className="bg-white/95 backdrop-blur-md border border-[#0b2c25]/30 rounded-[14px] shadow-md flex items-center gap-2.5 px-3.5 h-12"
-                >
-                  <Search className="size-4 text-[#0b2c25]/60 shrink-0" />
-                  <input
-                    type="text"
-                    placeholder="Rechercher une ville, une adresse…"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-transparent text-xs text-[#0b2c25] focus:outline-none placeholder:text-[#0b2c25]/50 font-medium"
-                  />
-                  {searchQuery && (
-                    <button
-                      type="submit"
-                      disabled={searching}
-                      className="px-3 py-1.5 bg-[#0b2c25] hover:bg-[#17664e] text-white text-[11px] font-semibold rounded-[10px] transition cursor-pointer shrink-0"
-                    >
-                      {searching ? '...' : 'Chercher'}
-                    </button>
-                  )}
-                </form>
-              </div>
+        {/* ── COLONNES (Figma 1364:92402) ── */}
+        <div className="flex flex-col lg:flex-row gap-[28px] items-start w-full" data-node-id="1364:92402" data-name="Colonnes">
+          {/* ── COLONNE GAUCHE : VRAIE CARTE LEAFLET DANS LE CADRE FIGMA (1364:92403) ── */}
+          <div
+            className="w-full lg:flex-1 h-[816px] bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] overflow-hidden relative shadow-sm"
+            data-node-id="1364:92403"
+            data-name="Carte carte"
+          >
+            {/* Barre de recherche flottante en haut de la carte (1364:92707) */}
+            <div
+              className="absolute top-[20px] left-[20px] right-[20px] max-w-[671px] z-[1000]"
+              data-node-id="1364:92707"
+            >
+              <form
+                onSubmit={handleSearchSubmit}
+                className="bg-white border border-[#0b2c25] rounded-[14px] h-[48px] px-[16px] flex items-center gap-[10px] shadow-md"
+              >
+                <img src={figmaSearch} alt="" className="size-[17px] shrink-0 opacity-75" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Rechercher une ville, une adresse…"
+                  className="flex-1 h-full bg-transparent font-normal text-[13px] text-[#0b2c25] placeholder:text-[#0b2c25]/60 focus:outline-none"
+                />
+                {searching ? (
+                  <span className="text-xs text-[#17664e] font-semibold animate-pulse">Recherche...</span>
+                ) : (
+                  <button
+                    type="submit"
+                    className="text-xs font-semibold text-white bg-[#0b2c25] hover:bg-[#17664e] px-3 py-1.5 rounded-lg transition"
+                  >
+                    Chercher
+                  </button>
+                )}
+              </form>
+            </div>
 
-              {/* Composant Vraie Carte Leaflet */}
-              <div className="size-full relative z-0">
-                <MapContainer
+            {/* Bouton GPS Me localiser flottant en bas à droite (1364:92711) */}
+            <button
+              type="button"
+              onClick={handleUseGPS}
+              disabled={gpsLoading}
+              title="Me localiser via GPS"
+              className="absolute bottom-[24px] right-[20px] z-[1000] size-[48px] rounded-full bg-white hover:bg-stone-50 border border-[#0b2c25] flex items-center justify-center shadow-lg transition cursor-pointer"
+              data-node-id="1364:92711"
+            >
+              <img
+                src={figmaGPSButton}
+                alt="Me localiser"
+                className={`size-[20px] ${gpsLoading ? 'animate-spin' : ''}`}
+              />
+            </button>
+
+            {/* VRAIE CARTE INTERACTIVE LEAFLET OPENSTREETMAP */}
+            <div className="w-full h-full">
+              <MapContainer
+                center={[selectedLat, selectedLng]}
+                zoom={13}
+                zoomControl={false}
+                className="w-full h-full"
+                style={{ height: '100%', width: '100%', background: '#ebeee1' }}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+
+                <MapController center={[selectedLat, selectedLng]} zoom={13} />
+                <MapClickHandler onMapClick={handleMapClick} />
+
+                {/* Cercle dynamique représentant le rayon de recherche (1364:92705) */}
+                <Circle
                   center={[selectedLat, selectedLng]}
-                  zoom={13}
-                  zoomControl={false}
-                  scrollWheelZoom={true}
-                  className="size-full"
-                  style={{ background: '#ebeee1' }}
-                >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
+                  radius={radiusKm * 1000}
+                  pathOptions={{
+                    color: '#17664e',
+                    fillColor: '#17664e',
+                    fillOpacity: 0.12,
+                    weight: 1.5,
+                  }}
+                />
 
-                  <MapController center={[selectedLat, selectedLng]} zoom={13} />
-                  <MapClickHandler onMapClick={handleMapClick} />
+                {/* Marqueur de la position de l'utilisateur (1364:92706) */}
+                <Marker
+                  position={[selectedLat, selectedLng]}
+                  icon={createLocationMarkerIcon(selectedLabel)}
+                />
 
-                  {/* Cercle représentant le rayon de recherche dynamique */}
-                  <Circle
-                    center={[selectedLat, selectedLng]}
-                    radius={radiusKm * 1000}
-                    pathOptions={{
-                      color: '#17664e',
-                      fillColor: '#17664e',
-                      fillOpacity: 0.12,
-                      weight: 2,
-                    }}
-                  />
-
-                  {/* Repère de position de l'utilisateur avec label */}
+                {/* Repères des commerces partenaires de la zone (1364:92691 - 1364:92703) */}
+                {SAMPLE_SHOPS.map((shop) => (
                   <Marker
-                    position={[selectedLat, selectedLng]}
-                    icon={createLocationMarkerIcon(selectedLabel)}
+                    key={shop.id}
+                    position={[shop.lat, shop.lng]}
+                    icon={createShopMarkerIcon(shop.name, shop.isPrimary)}
                   />
-
-                  {/* Repères des commerces partenaires de la zone */}
-                  {SAMPLE_SHOPS.map((shop) => (
-                    <Marker
-                      key={shop.id}
-                      position={[shop.lat, shop.lng]}
-                      icon={createShopMarkerIcon(shop.name, shop.isPrimary)}
-                    />
-                  ))}
-                </MapContainer>
-              </div>
-
-              {/* Bouton Me localiser rapide (Figma 1364:92711) */}
-              <div className="absolute bottom-4 right-4 z-[1000]">
-                <button
-                  type="button"
-                  onClick={handleUseGPS}
-                  title="Me localiser automatiquement avec le GPS"
-                  className="size-12 rounded-[24px] bg-white border border-[#0b2c25]/30 shadow-lg flex items-center justify-center text-[#17664e] hover:bg-stone-50 transition cursor-pointer"
-                >
-                  {gpsLoading ? (
-                    <Loader2 className="size-5 animate-spin" />
-                  ) : (
-                    <Compass className="size-5" />
-                  )}
-                </button>
-              </div>
+                ))}
+              </MapContainer>
             </div>
           </div>
 
-          {/* ─── COLONNE DROITE : PANNEAU DE CONTRÔLE (Figma 1364:92713) ─── */}
-          <div className="lg:col-span-5 space-y-4 w-full">
-            {/* 1. Section Position enregistrée (Figma 1364:92714) */}
-            <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] p-[18px] shadow-sm flex flex-col gap-[14px]">
-              <div className="flex items-center gap-3">
-                <div className="size-10 rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center text-[#17664e] shrink-0">
-                  <MapPin className="size-5" />
+          {/* ── COLONNE DROITE : PANNEAU DE CONTRÔLE FIGMA (1364:92713) ── */}
+          <div className="w-full lg:w-[380px] flex flex-col gap-[12px] shrink-0" data-node-id="1364:92713" data-name="Panneau">
+            {/* 1. SECTION POSITION ENREGISTRÉE (1364:92714) */}
+            <div
+              className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[18px] flex flex-col gap-[14px] shadow-sm"
+              data-node-id="1364:92714"
+              data-name="Section Position enregistrée"
+            >
+              <div className="flex items-center gap-[12px] w-full" data-node-id="1364:92715" data-name="En-tête de carte">
+                <div className="size-[40px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="1364:92716">
+                  <img src={figmaPastillePin} alt="" className="size-[20px]" />
                 </div>
-                <h3 className="text-[15px] font-semibold text-[#0b2c25]">Position enregistrée</h3>
+                <h3 className="font-semibold text-[15px] text-[#0b2c25]" data-node-id="1364:92718">
+                  Position enregistrée
+                </h3>
               </div>
 
-              <div className="flex items-center gap-3.5 py-2">
-                <div className="size-10 rounded-[14px] bg-[#0b2c25] text-white flex items-center justify-center shrink-0 shadow-xs">
-                  <Navigation className="size-4 -rotate-45" />
+              <div className="flex items-center gap-[14px] py-[8px] w-full" data-node-id="1364:92719">
+                <div className="size-[40px] rounded-[14px] bg-[#0b2c25] flex items-center justify-center shrink-0" data-node-id="1364:92720">
+                  <img src={figmaDarkPin} alt="" className="size-[18px]" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-semibold text-[#0b2c25] truncate">
+                <div className="flex flex-col gap-[2px] flex-1 min-w-0" data-node-id="1364:92722">
+                  <p className="font-semibold text-[15px] text-[#0b2c25] truncate" data-node-id="1364:92723">
                     {selectedLabel}
                   </p>
-                  <p className="text-[12px] text-[#0b2c25]/70">
+                  <p className="font-normal text-[12px] text-[#0b2c25]/70" data-node-id="1364:92724">
                     Localisation préférée actuelle
                   </p>
                 </div>
-                <span className="text-[12px] font-medium text-[#17664e] bg-[#dbf0dd] px-2.5 py-1 rounded-full whitespace-nowrap">
-                  Active
-                </span>
+                <div className="bg-[#dbf0dd] px-[10px] py-[4px] rounded-full shrink-0" data-node-id="1364:92725">
+                  <span className="font-medium text-[12px] text-[#17664e]" data-node-id="1364:92726">
+                    Active
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* 2. Section Choisir une autre localisation (Figma 1364:92727) */}
-            <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] p-[18px] shadow-sm flex flex-col gap-[14px]">
-              <div className="flex items-center gap-3">
-                <div className="size-10 rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center text-[#17664e] shrink-0">
-                  <Compass className="size-5" />
+            {/* 2. SECTION CHOISIR UNE AUTRE LOCALISATION (1364:92727) */}
+            <div
+              className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[18px] flex flex-col gap-[14px] shadow-sm"
+              data-node-id="1364:92727"
+              data-name="Section Choisir une autre localisation"
+            >
+              <div className="flex items-center gap-[12px] w-full" data-node-id="1364:92728" data-name="En-tête de carte">
+                <div className="size-[40px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="1364:92729">
+                  <img src={figmaCompassGps} alt="" className="size-[20px]" />
                 </div>
-                <h3 className="text-[15px] font-semibold text-[#0b2c25]">Autre localisation</h3>
+                <h3 className="font-semibold text-[15px] text-[#0b2c25]" data-node-id="1364:92731">
+                  Autre localisation
+                </h3>
               </div>
 
-              <div className="divide-y divide-[#0b2c25]/10">
-                {/* Ligne Utiliser ma position (GPS) - Figma 1364:92733 */}
+              <div className="flex flex-col py-[2px] w-full divide-y divide-[#0b2c25]/15" data-node-id="1364:92732">
+                {/* Ligne 1 : Utiliser ma position (1364:92733) */}
                 <div
                   onClick={handleUseGPS}
-                  className="flex items-center justify-between py-3 px-1 hover:bg-[#fffaf0] rounded-[14px] transition cursor-pointer group"
+                  className="flex items-center gap-[14px] px-[14px] py-[12px] hover:bg-[#fffaf0] rounded-[12px] transition cursor-pointer group"
+                  data-node-id="1364:92733"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-[14px] bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                      <Compass className="size-4 text-[#17664e]" />
-                    </div>
-                    <span className="text-[14px] font-medium text-[#0b2c25] group-hover:text-[#17664e] transition">
+                  <div className="size-[40px] rounded-[14px] bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="1364:92734">
+                    <img src={figmaMyPosPin} alt="" className="size-[18px]" />
+                  </div>
+                  <div className="flex-1 min-w-0" data-node-id="1364:92736">
+                    <p className="font-medium text-[15px] text-[#0b2c25]">
                       Utiliser ma position
-                    </span>
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-[#0b2c25]/80 bg-[#ebeee1] px-2 py-0.5 rounded-[8px]">
-                      GPS
-                    </span>
-                    {gpsLoading ? (
-                      <Loader2 className="size-4 animate-spin text-[#17664e]" />
-                    ) : (
-                      <ChevronRight className="size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition" />
-                    )}
-                  </div>
+                  <span className="font-normal text-[13px] text-[#0b2c25]/80" data-node-id="1364:92738">
+                    GPS
+                  </span>
+                  <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
                 </div>
 
-                {/* Ligne Saisir une adresse - Figma 1364:92741 */}
-                <div className="py-2.5 px-1">
+                {/* Ligne 2 : Saisir une adresse (1364:92741) */}
+                <div className="flex flex-col">
                   <div
-                    onClick={() => setShowAddressInput((prev) => !prev)}
-                    className="flex items-center justify-between py-1 cursor-pointer group"
+                    onClick={() => setShowAddressInput(!showAddressInput)}
+                    className="flex items-center gap-[14px] px-[14px] py-[12px] hover:bg-[#fffaf0] rounded-[12px] transition cursor-pointer group"
+                    data-node-id="1364:92741"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="size-9 rounded-[14px] bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                        <Edit2 className="size-4" />
-                      </div>
-                      <span className="text-[14px] font-medium text-[#0b2c25] group-hover:text-[#17664e] transition">
-                        Saisir une adresse
-                      </span>
+                    <div className="size-[40px] rounded-[14px] bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="1364:92742">
+                      <img src={figmaEditPen} alt="" className="size-[18px]" />
                     </div>
-                    <ChevronRight
-                      className={`size-4 text-[#0b2c25]/40 group-hover:text-[#0b2c25] transition transform ${
-                        showAddressInput ? 'rotate-90' : ''
-                      }`}
-                    />
+                    <div className="flex-1 min-w-0" data-node-id="1364:92744">
+                      <p className="font-medium text-[15px] text-[#0b2c25]">
+                        Saisir une adresse
+                      </p>
+                    </div>
+                    <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
                   </div>
 
                   {showAddressInput && (
-                    <form onSubmit={handleSearchSubmit} className="mt-2.5 relative flex items-center">
-                      <input
-                        type="text"
-                        placeholder="Ex: Bab Ezzouar, Alger"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-10 pl-3 pr-20 rounded-[12px] bg-[#fffaf0] border border-[#dbf0dd] text-xs text-[#0b2c25] focus:outline-none focus:ring-1 focus:ring-[#17664e]"
-                      />
-                      <button
-                        type="submit"
-                        disabled={searching || !searchQuery.trim()}
-                        className="absolute right-1 h-7 px-2.5 bg-[#0b2c25] hover:bg-[#17664e] text-white text-[11px] font-semibold rounded-[8px] transition disabled:opacity-50 cursor-pointer"
-                      >
-                        {searching ? '...' : 'Valider'}
-                      </button>
-                    </form>
+                    <div className="px-[14px] pb-[12px] pt-1">
+                      <form onSubmit={handleSearchSubmit} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Ex: Rue Didouche Mourad, Alger"
+                          className="flex-1 px-3 py-2 text-xs border border-[#0b2c25]/30 rounded-lg focus:outline-none focus:border-[#17664e] bg-[#fffaf0]"
+                        />
+                        <button
+                          type="submit"
+                          className="px-3 py-2 bg-[#0b2c25] text-white text-xs font-semibold rounded-lg hover:bg-[#17664e] transition"
+                        >
+                          OK
+                        </button>
+                      </form>
+                    </div>
                   )}
                 </div>
 
-                {/* Ligne Choisir une ville (58 wilayas) - Figma 1364:92748 */}
-                <div className="py-3 px-1 space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-[14px] bg-[#ebeee1] flex items-center justify-center text-[#0b2c25] shrink-0">
-                      <Building2 className="size-4 text-[#0b2c25]" />
+                {/* Ligne 3 : Choisir une ville (1364:92748) */}
+                <div className="flex flex-col">
+                  <div
+                    onClick={() => setShowCitySelect(!showCitySelect)}
+                    className="flex items-center gap-[14px] px-[14px] py-[12px] hover:bg-[#fffaf0] rounded-[12px] transition cursor-pointer group"
+                    data-node-id="1364:92748"
+                  >
+                    <div className="size-[40px] rounded-[14px] bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="1364:92749">
+                      <img src={figmaBuildingCity} alt="" className="size-[18px]" />
                     </div>
-                    <span className="text-[14px] font-medium text-[#0b2c25]">
-                      Choisir une ville
+                    <div className="flex-1 min-w-0" data-node-id="1364:92751">
+                      <p className="font-medium text-[15px] text-[#0b2c25]">
+                        Choisir une ville
+                      </p>
+                    </div>
+                    <span className="font-normal text-[13px] text-[#0b2c25]/80" data-node-id="1364:92753">
+                      Alger
                     </span>
+                    <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
                   </div>
 
-                  <div className="relative flex items-center">
-                    <select
-                      onChange={(e) => handleSelectWilaya(e.target.value)}
-                      defaultValue=""
-                      style={{ WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' }}
-                      className="w-full h-10 px-3.5 pr-10 rounded-[12px] bg-[#fffaf0] border border-[#dbf0dd] text-xs font-medium text-[#0b2c25] focus:outline-none focus:ring-1 focus:ring-[#17664e] cursor-pointer appearance-none leading-normal"
-                    >
-                      <option value="" disabled>
-                        -- Sélectionner une wilaya parmi les 58 --
-                      </option>
-                      {ALGERIAN_WILAYAS.map((w) => (
-                        <option key={w.code} value={w.name}>
-                          {w.code} - {w.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute right-3 flex items-center text-[#0b2c25]/60">
-                      <ChevronRight className="size-4 rotate-90" />
+                  {showCitySelect && (
+                    <div className="px-[14px] pb-[12px] pt-1">
+                      <select
+                        onChange={(e) => handleSelectWilaya(e.target.value)}
+                        defaultValue=""
+                        className="w-full px-3 py-2 text-xs border border-[#0b2c25]/30 rounded-lg focus:outline-none focus:border-[#17664e] bg-[#fffaf0] font-medium"
+                      >
+                        <option value="" disabled>-- Sélectionner une wilaya parmi les 58 --</option>
+                        {ALGERIAN_WILAYAS.map((w) => (
+                          <option key={w.code} value={w.name}>
+                            {w.code} - {w.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* 3. Section Rayon (Figma 1364:92755) */}
-            <div className="bg-white rounded-[24px] border-[1.5px] border-[#dbf0dd] p-[18px] shadow-sm flex flex-col gap-[14px]">
-              <div className="flex items-center gap-3">
-                <div className="size-10 rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center text-[#17664e] shrink-0">
-                  <Sliders className="size-5" />
+            {/* 3. SECTION RAYON DE RECHERCHE (1364:92755) */}
+            <div
+              className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[18px] flex flex-col gap-[14px] shadow-sm"
+              data-node-id="1364:92755"
+              data-name="Section Rayon"
+            >
+              <div className="flex items-center gap-[12px] w-full" data-node-id="1364:92756" data-name="En-tête de carte">
+                <div className="size-[40px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0" data-node-id="1364:92757">
+                  <img src={figmaCityIcon} alt="" className="size-[20px]" />
                 </div>
-                <h3 className="text-[15px] font-semibold text-[#0b2c25]">Rayon de recherche</h3>
+                <h3 className="font-semibold text-[15px] text-[#0b2c25]" data-node-id="1364:92759">
+                  Rayon de recherche
+                </h3>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-[14px] text-[#0b2c25]">
-                  <span className="font-medium">Distance de recherche</span>
-                  <span className="font-semibold">{radiusKm} km</span>
+              <div className="flex flex-col gap-[12px] w-full" data-node-id="1364:92760" data-name="Rayon">
+                <div className="flex items-center justify-between font-poppins text-[14px] text-[#0b2c25]" data-node-id="1364:92761">
+                  <span className="font-medium" data-node-id="1364:92762">
+                    Distance de recherche
+                  </span>
+                  <span className="font-semibold" data-node-id="1364:92763">
+                    {radiusKm} km
+                  </span>
                 </div>
 
-                <input
-                  type="range"
-                  min="1"
-                  max="50"
-                  step="1"
-                  value={radiusKm}
-                  onChange={(e) => setRadiusKm(parseInt(e.target.value, 10))}
-                  className="w-full accent-[#0b2c25] cursor-pointer h-2 bg-[#ebeee1] rounded-lg"
-                />
+                {/* Curseur slider interactif */}
+                <div className="relative w-full py-1">
+                  <input
+                    type="range"
+                    min={1}
+                    max={50}
+                    value={radiusKm}
+                    onChange={(e) => setRadiusKm(Number(e.target.value))}
+                    className="w-full h-[6px] bg-[#ebeee1] rounded-[3px] accent-[#0b2c25] cursor-pointer"
+                  />
+                </div>
 
-                <div className="flex justify-between text-[12px] text-[#0b2c25]/60 font-medium">
-                  <span>1 km</span>
-                  <span>50 km</span>
+                <div className="flex items-center justify-between text-[12px] font-normal text-[#0b2c25]/75" data-node-id="1364:92768">
+                  <span data-node-id="1364:92769">1 km</span>
+                  <span data-node-id="1364:92771">50 km</span>
                 </div>
               </div>
             </div>
 
-            {/* 4. Information (Figma 1364:92772) */}
-            <div className="bg-[#eef7ec] border-[1.5px] border-[#dbf0dd] rounded-[20px] px-4 py-3.5 flex items-start gap-3">
-              <Info className="size-5 text-[#17664e] shrink-0 mt-0.5" />
-              <p className="text-[12px] text-[#17664e] leading-relaxed">
+            {/* 4. ENCADRÉ INFORMATION (1364:92772) */}
+            <div
+              className="bg-[#eef7ec] border-[1.5px] border-[#dbf0dd] rounded-[20px] px-[16px] py-[14px] flex items-center gap-[12px]"
+              data-node-id="1364:92772"
+              data-name="Information"
+            >
+              <img src={figmaInfoCircle} alt="" className="size-[22px] shrink-0" />
+              <p className="font-normal text-[12px] text-[#17664e] leading-snug" data-node-id="1364:92774">
                 Votre localisation nous aide à vous proposer des offres proches de chez vous. Elle n’est jamais partagée.
               </p>
             </div>
 
-            {/* 5. Actions (Figma 1364:92775) */}
-            <div className="flex items-center gap-3 pt-1">
+            {/* 5. ACTIONS (1364:92775) */}
+            <div className="flex items-center gap-[12px] w-full pt-1" data-node-id="1364:92775" data-name="Actions">
               <button
                 type="button"
                 onClick={() => navigate('/profile')}
-                className="flex-1 h-11 rounded-[12px] border border-black/40 bg-white hover:bg-stone-50 text-[#0b2c25] text-[13px] font-semibold transition cursor-pointer flex items-center justify-center"
+                className="flex-1 h-[44px] rounded-[12px] border border-[rgba(0,0,0,0.44)] hover:bg-stone-50 font-semibold text-[13px] text-[#0b2c25] flex items-center justify-center transition cursor-pointer"
+                data-node-id="1364:92776"
               >
                 Annuler
               </button>
@@ -700,19 +803,10 @@ export const LocationPage: React.FC = () => {
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="flex-1 h-11 rounded-[12px] bg-[#0b2c25] hover:bg-[#17664e] text-white text-[13px] font-semibold shadow-sm transition active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+                className="flex-1 h-[44px] rounded-[12px] bg-[#0b2c25] hover:bg-[#17664e] text-white font-semibold text-[13px] flex items-center justify-center transition cursor-pointer shadow-xs disabled:opacity-50"
+                data-node-id="1364:92778"
               >
-                {saving ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" />
-                    <span>Enregistrement...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="size-4 stroke-[3]" />
-                    <span>Enregistrer</span>
-                  </>
-                )}
+                {saving ? 'Enregistrement...' : 'Enregistrer'}
               </button>
             </div>
           </div>
@@ -721,4 +815,5 @@ export const LocationPage: React.FC = () => {
     </div>
   );
 };
+
 export default LocationPage;
