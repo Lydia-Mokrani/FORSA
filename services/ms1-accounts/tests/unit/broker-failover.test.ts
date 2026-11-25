@@ -101,14 +101,23 @@ describe('LOT 5B-2: MS1 Failure Behaviour & Competing Consumer Queue', () => {
       expect(res.body.challengeId).toBe('chal-async-1');
       expect(res.body.deepLink).toContain('https://t.me/');
 
-      // Publication du défi créé
+      // Publication du défi créé avec condensat SHA-256 (JAMAIS le nonce brut)
       expect(eventBus.publish).toHaveBeenCalledWith(
         'telegram.challenge.created',
         expect.objectContaining({
           challengeId: 'chal-async-1',
+          nonceHash: expect.any(String),
           phone: '+213555123456',
         })
       );
+
+      // Sécurité : Vérifier formellement que l'événement ne contient PAS le nonce brut
+      const challengeEventCall = (eventBus.publish as jest.Mock).mock.calls.find(
+        (call) => call[0] === 'telegram.challenge.created'
+      );
+      expect(challengeEventCall).toBeDefined();
+      expect(challengeEventCall[1].nonce).toBeUndefined();
+      expect(challengeEventCall[1].nonceHash).toBeDefined();
 
       // Publication de l'OTP en attente dans la file pour MS5
       expect(eventBus.publish).toHaveBeenCalledWith(

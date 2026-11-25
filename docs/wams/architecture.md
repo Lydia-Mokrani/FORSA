@@ -87,6 +87,23 @@ Au Lot 5B-1b, une configuration transitoire dissymétrique (`TELEGRAM_BOT_ENABLE
 - `TELEGRAM_BOT_ENABLED` et `TELEGRAM_BOT_TOKEN` sont entièrement retirés du code et de l'environnement de MS1.
 - `ms1-accounts-1` et `ms1-accounts-2` ont désormais des variables et comportements 100% identiques.
 
+### Événement `telegram.challenge.created` (MS1 → MS5)
+- **Nom de l'événement :** `telegram.challenge.created`
+- **Émetteur :** `ms1-accounts` (lors d'un appel à `POST /api/auth/telegram/start`)
+- **Consommateur :** `ms5-notifications` (Singleton `telegram.service.ts`)
+- **File d'attente :** `q.ms5-notifications.telegram.challenge.created` (file durable, DLQ `forsa.events.dlx`)
+- **Champs du payload :**
+  - `challengeId` (string, UUID du défi)
+  - `nonceHash` (string, condensat SHA-256 du nonce - **le nonce brut ne transite JAMAIS sur le bus**)
+  - `phone` (string, numéro normalisé E.164)
+  - `expiresAt` (string ISO, date d'expiration du défi)
+- **TTL Message & Durée :** 600 secondes (10 minutes, correspondant au TTL du défi dans PostgreSQL).
+- **Règles de gestion en mémoire MS5 :**
+  - Stocké dans `pendingChallengesByNonce` indexé par `nonceHash`.
+  - Capacité bornée à 10 000 entrées pour prévenir toute fuite mémoire.
+  - Minuteur périodique de nettoyage (toutes les 60s) purgeant les entrées dont `expiresAt <= Date.now()`.
+  - Vérification d'expiration lors de la commande `/start <nonce>` : le nonce reçu est haché avec `hashString(nonce)` et rejeté s'il est expiré.
+
 ### Règles de Fonctionnement du Singleton MS5
 1. **Singleton Garanti :** Déployé avec `replicas: 1` dans `infra/nodes/node-ms5.yml`.
 2. **Nettoyage Préalable :** Appel systématique à `deleteWebhook` au démarrage pour purger tout webhook résiduel et forcer le mode long polling.

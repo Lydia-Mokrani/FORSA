@@ -3,6 +3,17 @@ import path from 'path';
 
 dotenv.config();
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const isProduction = nodeEnv === 'production';
+
+let databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  if (isProduction) {
+    throw new Error('[MS1-Env] DATABASE_URL est obligatoire en environnement de production');
+  }
+  databaseUrl = 'postgresql://forsa_user:forsa_secret_ms1@localhost:5432/forsa_ms1_accounts?schema=public';
+}
+
 function getRequiredEnv(key: string): string {
   const value = process.env[key];
   if (!value) {
@@ -16,8 +27,8 @@ function getRequiredEnv(key: string): string {
 
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
-  nodeEnv: process.env.NODE_ENV || 'development',
-  databaseUrl: process.env.DATABASE_URL || 'postgresql://forsa_user:forsa_secret_ms1@localhost:5432/forsa_ms1_accounts?schema=public',
+  nodeEnv,
+  databaseUrl,
   
   jwtPrivateKey: process.env.JWT_PRIVATE_KEY ? process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n') : '',
   jwtPublicKey: process.env.JWT_PUBLIC_KEY ? process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n') : '',

@@ -7,12 +7,17 @@ import {
   startTelegramBot,
   stopTelegramBot,
   registerPendingChallenge,
+  purgeExpiredChallenges,
+  startChallengeCleanupTimer,
+  stopChallengeCleanupTimer,
+  MAX_PENDING_CHALLENGES,
   pendingChallengesByNonce,
   chatToChallengeMap,
   initTelegramBotSubscriptions,
 } from '../src/telegram-bot/telegram.service';
 import { eventBus } from '../src/services/event-bus';
 import { config } from '../src/config/env';
+import { hashString } from '@forsa/common';
 
 // Mock global de fetch pour simuler l'API Telegram
 const mockFetch = jest.fn();
@@ -63,7 +68,7 @@ describe('MS5 Telegram Bot Unit Tests', () => {
   describe('1. Validation du contact émetteur (Sécurité)', () => {
     it('doit refuser et annuler le défi si contact.user_id !== from.id (partage de contact tiers)', async () => {
       const nonce = 'nonce-test-123';
-      registerPendingChallenge(nonce, {
+      registerPendingChallenge(hashString(nonce), {
         challengeId: 'chal-1',
         phone: '+213555112233',
       });
@@ -108,7 +113,7 @@ describe('MS5 Telegram Bot Unit Tests', () => {
 
     it('doit refuser le défi si le numéro de téléphone ne correspond pas au numéro attendu', async () => {
       const nonce = 'nonce-phone-mismatch';
-      registerPendingChallenge(nonce, {
+      registerPendingChallenge(hashString(nonce), {
         challengeId: 'chal-2',
         phone: '+213555112233', // Attendu
       });
@@ -151,7 +156,7 @@ describe('MS5 Telegram Bot Unit Tests', () => {
 
     it('doit publier telegram.contact.received si contact.user_id === from.id et numéro concordant', async () => {
       const nonce = 'nonce-valid-flow';
-      registerPendingChallenge(nonce, {
+      registerPendingChallenge(hashString(nonce), {
         challengeId: 'chal-valid-1',
         phone: '+213555889900',
       });
@@ -289,7 +294,7 @@ describe('MS5 Telegram Bot Unit Tests', () => {
   describe('4. Confidentialité des Journaux (Aucun Code / Nonce / DeepLink dans les logs)', () => {
     it('ne doit jamais journaliser de code à 6 chiffres ni de nonce en clair', async () => {
       const nonce = 'secret-nonce-1234567890abcdef';
-      registerPendingChallenge(nonce, {
+      registerPendingChallenge(hashString(nonce), {
         challengeId: 'chal-secret',
         phone: '+213555123456',
       });
@@ -327,6 +332,148 @@ describe('MS5 Telegram Bot Unit Tests', () => {
       expect(allLogged).not.toContain(nonce);
       // Le numéro complet ne doit pas fuiter non masqué
       expect(allLogged).not.toContain('+213555123456');
+    });
+  });
+
+  describe('5. Sécurité Nonce Haché sur le Bus & /start (Fix B.1)', () => {
+    it('doit consommer telegram.challenge.created avec nonceHash et retrouver le défi via /start sans stocker le nonce brut', async () => {
+      let challengeHandler: any = null;
+      (eventBus.subscribe as jest.Mock).mockImplementation((topic, handler) => {
+        if (topic === 'telegram.challenge.created') {
+          challengeHandler = handler;
+        }
+      });
+
+      await initTelegramBotSubscriptions();
+      expect(challengeHandler).toBeDefined();
+
+      const rawNonce = 'raw-user-nonce-abcdef123456';
+      const expectedHash = hashString(rawNonce);
+
+      // Simulation de l'événement émis par MS1 (contenant UNIQUEMENT nonceHash, JAMAIS nonce brut)
+      await challengeHandler({
+        eventId: 'evt-chal-hash-1',
+        type: 'telegram.challenge.created',
+        name: 'telegram.challenge.created',
+        occurredAt: new Date().toISOString(),
+        payload: {
+          challengeId: 'chal-hashed-uuid',
+          nonceHash: expectedHash,
+          phone: '+213555990011',
+          expiresAt: new Date(Date.now() + 600 * 1000).toISOString(),
+        },
+      });
+
+      // La Map contient le hash, et NON le nonce brut
+      expect(pendingChallengesByNonce.has(expectedHash)).toBe(true);
+      expect(pendingChallengesByNonce.has(rawNonce)).toBe(false);
+
+      // Quand l'utilisateur clique sur le lien et envoie /start <rawNonce>
+      await handleTelegramUpdate({
+        message: {
+          chat: { id: 5001 },
+          from: { id: 3333 },
+          text: `/start ${rawNonce}`,
+        },
+      });
+
+      // Le bot doit avoir calculé hashString(rawNonce), trouvé le défi et associé le chat
+      expect(chatToChallengeMap.get(5001)).toEqual({
+        challengeId: 'chal-hashed-uuid',
+        phone: '+213555990011',
+      });
+    });
+  });
+
+  describe('6. Expiration du Défi dans /start, Purge Périodique & Borne Maximale (Fix B.2)', () => {
+    it('doit refuser un défi dont la date expiresAt est dépassée lors de la commande /start', async () => {
+      const rawNonce = 'expired-nonce-999';
+      const nonceHash = hashString(rawNonce);
+
+      // Défi expiré il y a 5 secondes
+      registerPendingChallenge(nonceHash, {
+        challengeId: 'chal-expired',
+        phone: '+213555001122',
+        expiresAt: new Date(Date.now() - 5000),
+      });
+
+      await handleTelegramUpdate({
+        message: {
+          chat: { id: 6001 },
+          from: { id: 4444 },
+          text: `/start ${rawNonce}`,
+        },
+      });
+
+      // La session ne doit PAS être créée
+      expect(chatToChallengeMap.get(6001)).toBeUndefined();
+
+      // Le défi expiré doit être supprimé de la Map
+      expect(pendingChallengesByNonce.has(nonceHash)).toBe(false);
+
+      // Message d'expiration envoyé
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/sendMessage'),
+        expect.objectContaining({
+          body: expect.stringContaining('Lien de connexion expiré'),
+        })
+      );
+    });
+
+    it('doit purger périodiquement les défis expirés via le timer de nettoyage (fake timers)', () => {
+      jest.useFakeTimers();
+
+      const activeHash = hashString('active-nonce-1');
+      const expiredHash1 = hashString('expired-nonce-1');
+      const expiredHash2 = hashString('expired-nonce-2');
+
+      registerPendingChallenge(activeHash, {
+        challengeId: 'chal-active',
+        phone: '+213555111111',
+        expiresAt: new Date(Date.now() + 600000), // valide 10 min
+      });
+
+      registerPendingChallenge(expiredHash1, {
+        challengeId: 'chal-exp-1',
+        phone: '+213555222222',
+        expiresAt: new Date(Date.now() - 1000), // déjà expiré
+      });
+
+      registerPendingChallenge(expiredHash2, {
+        challengeId: 'chal-exp-2',
+        phone: '+213555333333',
+        expiresAt: new Date(Date.now() - 5000), // déjà expiré
+      });
+
+      expect(pendingChallengesByNonce.size).toBe(3);
+
+      startChallengeCleanupTimer();
+
+      // Avancement du temps de 60 secondes pour déclencher le timer
+      jest.advanceTimersByTime(60000);
+
+      // Les 2 défis expirés sont purgés, le défi actif reste
+      expect(pendingChallengesByNonce.has(activeHash)).toBe(true);
+      expect(pendingChallengesByNonce.has(expiredHash1)).toBe(false);
+      expect(pendingChallengesByNonce.has(expiredHash2)).toBe(false);
+      expect(pendingChallengesByNonce.size).toBe(1);
+
+      stopChallengeCleanupTimer();
+      jest.useRealTimers();
+    });
+
+    it('doit borner la taille maximale de pendingChallengesByNonce (max 10 000 entrées)', () => {
+      // Remplissage forcé jusqu'à la limite
+      for (let i = 0; i < MAX_PENDING_CHALLENGES + 10; i++) {
+        registerPendingChallenge(`hash-${i}`, {
+          challengeId: `chal-${i}`,
+          phone: `+21355500${i}`,
+          expiresAt: new Date(Date.now() + 600000),
+        });
+      }
+
+      // La taille ne doit jamais dépasser MAX_PENDING_CHALLENGES (10 000)
+      expect(pendingChallengesByNonce.size).toBeLessThanOrEqual(MAX_PENDING_CHALLENGES);
     });
   });
 });

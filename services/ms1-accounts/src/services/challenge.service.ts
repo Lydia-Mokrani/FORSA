@@ -25,6 +25,7 @@ export function constantTimeCompare(a: string, b: string): boolean {
 export interface CreatedChallenge {
   challengeId: string;
   nonce: string;
+  nonceHash: string;
   deepLink: string;
   expiresAt: Date;
 }
@@ -76,6 +77,7 @@ export async function createAuthChallenge(
   return {
     challengeId: challenge.id,
     nonce,
+    nonceHash,
     deepLink,
     expiresAt,
   };

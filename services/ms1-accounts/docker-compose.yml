@@ -5,7 +5,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: forsa_user
-      POSTGRES_PASSWORD: forsa_secret_ms1
+      POSTGRES_PASSWORD: ${MS1_DB_PASSWORD}
       POSTGRES_DB: forsa_ms1_accounts
     ports:
       - "5432:5432"
@@ -37,7 +37,7 @@ services:
       PORT: 3001
       INSTANCE_ID: ms1-accounts-1
       NODE_ENV: production
-      DATABASE_URL: postgresql://forsa_user:forsa_secret_ms1@ms1-postgres:5432/forsa_ms1_accounts?schema=public
+      DATABASE_URL: postgresql://forsa_user:${MS1_DB_PASSWORD}@ms1-postgres:5432/forsa_ms1_accounts?schema=public
       RABBITMQ_URL: amqp://forsa_user:forsa_password@10.0.0.10:5672 # IP Serveur S0
       CONSUL_HOST: 10.0.0.10 # IP Serveur S0
       CONSUL_PORT: 8500
@@ -71,7 +71,7 @@ services:
       PORT: 3002
       INSTANCE_ID: ms1-accounts-2
       NODE_ENV: production
-      DATABASE_URL: postgresql://forsa_user:forsa_secret_ms1@ms1-postgres:5432/forsa_ms1_accounts?schema=public
+      DATABASE_URL: postgresql://forsa_user:${MS1_DB_PASSWORD}@ms1-postgres:5432/forsa_ms1_accounts?schema=public
       RABBITMQ_URL: amqp://forsa_user:forsa_password@10.0.0.10:5672 # IP Serveur S0
       CONSUL_HOST: 10.0.0.10 # IP Serveur S0
       CONSUL_PORT: 8500

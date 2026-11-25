@@ -1,29 +1,76 @@
 import { config } from '../config/env';
 import { eventBus } from '../services/event-bus';
-import { maskPhone, normalizeToE164 } from '@forsa/common';
+import { maskPhone, normalizeToE164, hashString } from '@forsa/common';
 
 let isPolling = false;
 let pollingAbortController: AbortController | null = null;
 let offset = 0;
 
-// Définition d'un défi en attente stocké en mémoire par nonce
+// Définition d'un défi en attente stocké en mémoire par nonceHash
 export interface PendingChallenge {
   challengeId: string;
   phone: string;
   expiresAt?: Date | string;
 }
 
-// Mémoire des défis en attente (nonce -> { challengeId, phone, expiresAt })
+// Capacité maximale en mémoire pour éviter toute fuite / saturation (borne supérieure)
+export const MAX_PENDING_CHALLENGES = 10000;
+
+// Mémoire des défis en attente (nonceHash -> { challengeId, phone, expiresAt })
 export const pendingChallengesByNonce = new Map<string, PendingChallenge>();
 
 // Mémoire des sessions de chat Telegram en attente de contact (chatId -> { challengeId, phone })
 export const chatToChallengeMap = new Map<number | string, { challengeId: string; phone: string }>();
 
 /**
- * Enregistre un défi créé reçu via le bus d'événements
+ * Purge les défis expirés présents dans la table en mémoire.
  */
-export function registerPendingChallenge(nonce: string, challenge: PendingChallenge): void {
-  pendingChallengesByNonce.set(nonce, challenge);
+export function purgeExpiredChallenges(): number {
+  const now = Date.now();
+  let count = 0;
+  for (const [key, chal] of pendingChallengesByNonce.entries()) {
+    if (chal.expiresAt) {
+      const expMs = new Date(chal.expiresAt).getTime();
+      if (!isNaN(expMs) && expMs <= now) {
+        pendingChallengesByNonce.delete(key);
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+let cleanupTimer: NodeJS.Timeout | null = null;
+const CLEANUP_INTERVAL_MS = 60 * 1000; // Purge toutes les minutes
+
+export function startChallengeCleanupTimer(): void {
+  if (cleanupTimer) return;
+  cleanupTimer = setInterval(() => {
+    purgeExpiredChallenges();
+  }, CLEANUP_INTERVAL_MS);
+  if (cleanupTimer.unref) cleanupTimer.unref();
+}
+
+export function stopChallengeCleanupTimer(): void {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
+  }
+}
+
+/**
+ * Enregistre un défi créé reçu via le bus d'événements.
+ * Borde la taille maximale et purge les expirés en cas de saturation.
+ */
+export function registerPendingChallenge(nonceHash: string, challenge: PendingChallenge): void {
+  if (pendingChallengesByNonce.size >= MAX_PENDING_CHALLENGES) {
+    purgeExpiredChallenges();
+    if (pendingChallengesByNonce.size >= MAX_PENDING_CHALLENGES) {
+      const firstKey = pendingChallengesByNonce.keys().next().value;
+      if (firstKey) pendingChallengesByNonce.delete(firstKey);
+    }
+  }
+  pendingChallengesByNonce.set(nonceHash, challenge);
 }
 
 /**
@@ -157,7 +204,9 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
       return;
     }
 
-    const challenge = pendingChallengesByNonce.get(nonce);
+    // 🔒 SÉCURITÉ : Ne jamais chercher avec le nonce en clair. Hachage SHA-256 avec packages/common
+    const nonceHash = hashString(nonce);
+    const challenge = pendingChallengesByNonce.get(nonceHash);
 
     if (!challenge) {
       await sendTelegramMessage(
@@ -166,6 +215,20 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
         { remove_keyboard: true }
       );
       return;
+    }
+
+    // 🔒 Vérification de la date d'expiration du défi (TTL 10 min)
+    if (challenge.expiresAt) {
+      const expiresMs = new Date(challenge.expiresAt).getTime();
+      if (!isNaN(expiresMs) && Date.now() > expiresMs) {
+        pendingChallengesByNonce.delete(nonceHash);
+        await sendTelegramMessage(
+          chatId,
+          '⚠️ *Lien de connexion expiré.*\n\nCe lien a dépassé sa durée de validité (10 minutes). Veuillez relancer votre demande depuis FORSA.',
+          { remove_keyboard: true }
+        );
+        return;
+      }
     }
 
     // Associer la session de ce chat au défi en attente
@@ -269,16 +332,18 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
  * Abonnements du bot aux événements émis par MS1
  */
 export async function initTelegramBotSubscriptions(): Promise<void> {
-  // Consommation des défis créés émis par MS1
+  // Consommation des défis créés émis par MS1 (avec nonceHash)
   await eventBus.subscribe('telegram.challenge.created', async (event) => {
     const payload = (event.payload || event.data) as {
       challengeId: string;
-      nonce: string;
+      nonceHash?: string;
+      nonce?: string;
       phone: string;
       expiresAt?: Date | string;
     };
-    if (payload?.nonce && payload?.challengeId && payload?.phone) {
-      registerPendingChallenge(payload.nonce, {
+    const key = payload?.nonceHash || (payload?.nonce ? hashString(payload.nonce) : null);
+    if (key && payload?.challengeId && payload?.phone) {
+      registerPendingChallenge(key, {
         challengeId: payload.challengeId,
         phone: payload.phone,
         expiresAt: payload.expiresAt,
@@ -375,6 +440,9 @@ export async function startTelegramBot(): Promise<void> {
   // 1. Suppression préalable de tout webhook résiduel
   await deleteWebhook(token);
 
+  // 2. Démarrage du minuteur d'éviction des défis expirés
+  startChallengeCleanupTimer();
+
   console.log('[TelegramBot] 🤖 Bot Telegram actif en mode Long Polling (Singleton MS5)...');
 
   (async () => {
@@ -397,6 +465,7 @@ export async function startTelegramBot(): Promise<void> {
  */
 export function stopTelegramBot(): void {
   isPolling = false;
+  stopChallengeCleanupTimer();
   if (pollingAbortController) {
     pollingAbortController.abort();
     pollingAbortController = null;

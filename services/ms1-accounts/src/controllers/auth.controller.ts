@@ -82,10 +82,10 @@ export class AuthController {
       const challenge = await createAuthChallenge(phone, ChallengePurpose.LOGIN);
 
       try {
-        // 2. Publication du défi créé à destination de MS5
+        // 2. Publication du défi créé à destination de MS5 (condensat SHA-256 uniquement, jamais le nonce brut)
         await eventBus.publish('telegram.challenge.created', {
           challengeId: challenge.challengeId,
-          nonce: challenge.nonce,
+          nonceHash: challenge.nonceHash,
           phone,
           expiresAt: challenge.expiresAt,
         });

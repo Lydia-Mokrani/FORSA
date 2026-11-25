@@ -127,9 +127,21 @@ Légende : [OK] = conforme à la décision Telegram ; [ADAPTER] = maquette basé
 - Notification Telegram impossible (bot bloqué) : marquer `telegram_blocked` et afficher le bandeau « Telegram non relié / bot bloqué ».
 
 ## 8. Événements RabbitMQ
-- Bot → MS1 : `telegram.contact.received`. MS1 → bot (MS5) : `telegram.send.otp`.
-- MS1 → MS4 : `shop.verification.requested`. MS4 → MS1 : `shop.verification.decided` (approved|rejected + motif), `account.suspended`, `account.reactivated`.
-- MS1 → MS2 : `account.status.changed` (masquer/rétablir offres). MS1 → MS5 : `account.status.changed`, `user.registered`.
+- **MS1 → Bot (MS5) : `telegram.challenge.created`**
+  - Émetteur : MS1 (`/auth/telegram/start`)
+  - Consommateur : MS5 (Singleton `telegram.service.ts`)
+  - File d'attente : `q.ms5-notifications.telegram.challenge.created` (durable, DLQ `forsa.events.dlx`)
+  - Champs du payload : `{ challengeId: string, nonceHash: string, phone: string, expiresAt: string }`
+  - Sécurité : Le nonce brut ne transite JAMAIS sur le bus ni dans les logs ; seul son condensat SHA-256 (`nonceHash`) est publié.
+  - TTL message : 600s (10 minutes, correspondant à l'expiration du défi).
+- **Bot (MS5) → MS1 : `telegram.contact.received`**
+  - File d'attente partagée (competing consumers) : `q.ms1-accounts.telegram.contact.received`.
+  - Champs : `{ challengeId, phone, telegramUserId, chatId }`.
+- **MS1 → Bot (MS5) : `telegram.send.otp`**
+  - File d'attente : `q.ms5-notifications.telegram.send.otp` (TTL 300s / 5 min).
+  - Champs : `{ chatId, code, expiresAt, challengeId }`.
+- **MS1 → MS4 :** `shop.verification.requested`. **MS4 → MS1 :** `shop.verification.decided` (approved|rejected + motif), `account.suspended`, `account.reactivated`.
+- **MS1 → MS2 :** `account.status.changed` (masquer/rétablir offres). **MS1 → MS5 :** `account.status.changed`, `user.registered`.
 - Le service du bot vit dans MS5 (notifications) : Telegram remplace l'e-mail comme canal d'envoi. Il s'enregistre dans Consul.
 
 ## 9. Décisions encore ouvertes (ne pas trancher seul)
