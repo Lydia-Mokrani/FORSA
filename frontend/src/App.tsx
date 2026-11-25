@@ -23,7 +23,7 @@ import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
 import { ShopEditPage } from './features/catalogue/pages/ShopEditPage';
 
 // Profil & Compte MS1 (Sections B, C, D)
-import { ProfilePage } from './features/profile';
+import { ProfilePage, NotificationsPage } from './features/profile';
 import {
   SettingsPage,
   ModeSwitchPage,
@@ -95,15 +95,7 @@ export const App: React.FC = () => {
                 </div>
               }
             />
-            <Route
-              path="/notifications"
-              element={
-                <div className="p-8 max-w-4xl mx-auto">
-                  <h1 className="text-2xl font-bold text-[#0B2C25]">Notifications</h1>
-                  <p className="text-stone-500 mt-2">Vous n'avez aucune nouvelle notification pour le moment.</p>
-                </div>
-              }
-            />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/mode" element={<ModeSwitchPage />} />

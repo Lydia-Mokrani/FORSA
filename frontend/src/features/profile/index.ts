@@ -2,3 +2,4 @@
 export * from './types';
 export * from './ProfileCard';
 export * from './ProfilePage';
+export * from './NotificationsPage';
