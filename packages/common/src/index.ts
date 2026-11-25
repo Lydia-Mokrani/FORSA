@@ -5,4 +5,5 @@ export * from './consul';
 export * from './logger';
 export * from './utils/hash';
 export * from './utils/mask-phone';
+export * from './utils/mask-email';
 export * from './utils/phone';

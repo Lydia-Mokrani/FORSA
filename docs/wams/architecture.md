@@ -156,3 +156,50 @@ Pour intégrer un nouveau microservice (ex. `ms2-catalogue`, `ms3-reservations`,
 1. **Enregistrement Consul :** Utiliser `ConsulRegistry` de `@forsa/common` en fournissant `traefikPathPrefixes` si le service expose une API publique, ou `traefikPathPrefixes: []` s'il s'agit d'un worker interne (comme MS5).
 2. **Consommation JWKS :** Valider les tokens JWT émis par MS1 via `GET /api/auth/jwks` avec les clés publiques RFC 7517 (`n`, `e`, `kid`).
 3. **Bus d'Événements :** Échanger des messages via l'enveloppe standardisée `{ eventId, type, name, occurredAt, payload }`.
+
+---
+
+## 7. Architecture de Messagerie E-mail & Récupération de Compte (Lot E1)
+
+### Événement `email.send` (MS1 → MS5)
+- **Émetteur :** `ms1-accounts` (lors de l'inscription, changement d'e-mail dans `/users/me`, et flux de récupération de numéro).
+- **Consommateur :** `ms5-notifications` (`email.consumer.ts`).
+- **File d'attente :** `q.ms5-notifications.email.send` (durable, DLQ `forsa.events.dlx`).
+- **Structure de l'enveloppe :**
+  ```json
+  {
+    "eventId": "evt-email-verify-1732521600000-uuid",
+    "type": "email.send",
+    "name": "email.send",
+    "occurredAt": "2026-11-25T07:00:00.000Z",
+    "payload": {
+      "eventId": "evt-email-verify-1732521600000-uuid",
+      "to": "user@example.com",
+      "template": "verify",
+      "locale": "fr",
+      "data": { "code": "123456" }
+    }
+  }
+  ```
+
+### Drivers d'Expédition MS5
+1. **Driver SMTP (`smtp.sender.ts`) :**
+   - Basé sur `nodemailer`.
+   - Provider-agnostic (Gmail App Password, Brevo, Ethereal, serveurs SMTP d'entreprise).
+   - En environnement de développement : bascule gracieuse sur `log-masked` si `SMTP_HOST` n'est pas renseigné (aucun crash, aucun mot de passe requis en local).
+   - En production : fail-fast au démarrage si les informations d'authentification SMTP sont incomplètes.
+2. **Driver Log-Masked (`log-masked.sender.ts`) :**
+   - Conçu pour les tests unitaires et le développement déconnecté.
+   - Format de journal : `[EMAIL] to=a***@g***.com template=verify subject=...`.
+   - **Règle absolue :** Aucun code OTP, jeton ou adresse complète n'apparaît dans les flux de sortie stdout/stderr.
+
+### Modèles d'E-mails Standardisés
+- **`verify` :** Code de vérification à 6 chiffres valable 10 minutes (*« Ne partagez jamais ce code »*).
+- **`recovery` :** Code de récupération de compte valable 15 minutes (*« Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail »*).
+- **`phone-changed` :** Notification de sécurité confirmant l'attribution immédiate d'un nouveau numéro.
+- **`phone-change-pending` :** Alerte de sécurité commerçant avec délai de grâce de 24h et adresse de contact de secours (`support@forsa.dz`).
+
+### Tolérance aux Pannes & Reprise
+- **MS5 indisponible :** Les messages restent stockés dans la file durable `q.ms5-notifications.email.send`. Au retour de MS5, les messages dont l'âge dépasse le TTL du code sont abandonnés silencieusement ; les autres sont délivrés.
+- **Modèle inconnu :** Tout template non reconnu par le consommateur est immédiatement rejeté vers la Dead-Letter Queue (`forsa.events.dlx`) sans interrompre le service.
+- **Anti-énumération & Rate Limiting :** `POST /api/auth/recovery/start` répond immédiatement en 202 Accepted. Le traitement asynchrone (`setImmediate`) neutralise les canaux auxiliaires d'analyse temporelle. Traefik applique une limite stricte par IP (`recovery-ratelimit`) en amont de MS1.

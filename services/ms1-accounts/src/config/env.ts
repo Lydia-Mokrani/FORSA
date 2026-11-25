@@ -73,6 +73,9 @@ export const config = {
 
   // Répertoire de stockage des avatars
   avatarDir: process.env.AVATAR_DIR || path.join(__dirname, '..', '..', 'uploads', 'avatars'),
+
+  // Délai de récupération pour commerçant avec boutique approuvée (heures)
+  recoveryMerchantDelayHours: parseInt(process.env.RECOVERY_MERCHANT_DELAY_HOURS || '24', 10),
 };
 
 // Fail-fast en production

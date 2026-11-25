@@ -19,6 +19,8 @@ import { AuthController } from './auth.controller';
 import { logAudit } from '../services/audit.service';
 import { eventBus } from '../services/event-bus';
 import { createAuthChallenge, verifyAuthChallenge, hashString } from '../services/challenge.service';
+import { RecoveryService } from '../services/recovery.service';
+import { EmailVerificationService } from '../services/email-verification.service';
 import { ChallengePurpose, ChallengeStatus } from '@prisma/client';
 
 // ─── Schémas Zod ──────────────────────────────────────────────────────────────
@@ -37,6 +39,8 @@ const updateProfileSchema = z.object({
 const profileSelect = {
   id: true,
   email: true,
+  emailVerifiedAt: true,
+  pendingEmail: true,
   fullName: true,
   phoneE164: true,
   avatarUrl: true,
@@ -82,6 +86,8 @@ async function findUserWithProfile(userId: string): Promise<any> {
           fullName: pUser.fullName,
           avatarUrl: pUser.avatarUrl,
           email: pUser.email,
+          emailVerifiedAt: pUser.emailVerifiedAt,
+          pendingEmail: pUser.pendingEmail,
           roles: pUser.roles,
           activeMode: pUser.activeMode,
           status: pUser.status,
@@ -98,7 +104,7 @@ async function findUserWithProfile(userId: string): Promise<any> {
           phone: pUser.phoneE164,
           role: pUser.activeMode === 'merchant' ? 'MERCHANT' : 'CUSTOMER',
           phoneVerified: true,
-          emailVerified: !!pUser.email,
+          emailVerified: Boolean(pUser.emailVerifiedAt),
         };
       }
     } catch {
@@ -147,6 +153,8 @@ export class UserController {
       const userId = req.user?.sub;
       if (!userId) throw new UnauthorizedError();
 
+      await RecoveryService.checkAndApplyPendingPhone(userId);
+
       const user = await findUserWithProfile(userId);
       if (!user) throw new NotFoundError('Utilisateur non trouvé.');
 
@@ -175,8 +183,9 @@ export class UserController {
 
       const { fullName, email, preferredLocation, searchRadiusKm, pushEnabled, telegramNotifications } = parsed.data;
 
-      // Traitement de l'email : stocker null si vide
+      // Traitement de l'email : stocker null si vide ou vérifier avant de mettre en attente
       let formattedEmail: string | null | undefined = undefined;
+      let shouldInitiateEmailVerification = false;
       if (email !== undefined) {
         if (email === '' || email === null) {
           formattedEmail = null;
@@ -185,11 +194,12 @@ export class UserController {
           if (current.email !== formattedEmail) {
             if (await isPostgresAlive()) {
               const conflict = await prisma.user.findFirst({
-                where: { email: formattedEmail, id: { not: userId } },
+                where: { email: { equals: formattedEmail, mode: 'insensitive' }, id: { not: userId } },
               });
               if (conflict) {
                 throw new ConflictError('Cette adresse e-mail est déjà utilisée par un autre compte.');
               }
+              shouldInitiateEmailVerification = true;
             }
           }
         }
@@ -198,13 +208,26 @@ export class UserController {
       if (await isPostgresAlive()) {
         const updateUserData: any = {};
         if (fullName !== undefined) updateUserData.fullName = fullName;
-        if (formattedEmail !== undefined) updateUserData.email = formattedEmail;
+        if (formattedEmail !== undefined) {
+          if (formattedEmail === null) {
+            updateUserData.email = null;
+            updateUserData.pendingEmail = null;
+            updateUserData.emailVerifiedAt = null;
+          } else if (shouldInitiateEmailVerification) {
+            // L'ancien email reste actif jusqu'à vérification du nouvel email
+            updateUserData.pendingEmail = formattedEmail;
+          }
+        }
 
         if (Object.keys(updateUserData).length > 0) {
           await prisma.user.update({
             where: { id: userId },
             data: updateUserData,
           });
+        }
+
+        if (shouldInitiateEmailVerification && formattedEmail) {
+          await EmailVerificationService.initiateEmailVerification(userId, formattedEmail);
         }
 
         if (

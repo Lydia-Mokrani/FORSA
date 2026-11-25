@@ -6,6 +6,7 @@ import {
   UnauthorizedError,
   ForbiddenError,
   NotFoundError,
+  ConflictError,
   ApiError,
 } from '@forsa/common';
 import { prisma } from '../config/prisma';
@@ -26,6 +27,8 @@ import {
 } from '../services/session.service';
 import { jwtService, TokenPayload } from '../services/jwt.service';
 import { logAudit } from '../services/audit.service';
+import { RecoveryService } from '../services/recovery.service';
+import { EmailVerificationService } from '../services/email-verification.service';
 import { Role, ChallengePurpose } from '@prisma/client';
 
 const startSchema = z.object({
@@ -36,6 +39,25 @@ const verifySchema = z.object({
   challengeId: z.string().uuid('ID de défi invalide'),
   code: z.string().regex(/^\d{6}$/, 'Le code doit contenir exactement 6 chiffres'),
   role: z.enum(['CUSTOMER', 'MERCHANT']).optional(),
+  email: z.string().email('Format email invalide').optional(),
+});
+
+const emailVerifySchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Le code doit contenir exactement 6 chiffres'),
+});
+
+const recoveryStartSchema = z.object({
+  email: z.string().email('Format email invalide'),
+});
+
+const recoveryVerifySchema = z.object({
+  email: z.string().email('Format email invalide'),
+  code: z.string().regex(/^\d{6}$/, 'Le code doit contenir exactement 6 chiffres'),
+});
+
+const rebindPhoneStartSchema = z.object({
+  recoveryToken: z.string().min(1, 'Token de récupération manquant'),
+  newPhone: z.string().min(1, 'Nouveau numéro requis'),
 });
 
 const refreshSchema = z.object({
@@ -183,6 +205,26 @@ export class AuthController {
 
       const challenge = verificationResult.challenge;
       const phoneE164 = challenge.phone;
+      if (!phoneE164) {
+        throw new BadRequestError('Numéro de téléphone manquant pour ce défi.');
+      }
+
+      // Cas spécial : Récupération de compte (RECOVER_PHONE)
+      if (challenge.purpose === ChallengePurpose.RECOVER_PHONE && challenge.userId) {
+        const recoveryRes = await RecoveryService.completePhoneRecovery(
+          challenge.userId,
+          phoneE164,
+          (req.headers['x-telegram-user-id'] as string) || undefined,
+          (req.headers['x-telegram-chat-id'] as string) || undefined
+        );
+
+        return res.status(200).json({
+          success: true,
+          message: 'Numéro de téléphone récupéré avec succès.',
+          isMerchantDelay: recoveryRes.isMerchantDelay,
+          pendingPhoneActivateAt: recoveryRes.pendingPhoneActivateAt,
+        }) as any;
+      }
 
       // 2. Recherche ou création de l'utilisateur
       let user = await prisma.user.findUnique({
@@ -190,11 +232,31 @@ export class AuthController {
         include: { shop: true, preferences: true },
       });
 
+      // Vérification d'unicité de l'email si fourni
+      let normalizedEmail: string | null = null;
+      if (parsed.data.email) {
+        normalizedEmail = parsed.data.email.toLowerCase().trim();
+        const conflict = await prisma.user.findFirst({
+          where: {
+            email: { equals: normalizedEmail, mode: 'insensitive' },
+            id: user ? { not: user.id } : undefined,
+          },
+        });
+        if (conflict) {
+          const conflictErr = new ConflictError('Cette adresse e-mail est déjà utilisée par un autre compte.');
+          (conflictErr as any).code = 'EMAIL_ALREADY_USED';
+          throw conflictErr;
+        }
+      }
+
       let isNewUser = false;
 
       const requestedRole = parsed.data.role === 'MERCHANT' ? Role.MERCHANT : Role.CUSTOMER;
 
       if (user) {
+        // Activation check pour pendingPhone
+        await RecoveryService.checkAndApplyPendingPhone(user.id);
+
         // Réactivation si désactivé (spec §7)
         if (user.status === 'DEACTIVATED') {
           user = await prisma.user.update({
@@ -206,8 +268,18 @@ export class AuthController {
           throw new ForbiddenError('Ce compte a été suspendu ou supprimé.');
         }
 
-        // Sécurité rôle : un utilisateur existant ne peut pas s'auto-attribuer le rôle MERCHANT via /verify
-        // L'accès au rôle commerçant nécessite le flux dédié de création de boutique (POST /shops)
+        // Si un nouvel e-mail a été renseigné et diffère de l'existant
+        if (normalizedEmail && normalizedEmail !== user.email) {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              email: normalizedEmail,
+              emailVerifiedAt: null,
+            },
+            include: { shop: true, preferences: true },
+          });
+          await EmailVerificationService.initiateEmailVerification(user.id, normalizedEmail);
+        }
       } else {
         isNewUser = true;
         const initialRoles = requestedRole === Role.MERCHANT ? [Role.CUSTOMER, Role.MERCHANT] : [Role.CUSTOMER];
@@ -217,6 +289,8 @@ export class AuthController {
         user = await prisma.user.create({
           data: {
             phoneE164,
+            email: normalizedEmail,
+            emailVerifiedAt: null,
             roles: initialRoles,
             activeMode: initialMode,
             status: 'ACTIVE',
@@ -230,6 +304,10 @@ export class AuthController {
           },
           include: { shop: true, preferences: true },
         });
+
+        if (normalizedEmail) {
+          await EmailVerificationService.initiateEmailVerification(user.id, normalizedEmail);
+        }
       }
 
       // 3. Création de la session (JWT RS256 15min + Refresh 7d)
@@ -253,6 +331,8 @@ export class AuthController {
           activeMode: user.activeMode,
           status: user.status,
           email: user.email,
+          emailVerified: Boolean(user.emailVerifiedAt),
+          email_verified: Boolean(user.emailVerifiedAt),
           fullName: user.fullName,
           avatarUrl: user.avatarUrl,
           shop: user.shop,
@@ -420,6 +500,7 @@ export class AuthController {
         shopStatus,
         role: updatedUser.roles[0] || 'CUSTOMER',
         email: updatedUser.email,
+        emailVerified: Boolean(updatedUser.emailVerifiedAt),
         phone: updatedUser.phoneE164,
         fullName: updatedUser.fullName,
         shopId: updatedUser.shop?.id ?? null,
@@ -441,6 +522,109 @@ export class AuthController {
         activeMode: targetMode,
         accessToken,
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /auth/email/verify
+   * Valide le code à 6 chiffres envoyé par e-mail et enregistre email_verified_at.
+   */
+  public static async verifyEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.sub;
+      if (!userId) throw new UnauthorizedError();
+
+      const parsed = emailVerifySchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
+      }
+
+      await EmailVerificationService.verifyEmail(userId, parsed.data.code);
+
+      res.status(200).json({
+        success: true,
+        message: 'Adresse e-mail vérifiée avec succès.',
+        emailVerified: true,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /auth/email/resend
+   * Renvoi d'un nouveau code de vérification d'e-mail (max 3 par heure).
+   */
+  public static async resendEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.sub;
+      if (!userId) throw new UnauthorizedError();
+
+      await EmailVerificationService.resendVerification(userId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Code de vérification renvoyé avec succès.',
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /auth/recovery/start
+   * Démarre la récupération du compte par e-mail avec anti-énumération (202 Accepted).
+   */
+  public static async recoveryStart(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parsed = recoveryStartSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
+      }
+
+      const result = await RecoveryService.startRecovery(parsed.data.email);
+      res.status(202).json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /auth/recovery/verify
+   * Vérifie le code de récupération et émet un recoveryToken temporaire (15 min).
+   */
+  public static async recoveryVerify(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parsed = recoveryVerifySchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
+      }
+
+      const result = await RecoveryService.verifyRecovery(parsed.data.email, parsed.data.code);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /auth/recovery/rebind-phone/start
+   * Vérifie le recoveryToken et initie le défi Telegram pour lier le nouveau numéro.
+   */
+  public static async recoveryRebindPhoneStart(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parsed = rebindPhoneStartSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors.map((e) => e.message).join(', '));
+      }
+
+      const result = await RecoveryService.startRebindPhone(
+        parsed.data.recoveryToken,
+        parsed.data.newPhone
+      );
+      res.status(200).json(result);
     } catch (err) {
       next(err);
     }

@@ -7,6 +7,7 @@ import {
   stopTelegramBot,
   initTelegramBotSubscriptions,
 } from './telegram-bot/telegram.service';
+import { initEmailSubscriptions } from './email-sender/email.consumer';
 
 export const app = express();
 app.use(express.json());
@@ -49,6 +50,7 @@ export async function startServer(): Promise<any> {
       try {
         await eventBus.connect();
         await initTelegramBotSubscriptions();
+        await initEmailSubscriptions();
       } catch (err: any) {
         console.error('[MS5-Notifications] Erreur connexion EventBus:', err.message);
       }

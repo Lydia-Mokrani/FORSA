@@ -11,6 +11,8 @@ export interface UserSessionData {
   activeMode: string;
   phoneE164?: string | null;
   email?: string | null;
+  emailVerifiedAt?: Date | null;
+  emailVerified?: boolean;
   fullName?: string | null;
   shop?: {
     id: string;
@@ -49,6 +51,9 @@ export async function createSession(
   const shopStatus = user.shop?.verificationStatus ?? null;
   const shopId = user.shop?.id ?? null;
   const primaryRole = user.roles[0] || 'CUSTOMER';
+  const emailVerified = typeof user.emailVerified === 'boolean'
+    ? user.emailVerified
+    : Boolean(user.emailVerifiedAt);
 
   const tokenPayload: TokenPayload = {
     sub: user.id,
@@ -57,6 +62,7 @@ export async function createSession(
     shopStatus,
     role: primaryRole,
     email: user.email,
+    emailVerified,
     phone: user.phoneE164,
     fullName: user.fullName,
     shopId,
@@ -157,6 +163,7 @@ export async function rotateRefreshToken(
   const shopStatus = session.user.shop?.verificationStatus ?? null;
   const shopId = session.user.shop?.id ?? null;
   const primaryRole = session.user.roles[0] || 'CUSTOMER';
+  const emailVerified = Boolean(session.user.emailVerifiedAt);
 
   const tokenPayload: TokenPayload = {
     sub: session.user.id,
@@ -165,6 +172,7 @@ export async function rotateRefreshToken(
     shopStatus,
     role: primaryRole,
     email: session.user.email,
+    emailVerified,
     phone: session.user.phoneE164,
     fullName: session.user.fullName,
     shopId,

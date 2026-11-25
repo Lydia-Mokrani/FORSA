@@ -1,0 +1,45 @@
+# Configuration dynamique Traefik v3 pour FORSA
+http:
+  routers:
+    recovery-start-router:
+      rule: "Path(`/api/auth/recovery/start`)"
+      entryPoints:
+        - "web"
+      priority: 100
+      middlewares:
+        - "recovery-ratelimit"
+      service: "ms1-accounts-service"
+
+    telegram-start-router:
+      rule: "Path(`/api/auth/telegram/start`)"
+      entryPoints:
+        - "web"
+      priority: 100
+      middlewares:
+        - "telegram-start-ratelimit"
+      service: "ms1-accounts-service"
+
+  middlewares:
+    recovery-ratelimit:
+      rateLimit:
+        average: 5
+        burst: 10
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    telegram-start-ratelimit:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+  services:
+    ms1-accounts-service:
+      loadBalancer:
+        servers:
+          - url: "http://ms1-accounts:3001"

@@ -51,9 +51,26 @@ Remplace e-mail + mot de passe. Un bot ne peut pas écrire à un numéro tant qu
 - Nonce à usage unique, courte durée (≈10 min). Code : 6 chiffres haché, TTL 5 min, 5 essais max.
 - Rate limit par numéro et par IP (ex. 3 démarrages / 10 min).
 - Jeton du bot en variable d'environnement ou Consul KV. Webhook : header secret Telegram ; en démo réseau univ. préférer **long polling** (`getUpdates`).
-- JWT d'accès 15 min (claims : `sub`, `roles`, `mode`, `shopStatus`), refresh à rotation.
+- JWT d'accès 15 min (claims : `sub`, `roles`, `mode`, `shopStatus`, `emailVerified`), refresh à rotation.
 - Opérations sensibles (suppression de compte, changement de numéro) : confirmation par code Telegram (remplace « mot de passe actuel » dans les maquettes).
-- Récupération en cas de perte du numéro : **à définir** (commerçants : appui sur leurs documents ; clients : décision produit).
+- Récupération en cas de perte du numéro : par e-mail vérifié obligatoire (Lot E1, voir §3.4).
+
+### 3.4 Vérification d'e-mail obligatoire et récupération de compte par e-mail (Lot E1)
+1. **E-mail obligatoire & vérifié :**
+   - L'e-mail est obligatoire lors de l'inscription pour les clients et les commerçants.
+   - L'e-mail ne permet JAMAIS de se connecter directement (seul le numéro Telegram authentifie l'utilisateur).
+   - L'e-mail sert exclusivement à la vérification d'identité et à la récupération du compte en cas de perte de numéro.
+   - À l'inscription ou en cas de modification dans `PUT /users/me`, un code à 6 chiffres est envoyé par e-mail (TTL 10 min, max 5 tentatives).
+   - Validation via `POST /auth/email/verify { code }` → renseigne `email_verified_at` et active le claim JWT `emailVerified: true`.
+   - Renvoi du code via `POST /auth/email/resend` limité à 3 demandes par heure.
+2. **Récupération de compte par e-mail :**
+   - `POST /auth/recovery/start { email }` : anti-énumération stricte (renvoie 202 synchrone avec message identique, traitement asynchrone via `setImmediate`, limite DB max 3 demandes / 24h sur `recovery_attempts` par condensat d'e-mail, rate-limit Traefik par IP).
+   - `POST /auth/recovery/verify { email, code }` : validation du code à 6 chiffres (TTL 15 min, max 5 tentatives) et émission d'un `recoveryToken` temporaire (15 min) à usage unique.
+   - `POST /auth/recovery/rebind-phone/start { recoveryToken, newPhone }` : vérification du token, validation du format E.164 algérien, vérification de conflit unique (409 `PHONE_ALREADY_IN_USE`), initialisation d'un défi Telegram et publication de `telegram.challenge.created` avec `nonceHash`.
+   - **Finalisation de la récupération :**
+     - **Clients :** activation immédiate du nouveau numéro avec e-mail d'alerte `phone-changed`.
+     - **Commerçants avec boutique approuvée :** délai de sécurité de 24h (`RECOVERY_MERCHANT_DELAY_HOURS`). Le numéro est stocké dans `pending_phone` avec échéance `pending_phone_activate_at`. Un e-mail d'avertissement `phone-change-pending` est envoyé avec le contact de sécurité support. L'activation est effectuée paresseusement lors de la connexion ou via `GET /users/me` une fois le délai écoulé.
+     - Toutes les sessions actives de l'utilisateur sont immédiatement révoquées et le `recoveryToken` est consommé.
 
 ## 4. Pages Figma MS1 → routes proposées
 Légende : [OK] = conforme à la décision Telegram ; [ADAPTER] = maquette basée e-mail/mot de passe/SMS à adapter ; [NOUVEAU] = écran Telegram à concevoir ; [GARDER?] = à décider.
@@ -140,16 +157,19 @@ Légende : [OK] = conforme à la décision Telegram ; [ADAPTER] = maquette basé
 - **MS1 → Bot (MS5) : `telegram.send.otp`**
   - File d'attente : `q.ms5-notifications.telegram.send.otp` (TTL 300s / 5 min).
   - Champs : `{ chatId, code, expiresAt, challengeId }`.
+- **MS1 → Expéditeur E-mail (MS5) : `email.send`**
+  - File d'attente : `q.ms5-notifications.email.send` (durable, DLQ `forsa.events.dlx`)
+  - Champs du payload : `{ eventId: string, to: string, template: 'verify' | 'recovery' | 'phone-changed' | 'phone-change-pending', locale?: string, data: { code?: string, delayHours?: number } }`
+  - Sécurité : E-mails masqués dans les logs (`a***@g***.com`), aucun code OTP ni token consigné dans les logs console.
+  - Consommateur MS5 : filtrage des messages expirés (TTL 10 min pour verify, 15 min pour recovery), déduplication par `eventId`, routage vers DLQ des templates non reconnus.
 - **MS1 → MS4 :** `shop.verification.requested`. **MS4 → MS1 :** `shop.verification.decided` (approved|rejected + motif), `account.suspended`, `account.reactivated`.
 - **MS1 → MS2 :** `account.status.changed` (masquer/rétablir offres). **MS1 → MS5 :** `account.status.changed`, `user.registered`.
-- Le service du bot vit dans MS5 (notifications) : Telegram remplace l'e-mail comme canal d'envoi. Il s'enregistre dans Consul.
+- Le service du bot et l'expéditeur e-mail vivent dans MS5 (notifications) : ils s'enregistrent dans Consul sans routes publiques Traefik.
 
-## 9. Décisions encore ouvertes (ne pas trancher seul)
-- Garder ou retirer Google/Apple. E-mail totalement facultatif ?
-- Emplacement du changement de mode dans l'UI (Paramètres, sidebar ou profil).
-- Délai de rétractation après suppression : aucun défini.
-- Récupération de compte si numéro perdu. Webhook vs long polling.
-- Noms exacts des documents demandés aux commerçants.
+## 9. Décisions de conception actées (Lot E1)
+- L'e-mail est obligatoire et obligatoirement vérifié pour tous les comptes. Il ne sert jamais d'identifiant de connexion, mais garantit la récupération de compte et l'intégrité des alertes sécurité.
+- Récupération de numéro : sécurisée par e-mail avec délai marchand de 24h pour protéger les commerçants vérifiés.
+- Décisions encore ouvertes : intégration OAuth Google (Lot G1 ultérieur), politique de suppression définitive vs rétractation.
 
 ## 10. Écarts à signaler à l'équipe
 - Le dossier UML (CU-02/03/04, F1.4, F1.5, F1.9, attribut `motDePasse`) décrit encore e-mail+mot de passe → à réécrire.

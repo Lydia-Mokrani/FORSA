@@ -23,6 +23,15 @@ authRouter.delete('/sessions/:id', authMiddleware, AuthController.revokeSession)
 // ─── Changement de Mode (spec §6 & §7) ────────────────────────────────────────
 authRouter.post('/switch-mode', authMiddleware, AuthController.switchMode);
 
+// ─── Vérification de l'E-mail (Lot E1) ─────────────────────────────────────────
+authRouter.post('/email/verify', authMiddleware, AuthController.verifyEmail);
+authRouter.post('/email/resend', authMiddleware, AuthController.resendEmail);
+
+// ─── Récupération de Compte par E-mail (Lot E1) ───────────────────────────────
+authRouter.post('/recovery/start', AuthController.recoveryStart);
+authRouter.post('/recovery/verify', AuthController.recoveryVerify);
+authRouter.post('/recovery/rebind-phone/start', AuthController.recoveryRebindPhoneStart);
+
 // ─── Clé Publique & JWKS (Validation inter-services sans appel réseau) ────────
 authRouter.get('/public-key', (_req, res) => {
   res.setHeader('Content-Type', 'text/plain');

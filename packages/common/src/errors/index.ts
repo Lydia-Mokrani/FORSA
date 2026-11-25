@@ -44,6 +44,12 @@ export class ConflictError extends ApiError {
   }
 }
 
+export class RateLimitError extends ApiError {
+  constructor(message: string = 'Trop de requêtes, veuillez réessayer plus tard.') {
+    super(429, 'RATE_LIMITED', message);
+  }
+}
+
 // Middleware Express standardisé respectant le contrat du projet
 export const errorHandler = (
   err: Error,

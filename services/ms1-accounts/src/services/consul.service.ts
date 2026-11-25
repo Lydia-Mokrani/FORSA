@@ -22,5 +22,13 @@ export const consul = new ConsulRegistry({
     `traefik.http.middlewares.ms1-start-ratelimit.ratelimit.average=${process.env.TRAEFIK_START_RATE_LIMIT_AVERAGE || '10'}`,
     `traefik.http.middlewares.ms1-start-ratelimit.ratelimit.burst=${process.env.TRAEFIK_START_RATE_LIMIT_BURST || '20'}`,
     'traefik.http.middlewares.ms1-start-ratelimit.ratelimit.period=1m',
+
+    'traefik.http.routers.ms1-accounts-recovery.rule=Path(`/api/auth/recovery/start`)',
+    'traefik.http.routers.ms1-accounts-recovery.entrypoints=web',
+    'traefik.http.routers.ms1-accounts-recovery.priority=100',
+    'traefik.http.routers.ms1-accounts-recovery.middlewares=ms1-recovery-ratelimit',
+    `traefik.http.middlewares.ms1-recovery-ratelimit.ratelimit.average=${process.env.TRAEFIK_RECOVERY_RATE_LIMIT_AVERAGE || '5'}`,
+    `traefik.http.middlewares.ms1-recovery-ratelimit.ratelimit.burst=${process.env.TRAEFIK_RECOVERY_RATE_LIMIT_BURST || '10'}`,
+    'traefik.http.middlewares.ms1-recovery-ratelimit.ratelimit.period=1m',
   ],
 });

@@ -104,6 +104,142 @@ paths:
         '200':
           description: Clé publique au format PEM
 
+  /api/auth/email/verify:
+    post:
+      summary: Validation du code de vérification à 6 chiffres envoyé par e-mail
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+                  example: '123456'
+      responses:
+        '200':
+          description: E-mail vérifié avec succès
+        '400':
+          description: Code invalide, expiré ou tentatives épuisées
+        '401':
+          description: Non authentifié
+
+  /api/auth/email/resend:
+    post:
+      summary: Renvoi d'un code de vérification par e-mail (max 3 par heure)
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Nouveau code de vérification envoyé
+        '401':
+          description: Non authentifié
+        '429':
+          description: Limite de taux dépassée (max 3 par heure)
+
+  /api/auth/recovery/start:
+    post:
+      summary: Début du flux de récupération de compte par e-mail (anti-énumération)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: 'alice@example.com'
+      responses:
+        '202':
+          description: Requête acceptée (réponse identique que l'e-mail existe ou non)
+        '400':
+          description: Format e-mail invalide
+        '429':
+          description: Limite de taux dépassée (max 3 par 24h)
+
+  /api/auth/recovery/verify:
+    post:
+      summary: Validation du code de récupération et émission d'un token à usage unique (15 min)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+      responses:
+        '200':
+          description: Code valide, token de récupération émis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recoveryToken:
+                    type: string
+        '400':
+          description: Code invalide, expiré ou tentatives épuisées
+
+  /api/auth/recovery/rebind-phone/start:
+    post:
+      summary: Liaison d'un nouveau numéro de téléphone via token de récupération et Telegram
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recoveryToken, newPhone]
+              properties:
+                recoveryToken:
+                  type: string
+                newPhone:
+                  type: string
+                  example: '+213555123456'
+      responses:
+        '200':
+          description: Défi Telegram initialisé
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challengeId:
+                    type: string
+                  deepLink:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Numéro invalide
+        '401':
+          description: Token de récupération invalide ou expiré
+        '409':
+          description: Numéro de téléphone déjà associé à un autre compte
+        '503':
+          description: Broker indisponible
+
   /api/users/me:
     get:
       summary: Récupération du profil de l'utilisateur connecté

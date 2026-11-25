@@ -1,9 +1,11 @@
 import crypto from 'crypto';
 import { eventBus } from '../services/event-bus';
 import { prisma } from '../config/prisma';
+import { config } from '../config/env';
 import { maskPhone } from '../utils/mask-phone';
 import { ChallengePurpose, ChallengeStatus } from '@prisma/client';
 import { hashString } from '../services/challenge.service';
+import { RecoveryService } from '../services/recovery.service';
 
 export async function initAuthEventListeners(): Promise<void> {
   // File partagée entre toutes les instances MS1 (competing consumers, un seul traitement par événement)
@@ -125,6 +127,41 @@ export async function initAuthEventListeners(): Promise<void> {
             `[AuthEventListener] Conflit de contrainte unique lors du changement de numéro (userId=${challenge.userId}, raison=${failReason}):`,
             txError.message
           );
+          return;
+        }
+      }
+
+      // ─── CAS 1B : RÉCUPÉRATION DU NUMÉRO (RECOVER_PHONE) ───────────────────
+      if (challenge.purpose === ChallengePurpose.RECOVER_PHONE && challenge.userId) {
+        try {
+          const recoveryRes = await RecoveryService.completePhoneRecovery(
+            challenge.userId,
+            payload.phone,
+            payload.telegramUserId,
+            payload.chatId
+          );
+
+          await prisma.authChallenge.update({
+            where: { id: challenge.id },
+            data: { status: ChallengeStatus.VERIFIED },
+          });
+
+          const msg = recoveryRes.isMerchantDelay
+            ? `🔒 *Demande de récupération enregistrée.*\n\nPar mesure de sécurité pour votre boutique vérifiée, votre nouveau numéro sera activé dans ${config.recoveryMerchantDelayHours} heures.`
+            : `✅ *Votre numéro a été récupéré avec succès !*\n\nVotre compte FORSA est désormais associé au numéro \`${payload.phone}\`.`;
+
+          await eventBus.publish('telegram.send.message', {
+            chatId: String(payload.chatId),
+            text: msg,
+          });
+
+          return;
+        } catch (recoveryErr: any) {
+          console.error('[AuthEventListener] Erreur lors de la récupération du numéro:', recoveryErr.message);
+          await prisma.authChallenge.update({
+            where: { id: challenge.id },
+            data: { status: ChallengeStatus.FAILED },
+          }).catch(() => {});
           return;
         }
       }
