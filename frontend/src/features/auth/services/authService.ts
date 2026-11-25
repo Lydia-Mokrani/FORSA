@@ -20,6 +20,7 @@ export interface ShopInfo {
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
   address?: string;
   category?: string;
+  rejectReason?: string | null;
 }
 
 export interface UserPreferences {
