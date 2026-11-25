@@ -1,28 +1,46 @@
 import { config } from '../config/env';
-import { prisma } from '../config/prisma';
-import { eventBus } from './event-bus';
-import { normalizeToE164 } from '../utils/phone';
-import { hashString } from './challenge.service';
-import { ChallengePurpose, ChallengeStatus } from '@prisma/client';
+import { eventBus } from '../services/event-bus';
+import { maskPhone, normalizeToE164 } from '@forsa/common';
 
 let isPolling = false;
 let pollingAbortController: AbortController | null = null;
+let offset = 0;
 
-// Mémoire des sessions de chat Telegram en attente de contact (chatId -> challengeId)
-export const chatToChallengeMap = new Map<number | string, string>();
+// Définition d'un défi en attente stocké en mémoire par nonce
+export interface PendingChallenge {
+  challengeId: string;
+  phone: string;
+  expiresAt?: Date | string;
+}
+
+// Mémoire des défis en attente (nonce -> { challengeId, phone, expiresAt })
+export const pendingChallengesByNonce = new Map<string, PendingChallenge>();
+
+// Mémoire des sessions de chat Telegram en attente de contact (chatId -> { challengeId, phone })
+export const chatToChallengeMap = new Map<number | string, { challengeId: string; phone: string }>();
 
 /**
- * Met à jour le flag telegramBlocked = true pour l'utilisateur associé au chatId
+ * Enregistre un défi créé reçu via le bus d'événements
  */
-export async function handleBotBlockedByUser(chatId: string | number): Promise<void> {
+export function registerPendingChallenge(nonce: string, challenge: PendingChallenge): void {
+  pendingChallengesByNonce.set(nonce, challenge);
+}
+
+/**
+ * Supprime les webhooks actifs de Telegram pour activer le mode Long Polling
+ */
+export async function deleteWebhook(token: string): Promise<boolean> {
   try {
-    await prisma.user.updateMany({
-      where: { telegramChatId: String(chatId) },
-      data: { telegramBlocked: true },
-    });
-    console.warn(`[TelegramService] L'utilisateur (chatId: ${chatId}) a bloqué le bot. telegram_blocked = true.`);
+    const res = await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`);
+    const data: any = await res.json().catch(() => ({}));
+    if (data?.ok) {
+      console.log('[TelegramBot] ✅ Webhook Telegram supprimé (mode Long Polling activé).');
+      return true;
+    }
+    return false;
   } catch (err: any) {
-    console.error('[TelegramService] Erreur mise à jour telegram_blocked:', err.message);
+    console.warn('[TelegramBot] ⚠️ Impossible de supprimer le webhook:', err.message);
+    return false;
   }
 }
 
@@ -68,13 +86,13 @@ export async function sendTelegramOtpCode(
 
     // Détection si l'utilisateur a bloqué le bot (403 Forbidden)
     if (res.status === 403 || data?.error_code === 403 || data?.description?.includes('bot was blocked by the user')) {
-      await handleBotBlockedByUser(chatId);
+      console.warn(`[TelegramBot] ⚠️ L'utilisateur (chatId: ${chatId}) a bloqué le bot (HTTP 403).`);
       return false;
     }
 
     return !!data.ok;
   } catch (err: any) {
-    console.error('[TelegramService] Erreur sendTelegramOtpCode:', err.message);
+    console.error('[TelegramBot] Erreur sendTelegramOtpCode:', err.message);
     return false;
   }
 }
@@ -107,22 +125,22 @@ export async function sendTelegramMessage(
 
     // Détection si l'utilisateur a bloqué le bot (403 Forbidden)
     if (res.status === 403 || data?.error_code === 403 || data?.description?.includes('bot was blocked by the user')) {
-      await handleBotBlockedByUser(chatId);
+      console.warn(`[TelegramBot] ⚠️ L'utilisateur (chatId: ${chatId}) a bloqué le bot (HTTP 403).`);
       return false;
     }
 
     return !!data.ok;
   } catch (err: any) {
-    console.error('[TelegramService] Erreur sendTelegramMessage:', err.message);
+    console.error('[TelegramBot] Erreur sendTelegramMessage:', err.message);
     return false;
   }
 }
 
 /**
- * Traitement d'une mise à jour Telegram reçue (Webhook ou Long Polling)
+ * Traitement d'une mise à jour Telegram reçue (Long Polling)
  */
 export async function handleTelegramUpdate(update: any): Promise<void> {
-  const message = update.message;
+  const message = update?.message;
   if (!message || !message.chat) return;
 
   const chatId = message.chat.id;
@@ -139,14 +157,7 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
       return;
     }
 
-    const nonceHash = hashString(nonce);
-    const challenge = await prisma.authChallenge.findFirst({
-      where: {
-        nonceHash,
-        status: ChallengeStatus.PENDING,
-        expiresAt: { gt: new Date() },
-      },
-    });
+    const challenge = pendingChallengesByNonce.get(nonce);
 
     if (!challenge) {
       await sendTelegramMessage(
@@ -157,18 +168,17 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
       return;
     }
 
-    chatToChallengeMap.set(chatId, challenge.id);
+    // Associer la session de ce chat au défi en attente
+    chatToChallengeMap.set(chatId, {
+      challengeId: challenge.challengeId,
+      phone: challenge.phone,
+    });
 
-    const isChangePhone = challenge.purpose === ChallengePurpose.CHANGE_PHONE;
-    const promptMsg = isChangePhone
-      ? `👋 Bonjour !\n\n` +
-        `🔄 *Mise à jour de votre numéro FORSA*\n` +
-        `Nouveau numéro demandé : \`${challenge.phone}\`\n\n` +
-        `👇 *Appuyez sur le bouton ci-dessous pour confirmer que vous possédez ce numéro :*`
-      : `👋 Bonjour !\n\n` +
-        `🛡️ *Connexion sécurisée FORSA*\n` +
-        `Numéro demandé : \`${challenge.phone}\`\n\n` +
-        `👇 *Appuyez sur le bouton ci-dessous pour confirmer votre numéro :*`;
+    const promptMsg =
+      `👋 Bonjour !\n\n` +
+      `🛡️ *Connexion sécurisée FORSA*\n` +
+      `Numéro demandé : \`${challenge.phone}\`\n\n` +
+      `👇 *Appuyez sur le bouton ci-dessous pour confirmer votre numéro :*`;
 
     await sendTelegramMessage(chatId, promptMsg, {
       keyboard: [
@@ -199,25 +209,9 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     }
 
     // Récupérer le défi associé au chat
-    let challengeId = chatToChallengeMap.get(chatId);
-    let challenge: any = null;
+    const session = chatToChallengeMap.get(chatId);
 
-    if (challengeId) {
-      challenge = await prisma.authChallenge.findUnique({ where: { id: challengeId } });
-    }
-
-    if (!challenge || challenge.status !== ChallengeStatus.PENDING || challenge.expiresAt <= new Date()) {
-      challenge = await prisma.authChallenge.findFirst({
-        where: {
-          phone: contactPhone,
-          status: ChallengeStatus.PENDING,
-          expiresAt: { gt: new Date() },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-    }
-
-    if (!challenge) {
+    if (!session) {
       await sendTelegramMessage(
         chatId,
         '⚠️ *Session expirée ou introuvable.*\n\nVeuillez relancer votre demande sur FORSA.',
@@ -228,12 +222,6 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
 
     // 🔒 VÉRIFICATION 1 : Le contact partagé doit appartenir à l'émetteur (contact.user_id === from.id)
     if (contactUserId && senderId && contactUserId !== senderId) {
-      // Défi FAILED + message clair
-      await prisma.authChallenge.update({
-        where: { id: challenge.id },
-        data: { status: ChallengeStatus.FAILED },
-      }).catch(() => {});
-
       await sendTelegramMessage(
         chatId,
         '❌ *Attention — Sécurité :* Le contact partagé ne correspond pas à votre propre compte Telegram. Défi annulé.',
@@ -243,22 +231,16 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
       return;
     }
 
-    // 🔒 VÉRIFICATION 2 : Numéro normalisé === numéro du défi (ou newPhone pour CHANGE_PHONE)
-    const expectedPhone = challenge.newPhone || challenge.phone;
+    // 🔒 VÉRIFICATION 2 : Numéro normalisé === numéro du défi attendu
+    const expectedPhone = session.phone;
     if (expectedPhone !== contactPhone) {
-      // Défi FAILED + message clair
-      await prisma.authChallenge.update({
-        where: { id: challenge.id },
-        data: { status: ChallengeStatus.FAILED },
-      }).catch(() => {});
-
       if (process.env.NODE_ENV === 'development') {
-        console.warn(`[TelegramSecurity] Mismatch : Contact (${contactPhone}) != Attendu (${expectedPhone})`);
+        console.warn(`[TelegramSecurity] Mismatch : Contact (${maskPhone(contactPhone)}) != Attendu (${maskPhone(expectedPhone)})`);
       }
       await sendTelegramMessage(
         chatId,
         `❌ *Numéro non concordant*\n\n` +
-        `Le contact partagé (\`${contactPhone}\`) ne correspond pas au numéro de la demande (\`${expectedPhone}\`).\n\n` +
+        `Le contact partagé ne correspond pas au numéro de la demande.\n\n` +
         `Défi annulé. Veuillez utiliser le compte Telegram correspondant à votre numéro.`,
         { remove_keyboard: true }
       );
@@ -267,13 +249,16 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     }
 
     // ✅ Vérifications réussies : Publier telegram.contact.received sur le bus d'événements
-    // Le module bot est isolé : il ne fait aucune mutation métier directe et ne génère aucun code.
-    await eventBus.publish('telegram.contact.received', {
-      challengeId: challenge.id,
-      phone: contactPhone,
-      telegramUserId: String(senderId),
-      chatId: String(chatId),
-    }).catch((e) => console.warn('[EventBus] Erreur publish telegram.contact.received:', e.message));
+    try {
+      await eventBus.publish('telegram.contact.received', {
+        challengeId: session.challengeId,
+        phone: contactPhone,
+        telegramUserId: String(senderId),
+        chatId: String(chatId),
+      });
+    } catch (e: any) {
+      console.warn('[EventBus] Erreur publish telegram.contact.received:', e.message);
+    }
 
     // Nettoyer la session en cours
     chatToChallengeMap.delete(chatId);
@@ -284,14 +269,30 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
  * Abonnements du bot aux événements émis par MS1
  */
 export async function initTelegramBotSubscriptions(): Promise<void> {
-  // Consommation de telegram.send.otp
+  // Consommation des défis créés émis par MS1
+  await eventBus.subscribe('telegram.challenge.created', async (event) => {
+    const payload = (event.payload || event.data) as {
+      challengeId: string;
+      nonce: string;
+      phone: string;
+      expiresAt?: Date | string;
+    };
+    if (payload?.nonce && payload?.challengeId && payload?.phone) {
+      registerPendingChallenge(payload.nonce, {
+        challengeId: payload.challengeId,
+        phone: payload.phone,
+        expiresAt: payload.expiresAt,
+      });
+    }
+  }, 'q.ms5-notifications.telegram.challenge.created');
+
+  // Consommation de telegram.send.otp (avec drop si expiré)
   await eventBus.subscribe('telegram.send.otp', async (event) => {
-    // Vérification de validité temporelle : drop du message si occurredAt + TTL est dépassé
-    const otpTtlSeconds = parseInt(process.env.OTP_TTL_SECONDS || '300', 10);
+    const otpTtlSeconds = config.otpTtlSeconds;
     if (event.occurredAt) {
       const occurredMs = new Date(event.occurredAt).getTime();
       if (!isNaN(occurredMs) && Date.now() > occurredMs + otpTtlSeconds * 1000) {
-        console.warn(`[TelegramService] OTP expiré (émis il y a > ${otpTtlSeconds}s). Message abandonné.`);
+        console.warn(`[TelegramBot] ⏰ OTP expiré (émis il y a > ${otpTtlSeconds}s). Message abandonné.`);
         return;
       }
     }
@@ -305,7 +306,7 @@ export async function initTelegramBotSubscriptions(): Promise<void> {
     if (payload?.chatId && payload?.code) {
       await sendTelegramOtpCode(payload.chatId, payload.code);
     }
-  });
+  }, 'q.ms5-notifications.telegram.send.otp');
 
   // Consommation de telegram.send.message
   await eventBus.subscribe('telegram.send.message', async (event) => {
@@ -316,21 +317,54 @@ export async function initTelegramBotSubscriptions(): Promise<void> {
     if (payload?.chatId && payload?.text) {
       await sendTelegramMessage(payload.chatId, payload.text, { remove_keyboard: true });
     }
-  });
+  }, 'q.ms5-notifications.telegram.send.message');
 }
 
 /**
- * Démarre le polling automatique du bot Telegram en arrière-plan
+ * Effectue un cycle de long polling getUpdates
  */
-export async function startTelegramBot(): Promise<void> {
-  if (!config.telegramBotEnabled) {
-    console.log('[TelegramService] TELEGRAM_BOT_ENABLED=false. Le polling du bot Telegram est désactivé sur cette instance.');
-    return;
+export async function pollUpdatesOnce(): Promise<boolean> {
+  const token = config.telegramBotToken;
+  if (!token) return false;
+
+  const url = `https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=20`;
+  const res = await fetch(url, { signal: pollingAbortController?.signal });
+
+  if (!res.ok) {
+    if (res.status === 409) {
+      console.error('[TelegramBot] ❌ ERREUR 409 CONFLICT: Une autre instance du bot Telegram tourne déjà avec ce token. Arrêt immédiat.');
+      isPolling = false;
+      process.exit(1);
+    }
+    if (res.status === 401 || res.status === 404) {
+      console.error('[TelegramBot] ❌ Token bot invalide (HTTP ' + res.status + '). Polling arrêté.');
+      isPolling = false;
+      return false;
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+    return true;
   }
 
+  const data: any = await res.json();
+  if (data?.ok && Array.isArray(data.result)) {
+    for (const update of data.result) {
+      offset = update.update_id + 1;
+      await handleTelegramUpdate(update);
+    }
+  }
+  return true;
+}
+
+/**
+ * Démarre le polling automatique du bot Telegram (Singleton)
+ */
+export async function startTelegramBot(): Promise<void> {
   const token = config.telegramBotToken;
   if (!token) {
-    console.log('[TelegramService] TELEGRAM_BOT_TOKEN non configuré. Bot désactivé.');
+    if (config.isProduction) {
+      throw new Error('FATAL: TELEGRAM_BOT_TOKEN manquant pour démarrer le bot Telegram en production.');
+    }
+    console.warn('[TelegramBot] ⚠️ TELEGRAM_BOT_TOKEN non configuré. Bot inactif en développement.');
     return;
   }
 
@@ -338,39 +372,23 @@ export async function startTelegramBot(): Promise<void> {
   isPolling = true;
   pollingAbortController = new AbortController();
 
-  console.log('[TelegramService] 🤖 Bot Telegram actif en mode Long Polling...');
+  // 1. Suppression préalable de tout webhook résiduel
+  await deleteWebhook(token);
 
-  let offset = 0;
+  console.log('[TelegramBot] 🤖 Bot Telegram actif en mode Long Polling (Singleton MS5)...');
 
   (async () => {
     while (isPolling) {
       try {
-        const url = `https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=20`;
-        const res = await fetch(url, { signal: pollingAbortController?.signal });
-        if (!res.ok) {
-          if (res.status === 401 || res.status === 404) {
-            console.error('[TelegramService] Token bot invalide. Polling arrêté.');
-            isPolling = false;
-            break;
-          }
-          await new Promise((r) => setTimeout(r, 3000));
-          continue;
-        }
-
-        const data: any = await res.json();
-        if (data.ok && Array.isArray(data.result)) {
-          for (const update of data.result) {
-            offset = update.update_id + 1;
-            await handleTelegramUpdate(update);
-          }
-        }
+        const keepGoing = await pollUpdatesOnce();
+        if (!keepGoing) break;
       } catch (err: any) {
         if (err.name === 'AbortError') break;
         await new Promise((r) => setTimeout(r, 4000));
       }
     }
   })().catch((err) => {
-    console.error('[TelegramService] Erreur boucle polling:', err);
+    console.error('[TelegramBot] Erreur boucle polling:', err);
   });
 }
 
@@ -383,5 +401,5 @@ export function stopTelegramBot(): void {
     pollingAbortController.abort();
     pollingAbortController = null;
   }
-  console.log('[TelegramService] Bot Telegram arrêté.');
+  console.log('[TelegramBot] Bot Telegram arrêté.');
 }

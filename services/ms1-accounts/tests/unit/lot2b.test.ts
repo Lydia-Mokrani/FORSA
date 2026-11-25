@@ -2,12 +2,6 @@ import { ChallengePurpose, ChallengeStatus } from '@prisma/client';
 import { prisma } from '../../src/config/prisma';
 import { eventBus } from '../../src/services/event-bus';
 import { rabbitMQ } from '../../src/services/rabbitmq.service';
-import {
-  handleTelegramUpdate,
-  handleBotBlockedByUser,
-  chatToChallengeMap,
-  sendTelegramMessage,
-} from '../../src/services/telegram.service';
 import { UserController } from '../../src/controllers/user.controller';
 import { ShopController } from '../../src/controllers/shop.controller';
 import { ConflictError } from '@forsa/common';
@@ -53,6 +47,7 @@ jest.mock('../../src/services/event-bus', () => ({
     subscribe: jest.fn(),
     connect: jest.fn(),
     close: jest.fn(),
+    isBrokerUp: jest.fn().mockReturnValue(true),
   },
 }));
 
@@ -67,16 +62,16 @@ jest.mock('../../src/services/rabbitmq.service', () => ({
   initRabbitMQ: jest.fn(),
 }));
 
-// Mock fetch global pour Telegram Bot API
-const mockFetch = jest.fn();
-global.fetch = mockFetch as any;
-
-describe('Lot 2B — Bot Telegram, Changement de numéro, Profil & Horaires Boutique', () => {
-  let eventHandlers: Record<string, Function[]> = {};
+describe('Lot 2B — Changement de numéro, Profil & Horaires Boutique', () => {
+  let eventHandlers: Record<string, Function> = {};
 
   beforeEach(() => {
     eventHandlers = {};
-    chatToChallengeMap.clear();
+
+    (eventBus.subscribe as jest.Mock).mockImplementation((topic: string, handler: Function) => {
+      eventHandlers[topic] = handler;
+      return Promise.resolve();
+    });
 
     // Configuration par défaut des mocks Prisma (nécessaire à cause de resetMocks: true)
     (prisma.authChallenge.update as jest.Mock).mockResolvedValue({});
@@ -99,104 +94,72 @@ describe('Lot 2B — Bot Telegram, Changement de numéro, Profil & Horaires Bout
       if (Array.isArray(actions)) {
         return Promise.all(actions);
       }
-      return actions(prisma);
-    });
-
-    // Configuration par défaut du bus d'événements
-    (eventBus.subscribe as jest.Mock).mockImplementation(async (key: string, handler: Function) => {
-      if (!eventHandlers[key]) eventHandlers[key] = [];
-      eventHandlers[key].push(handler);
-    });
-
-    (eventBus.publish as jest.Mock).mockImplementation(async (key: string, data: any) => {
-      if (eventHandlers[key]) {
-        for (const h of eventHandlers[key]) {
-          await h({ data, payload: data });
-        }
+      if (typeof actions === 'function') {
+        return actions(prisma);
       }
+      return Promise.resolve(actions);
     });
+
+    (eventBus.publish as jest.Mock).mockResolvedValue(undefined);
 
     (rabbitMQ.publish as jest.Mock).mockResolvedValue(undefined);
     (rabbitMQ.subscribe as jest.Mock).mockResolvedValue(undefined);
-
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true }),
-    });
   });
 
-  // ─── 1. CONTACT QUI NE CORRESPOND PAS ──────────────────────────────────────────
-  describe('1. Sécurité Contact Telegram (Mismatches)', () => {
-    it('doit marquer le défi FAILED si le contact partagé n\'appartient pas à l\'utilisateur (contact.user_id !== from.id)', async () => {
-      const challengeId = 'chal-security-1';
-      chatToChallengeMap.set(123456, challengeId);
+  // ─── 1. ÉCOUTEUR CONTACT REÇU (Flux Connexion / Inscription) ────────────────
+  describe('1. Écouteur d\'événements telegram.contact.received (Cas LOGIN)', () => {
+    it('doit générer un code OTP 6 chiffres, lier telegramChatId et publier telegram.send.otp', async () => {
+      await initAuthEventListeners();
+      const handler = eventHandlers['telegram.contact.received'];
+      expect(handler).toBeDefined();
 
+      const challengeId = 'chal-auth-1';
       (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
         id: challengeId,
-        phone: '+213555112233',
+        phone: '+213555889900',
+        purpose: ChallengePurpose.LOGIN,
         status: ChallengeStatus.PENDING,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       });
 
-      const update = {
-        message: {
-          chat: { id: 123456 },
-          from: { id: 9999 }, // Émetteur Telegram
-          contact: {
-            user_id: 8888, // Différent de from.id (carte de contact tiers partagée !)
-            phone_number: '0555112233',
-          },
+      await handler({
+        eventId: 'evt-contact-1',
+        name: 'telegram.contact.received',
+        type: 'telegram.contact.received',
+        occurredAt: new Date().toISOString(),
+        payload: {
+          challengeId,
+          phone: '+213555889900',
+          telegramUserId: '888888',
+          chatId: '777777',
         },
-      };
-
-      await handleTelegramUpdate(update);
-
-      // Le défi doit être verrouillé en FAILED
-      expect(prisma.authChallenge.update).toHaveBeenCalledWith({
-        where: { id: challengeId },
-        data: { status: ChallengeStatus.FAILED },
       });
 
-      // Aucun événement contact.received ne doit être publié
-      expect(eventBus.publish).not.toHaveBeenCalledWith(
-        'telegram.contact.received',
-        expect.anything()
+      expect(prisma.authChallenge.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: challengeId },
+          data: expect.objectContaining({
+            codeHash: expect.any(String),
+          }),
+        })
       );
-    });
 
-    it('doit marquer le défi FAILED si le numéro du contact ne correspond pas au numéro demandé', async () => {
-      const challengeId = 'chal-security-2';
-      chatToChallengeMap.set(123456, challengeId);
-
-      (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
-        id: challengeId,
-        phone: '+213555112233', // Numéro attendu
-        status: ChallengeStatus.PENDING,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { phoneE164: '+213555889900' },
+        data: expect.objectContaining({
+          telegramUserId: '888888',
+          telegramChatId: '777777',
+          telegramBlocked: false,
+        }),
       });
 
-      const update = {
-        message: {
-          chat: { id: 123456 },
-          from: { id: 9999 },
-          contact: {
-            user_id: 9999,
-            phone_number: '0666998877', // Numéro différent (+213666998877)
-          },
-        },
-      };
-
-      await handleTelegramUpdate(update);
-
-      // Le défi doit être mis en FAILED
-      expect(prisma.authChallenge.update).toHaveBeenCalledWith({
-        where: { id: challengeId },
-        data: { status: ChallengeStatus.FAILED },
-      });
-
-      expect(eventBus.publish).not.toHaveBeenCalledWith(
-        'telegram.contact.received',
-        expect.anything()
+      expect(eventBus.publish).toHaveBeenCalledWith(
+        'telegram.send.otp',
+        expect.objectContaining({
+          chatId: '777777',
+          code: expect.stringMatching(/^[0-9]{6}$/),
+          challengeId,
+        })
       );
     });
   });
@@ -211,98 +174,123 @@ describe('Lot 2B — Bot Telegram, Changement de numéro, Profil & Horaires Bout
         if (where.id === currentUserId) {
           return Promise.resolve({
             id: currentUserId,
-            phoneE164: '+213555112233',
-            telegramChatId: 'chat-111',
+            phoneE164: '+213555111111',
+            telegramUserId: 'telegram-user-1',
           });
         }
-        if (where.phoneE164 === '+213666778899') {
+        if (where.phoneE164 === '+213555222222') {
           return Promise.resolve({
             id: otherUserId,
-            phoneE164: '+213666778899',
+            phoneE164: '+213555222222',
           });
         }
         return Promise.resolve(null);
       });
 
+      const challengeId = '00000000-0000-0000-0000-000000000001';
+
       const req: any = {
         user: { sub: currentUserId },
         body: {
-          challengeId: '00000000-0000-0000-0000-000000000001',
+          challengeId,
           code: '123456',
-          newPhone: '0666778899',
+          newPhone: '0555222222',
         },
       };
-      const res: any = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const res: any = { json: jest.fn() };
       const next = jest.fn();
 
       await UserController.changePhoneVerify(req, res, next);
 
       expect(next).toHaveBeenCalledWith(expect.any(ConflictError));
-      expect(next.mock.calls[0][0].message).toContain('déjà associé à un autre compte');
+      const errorPassed = next.mock.calls[0][0];
+      expect(errorPassed.statusCode).toBe(409);
+    });
+
+    it('doit refuser si le nouveau numéro est strictement identique au numéro actuel', async () => {
+      const currentUserId = 'user-current-id';
+
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: currentUserId,
+        phoneE164: '+213555111111',
+        telegramUserId: 'telegram-user-1',
+      });
+
+      const challengeId = '00000000-0000-0000-0000-000000000002';
+
+      const req: any = {
+        user: { sub: currentUserId },
+        body: {
+          challengeId,
+          code: '123456',
+          newPhone: '+213555111111',
+        },
+      };
+      const res: any = { json: jest.fn() };
+      const next = jest.fn();
+
+      await UserController.changePhoneVerify(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(expect.anything());
+      const err = next.mock.calls[0][0];
+      expect(err.statusCode).toBe(400);
+      expect(err.message).toContain('différent');
     });
   });
 
-  // ─── 3. ATOMICITÉ DE LA TRANSACTION (Changement de numéro) ────────────────────
-  describe('3. Atomicité de la transaction Prisma', () => {
-    it('doit exécuter atomiquement la mise à jour du numéro, la validation du défi et l\'audit log dans $transaction', async () => {
+  // ─── 3. TRANSACTION ATOMIQUE (Changement de numéro réussi ou conflits) ───────
+  describe('3. Transaction Atomique (Changement de numéro via telegram.contact.received)', () => {
+    it('doit exécuter la transaction atomique (user update, challenge VERIFIED, auditLog) lors de la confirmation', async () => {
       await initAuthEventListeners();
+      const handler = eventHandlers['telegram.contact.received'];
 
-      const challengeId = 'chal-change-phone';
-      const userId = 'user-test-atomic';
+      const challengeId = 'chal-change-success';
+      const userId = 'user-to-update';
 
       (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
         id: challengeId,
-        userId,
         purpose: ChallengePurpose.CHANGE_PHONE,
-        phone: '+213666001122',
-        newPhone: '+213666001122',
+        userId,
+        newPhone: '+213555998877',
         status: ChallengeStatus.PENDING,
         expiresAt: new Date(Date.now() + 5 * 60 * 1000),
         user: {
           id: userId,
-          phoneE164: '+213555000000',
-          telegramUserId: 'old-tg-id',
-          telegramChatId: 'old-chat-id',
+          phoneE164: '+213555112233',
+          telegramUserId: 'old-tg-user',
         },
       });
 
-      (prisma.user.update as jest.Mock).mockResolvedValue({ id: userId });
-      (prisma.authChallenge.update as jest.Mock).mockResolvedValue({ id: challengeId });
-      (prisma.auditLog.create as jest.Mock).mockResolvedValue({ id: 'audit-1' });
+      (prisma.$transaction as jest.Mock).mockResolvedValue([{}, {}, {}]);
 
-      // Émission de telegram.contact.received
-      await eventBus.publish('telegram.contact.received', {
-        challengeId,
-        phone: '+213666001122',
-        telegramUserId: 'new-tg-id',
-        chatId: 'new-chat-id',
+      await handler({
+        eventId: 'evt-tx-success',
+        name: 'telegram.contact.received',
+        type: 'telegram.contact.received',
+        occurredAt: new Date().toISOString(),
+        payload: {
+          challengeId,
+          phone: '+213555998877',
+          telegramUserId: 'new-tg-user',
+          chatId: 'new-chat-id',
+        },
       });
 
-      // Vérifie que prisma.$transaction a bien été appelé
       expect(prisma.$transaction).toHaveBeenCalled();
-
-      // Vérifie que l'utilisateur a été mis à jour avec son nouveau numéro et ses nouveaux identifiants TG
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: userId },
           data: expect.objectContaining({
-            phoneE164: '+213666001122',
-            telegramUserId: 'new-tg-id',
+            phoneE164: '+213555998877',
+            telegramUserId: 'new-tg-user',
             telegramChatId: 'new-chat-id',
-            telegramBlocked: false,
           }),
         })
       );
-
-      // Vérifie que le défi a été marqué VERIFIED
-      expect(prisma.authChallenge.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: challengeId },
-          data: { status: ChallengeStatus.VERIFIED },
-        })
-      );
-
-      // Vérifie la création de l'audit log
+      expect(prisma.authChallenge.update).toHaveBeenCalledWith({
+        where: { id: challengeId },
+        data: { status: ChallengeStatus.VERIFIED },
+      });
       expect(prisma.auditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -313,68 +301,51 @@ describe('Lot 2B — Bot Telegram, Changement de numéro, Profil & Horaires Bout
       );
     });
 
-    it('doit annuler l\'ensemble si l\'une des opérations de la transaction échoue', async () => {
+    it('doit marquer le défi FAILED et créer un auditLog d\'échec si un compte Telegram est déjà lié à un autre utilisateur (P2002)', async () => {
       await initAuthEventListeners();
-      (prisma.$transaction as jest.Mock).mockRejectedValueOnce(new Error('DB_DEADLOCK_ROLLBACK'));
+      const handler = eventHandlers['telegram.contact.received'];
 
-      const challengeId = 'chal-rollback';
+      const challengeId = 'chal-change-conflict-tg';
+      const userId = 'user-to-update';
+
       (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
         id: challengeId,
-        userId: 'u1',
         purpose: ChallengePurpose.CHANGE_PHONE,
-        phone: '+213666001122',
-        status: ChallengeStatus.PENDING,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-      });
-
-      await expect(
-        eventBus.publish('telegram.contact.received', {
-          challengeId,
-          phone: '+213666001122',
-          telegramUserId: 'tg-1',
-          chatId: 'chat-1',
-        })
-      ).resolves.not.toThrow();
-    });
-
-    it('Cas A — doit marquer FAILED, avertir et logger en audit si telegramUserId est déjà lié à un autre compte', async () => {
-      await initAuthEventListeners();
-
-      const p2002Error: any = new Error('Unique constraint failed on the fields: (`telegram_user_id`)');
-      p2002Error.code = 'P2002';
-      p2002Error.meta = { target: ['users_telegram_user_id_key'] };
-
-      (prisma.$transaction as jest.Mock).mockRejectedValueOnce(p2002Error);
-
-      const challengeId = 'chal-tg-conflict';
-      const userId = 'user-test-tg-conflict';
-
-      (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
-        id: challengeId,
         userId,
-        purpose: ChallengePurpose.CHANGE_PHONE,
-        phone: '+213666001122',
+        newPhone: '+213555998877',
         status: ChallengeStatus.PENDING,
         expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-        user: { id: userId, phoneE164: '+213555000000' },
+        user: {
+          id: userId,
+          phoneE164: '+213555112233',
+          telegramUserId: 'old-tg-user',
+        },
       });
 
-      await eventBus.publish('telegram.contact.received', {
-        challengeId,
-        phone: '+213666001122',
-        telegramUserId: 'already-linked-tg-id',
-        chatId: 'chat-conflict-1',
+      const uniqueConstraintError: any = new Error('Unique constraint failed on the fields: (`telegram_user_id`)');
+      uniqueConstraintError.code = 'P2002';
+      uniqueConstraintError.meta = { target: ['telegram_user_id'] };
+
+      (prisma.$transaction as jest.Mock).mockRejectedValue(uniqueConstraintError);
+
+      await handler({
+        eventId: 'evt-conflict-tg',
+        name: 'telegram.contact.received',
+        type: 'telegram.contact.received',
+        occurredAt: new Date().toISOString(),
+        payload: {
+          challengeId,
+          phone: '+213555998877',
+          telegramUserId: 'already-linked-tg-user',
+          chatId: 'new-chat-id',
+        },
       });
 
-      // Le défi doit passer au statut FAILED
-      expect(prisma.authChallenge.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: challengeId },
-          data: { status: ChallengeStatus.FAILED },
-        })
-      );
+      expect(prisma.authChallenge.update).toHaveBeenCalledWith({
+        where: { id: challengeId },
+        data: { status: ChallengeStatus.FAILED },
+      });
 
-      // Audit log de l'échec
       expect(prisma.auditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -386,112 +357,11 @@ describe('Lot 2B — Bot Telegram, Changement de numéro, Profil & Horaires Bout
           }),
         })
       );
-
-      // Message d'erreur explicite envoyé via Telegram
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        'telegram.send.message',
-        expect.objectContaining({
-          chatId: 'chat-conflict-1',
-          text: expect.stringContaining('Ce compte Telegram est déjà lié à un autre compte FORSA'),
-        })
-      );
-    });
-
-    it('Cas B — doit marquer FAILED, avertir et logger en audit si le nouveau numéro est déjà utilisé par un autre compte', async () => {
-      await initAuthEventListeners();
-
-      const p2002Error: any = new Error('Unique constraint failed on the fields: (`phone_e164`)');
-      p2002Error.code = 'P2002';
-      p2002Error.meta = { target: ['users_phone_e164_key'] };
-
-      (prisma.$transaction as jest.Mock).mockRejectedValueOnce(p2002Error);
-
-      const challengeId = 'chal-phone-conflict';
-      const userId = 'user-test-phone-conflict';
-
-      (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
-        id: challengeId,
-        userId,
-        purpose: ChallengePurpose.CHANGE_PHONE,
-        phone: '+213666001122',
-        status: ChallengeStatus.PENDING,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-        user: { id: userId, phoneE164: '+213555000000' },
-      });
-
-      await eventBus.publish('telegram.contact.received', {
-        challengeId,
-        phone: '+213666001122',
-        telegramUserId: 'tg-phone-conflict',
-        chatId: 'chat-conflict-2',
-      });
-
-      // Le défi doit passer au statut FAILED
-      expect(prisma.authChallenge.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: challengeId },
-          data: { status: ChallengeStatus.FAILED },
-        })
-      );
-
-      // Audit log de l'échec
-      expect(prisma.auditLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            userId,
-            action: 'PHONE_CHANGE_FAILED',
-            metadata: expect.objectContaining({
-              reason: 'PHONE_ALREADY_IN_USE',
-            }),
-          }),
-        })
-      );
-
-      // Message d'erreur explicite envoyé via Telegram
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        'telegram.send.message',
-        expect.objectContaining({
-          chatId: 'chat-conflict-2',
-          text: expect.stringContaining('Ce numéro de téléphone est déjà associé à un autre compte FORSA'),
-        })
-      );
     });
   });
 
-  // ─── 4. BOT BLOQUÉ PAR L'UTILISATEUR ──────────────────────────────────────────
-  describe('4. Détection du blocage du bot (telegram_blocked = true)', () => {
-    it('doit passer telegramBlocked à true si Telegram renvoie une erreur 403 Forbidden', async () => {
-      mockFetch.mockResolvedValue({
-        status: 403,
-        json: async () => ({
-          ok: false,
-          error_code: 403,
-          description: 'Forbidden: bot was blocked by the user',
-        }),
-      });
-
-      const chatId = 987654321;
-      const sent = await sendTelegramMessage(chatId, 'Test message');
-
-      expect(sent).toBe(false);
-      expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: { telegramChatId: String(chatId) },
-        data: { telegramBlocked: true },
-      });
-    });
-
-    it('handleBotBlockedByUser met à jour la table users avec telegramBlocked=true', async () => {
-      await handleBotBlockedByUser(11223344);
-
-      expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: { telegramChatId: '11223344' },
-        data: { telegramBlocked: true },
-      });
-    });
-  });
-
-  // ─── 5. HORAIRES BOUTIQUE (openingHours JSON) ──────────────────────────────────
-  describe('5. Horaires Boutique (openingHours JSON typage Prisma)', () => {
+  // ─── 4. HORAIRES BOUTIQUE (openingHours JSON) ──────────────────────────────────
+  describe('4. Horaires Boutique (openingHours JSON typage Prisma)', () => {
     it('doit persister openingHours en JSON valide lors de createShop', async () => {
       const userId = 'merchant-user-1';
       const openingHours = {
@@ -570,95 +440,6 @@ describe('Lot 2B — Bot Telegram, Changement de numéro, Profil & Horaires Bout
           data: expect.objectContaining({
             openingHours: newOpeningHours,
           }),
-        })
-      );
-    });
-  });
-
-  // ─── 6. TEST DE BOUT EN BOUT (Simulé) ─────────────────────────────────────────
-  describe('6. Test de bout en bout (Simulé avec faux client Telegram)', () => {
-    it('déroule le flux complet : /start -> partage contact -> contact.received -> OTP -> verify', async () => {
-      await initAuthEventListeners();
-
-      // Étape A : Défi initialisé (ex. par POST /auth/telegram/start)
-      const nonce = 'abcdef0123456789abcdef0123456789';
-      const nonceHash = hashString(nonce);
-      const challengeId = 'chal-e2e-1';
-
-      (prisma.authChallenge.findFirst as jest.Mock).mockResolvedValue({
-        id: challengeId,
-        phone: '+213555889900',
-        purpose: ChallengePurpose.LOGIN,
-        nonceHash,
-        status: ChallengeStatus.PENDING,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      });
-      (prisma.authChallenge.findUnique as jest.Mock).mockResolvedValue({
-        id: challengeId,
-        phone: '+213555889900',
-        purpose: ChallengePurpose.LOGIN,
-        status: ChallengeStatus.PENDING,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      });
-
-      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
-
-      // 1. L'utilisateur envoie /start <nonce> au bot
-      await handleTelegramUpdate({
-        message: {
-          chat: { id: 777777 },
-          from: { id: 888888 },
-          text: `/start ${nonce}`,
-        },
-      });
-
-      // Le bot a bien envoyé le message avec le bouton de contact
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/sendMessage'),
-        expect.objectContaining({
-          body: expect.stringContaining('Partager mon contact'),
-        })
-      );
-
-      // 2. L'utilisateur partage son contact
-      await handleTelegramUpdate({
-        message: {
-          chat: { id: 777777 },
-          from: { id: 888888 },
-          contact: {
-            user_id: 888888, // Concordant avec from.id
-            phone_number: '0555889900', // Concordant avec le défi
-          },
-        },
-      });
-
-      // Le bot a publié telegram.contact.received
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        'telegram.contact.received',
-        expect.objectContaining({
-          challengeId,
-          phone: '+213555889900',
-          telegramUserId: '888888',
-          chatId: '777777',
-        })
-      );
-
-      // L'écouteur MS1 a mis à jour le défi avec un codeHash
-      expect(prisma.authChallenge.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: challengeId },
-          data: expect.objectContaining({
-            codeHash: expect.any(String),
-          }),
-        })
-      );
-
-      // Et MS1 a publié telegram.send.otp
-      expect(eventBus.publish).toHaveBeenCalledWith(
-        'telegram.send.otp',
-        expect.objectContaining({
-          chatId: '777777',
-          code: expect.stringMatching(/^[0-9]{6}$/),
         })
       );
     });

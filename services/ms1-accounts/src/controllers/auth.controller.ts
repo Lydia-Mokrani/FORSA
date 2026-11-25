@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import { z } from 'zod';
 import {
   BadRequestError,
@@ -8,11 +9,13 @@ import {
   ApiError,
 } from '@forsa/common';
 import { prisma } from '../config/prisma';
+import { eventBus } from '../services/event-bus';
 import { phoneE164Schema, normalizeToE164 } from '../utils/phone';
 import {
   createAuthChallenge,
   getChallengeStatus,
   verifyAuthChallenge,
+  hashString,
 } from '../services/challenge.service';
 import {
   createSession,
@@ -49,7 +52,10 @@ export class AuthController {
   /**
    * POST /auth/telegram/start
    * - Vérifie et normalise le numéro en E.164
+   * - Vérification de la disponibilité du broker (fail-fast synchrone 503 BROKER_UNAVAILABLE)
    * - Crée un AuthChallenge (nonce 128 bits haché, TTL 10 min)
+   * - Publie telegram.challenge.created sur le bus d'événements
+   * - Si returning user avec telegramChatId : émet l'OTP via telegram.send.otp
    * - Réponse identique si le numéro existe ou non (anti-énumération)
    */
   public static async telegramStart(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -64,14 +70,69 @@ export class AuthController {
         throw new BadRequestError('Numéro de téléphone mobile algérien invalide (+213 5/6/7 xx xx xx).');
       }
 
+      // 1. Fail-fast si le broker est déconnecté
+      if (typeof eventBus.isBrokerUp === 'function' && !eventBus.isBrokerUp()) {
+        res.status(503).json({
+          error: 'BROKER_UNAVAILABLE',
+          message: 'Le service de messagerie (broker) est indisponible.',
+        });
+        return;
+      }
+
       const challenge = await createAuthChallenge(phone, ChallengePurpose.LOGIN);
+
+      try {
+        // 2. Publication du défi créé à destination de MS5
+        await eventBus.publish('telegram.challenge.created', {
+          challengeId: challenge.challengeId,
+          nonce: challenge.nonce,
+          phone,
+          expiresAt: challenge.expiresAt,
+        });
+
+        // 3. Si l'utilisateur possède déjà un telegramChatId, générer et envoyer l'OTP directement
+        const user = await prisma.user.findUnique({ where: { phoneE164: phone } });
+        if (user?.telegramChatId) {
+          const code = crypto.randomInt(100000, 999999).toString();
+          const codeHash = hashString(code);
+          const codeExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+          await prisma.authChallenge.update({
+            where: { id: challenge.challengeId },
+            data: { codeHash, expiresAt: codeExpiresAt },
+          });
+
+          await eventBus.publish('telegram.send.otp', {
+            chatId: user.telegramChatId,
+            code,
+            expiresAt: codeExpiresAt,
+            challengeId: challenge.challengeId,
+          });
+        }
+      } catch (busErr: any) {
+        if (busErr?.message?.includes('BROKER_UNAVAILABLE')) {
+          res.status(503).json({
+            error: 'BROKER_UNAVAILABLE',
+            message: 'Le service de messagerie (broker) est indisponible.',
+          });
+          return;
+        }
+        throw busErr;
+      }
 
       res.status(200).json({
         challengeId: challenge.challengeId,
         deepLink: challenge.deepLink,
         expiresAt: challenge.expiresAt,
       });
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.message?.includes('BROKER_UNAVAILABLE')) {
+        res.status(503).json({
+          error: 'BROKER_UNAVAILABLE',
+          message: 'Le service de messagerie (broker) est indisponible.',
+        });
+        return;
+      }
       next(err);
     }
   }

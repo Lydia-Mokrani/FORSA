@@ -6,7 +6,10 @@ import { ChallengePurpose, ChallengeStatus } from '@prisma/client';
 import { hashString } from '../services/challenge.service';
 
 export async function initAuthEventListeners(): Promise<void> {
-  await eventBus.subscribe('telegram.contact.received', async (event) => {
+  // File partagée entre toutes les instances MS1 (competing consumers, un seul traitement par événement)
+  await eventBus.subscribe(
+    'telegram.contact.received',
+    async (event) => {
     const payload = (event.payload || event.data) as {
       challengeId: string;
       phone: string;
@@ -163,5 +166,5 @@ export async function initAuthEventListeners(): Promise<void> {
     } catch (err: any) {
       console.error('[AuthEventListener] Erreur traitement telegram.contact.received:', err.message);
     }
-  });
+  }, 'q.ms1-accounts.telegram.contact.received');
 }

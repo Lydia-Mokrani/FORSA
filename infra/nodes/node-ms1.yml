@@ -1,11 +1,14 @@
 version: '3.8'
 
 # ==============================================================================
-# FORSA (WAMS) — Nœud Applicatif MS1 (Accounts & Shops - 2 Instances en Load Balancing)
+# FORSA (WAMS) — Nœud Applicatif MS1 (Accounts & Shops - 2 Instances Homogènes)
+# ==============================================================================
+# Grâce à la migration du bot Telegram vers MS5 (Lot 5B-2), les deux instances
+# MS1 sont désormais strictement identiques et interchangeables (stateless workers).
 # ==============================================================================
 
 services:
-  # Instance 1 : Poller Telegram officiel actif (TELEGRAM_BOT_ENABLED=true)
+  # Instance 1 : Stateless worker
   ms1-accounts-1:
     build:
       context: ../..
@@ -18,8 +21,6 @@ services:
       NODE_ENV: production
       PORT: 3001
       INSTANCE_ID: ${MS1_1_INSTANCE_ID:-ms1-accounts-1}
-      # Instance 1 gère le polling Telegram
-      TELEGRAM_BOT_ENABLED: "true"
       # Configuration Consul & Service Discovery
       CONSUL_HOST: ${CONSUL_HOST:?CONSUL_HOST est obligatoire}
       CONSUL_PORT: ${CONSUL_PORT:-8500}
@@ -36,8 +37,7 @@ services:
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY est obligatoire}
-      # Bot Telegram
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Telegram Bot Username (uniquement pour formater les deep links https://t.me/<username>?start=<nonce>)
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME obligatoire en prod}
       # Géocodage Nominatim
       GEOCODER_USER_AGENT: ${GEOCODER_USER_AGENT:?GEOCODER_USER_AGENT valide obligatoire en prod}
@@ -49,10 +49,7 @@ services:
     networks:
       - forsa-network
 
-  # Instance 2 : Sans polling Telegram (TELEGRAM_BOT_ENABLED=false)
-  # NOTE IMPORTANTE : Deux pollers simultanés sur un même token provoquent une erreur HTTP 409 Conflict.
-  # L'instance 2 publie et consomme normalement les événements sans écouter le long-polling Telegram.
-  # Cette dissymétrie est TEMPORAIRE jusqu'à la migration du bot vers MS5 (singleton) au Lot 5B-2.
+  # Instance 2 : Stateless worker strictement identique à l'instance 1
   ms1-accounts-2:
     build:
       context: ../..
@@ -65,8 +62,6 @@ services:
       NODE_ENV: production
       PORT: 3002
       INSTANCE_ID: ${MS1_2_INSTANCE_ID:-ms1-accounts-2}
-      # Instance 2 NE gère PAS le polling Telegram (évite le conflit 409)
-      TELEGRAM_BOT_ENABLED: "false"
       # Configuration Consul & Service Discovery
       CONSUL_HOST: ${CONSUL_HOST:?CONSUL_HOST est obligatoire}
       CONSUL_PORT: ${CONSUL_PORT:-8500}
@@ -83,8 +78,7 @@ services:
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY est obligatoire}
-      # Bot Telegram
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Telegram Bot Username (uniquement pour formater les deep links https://t.me/<username>?start=<nonce>)
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME obligatoire en prod}
       # Géocodage Nominatim
       GEOCODER_USER_AGENT: ${GEOCODER_USER_AGENT:?GEOCODER_USER_AGENT valide obligatoire en prod}
