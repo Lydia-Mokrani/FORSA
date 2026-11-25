@@ -5,7 +5,6 @@ import {
   Building,
   Check,
   ArrowRight,
-  ArrowLeft,
   X,
   Repeat,
   Info,
@@ -105,22 +104,23 @@ export const ModeSwitchPage: React.FC = () => {
     >
       <div className="max-w-5xl mx-auto space-y-8">
         {/* En-tête */}
-        <div data-node-id="1155:26118">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-node-id="1155:26118">
+          <div>
+            <h1 className="font-semibold text-3xl sm:text-[44px] text-[#0b2c25] leading-tight" data-node-id="1155:26119">
+              Mode d’utilisation
+            </h1>
+            <p className="text-base sm:text-xl text-[#0b2c25]/80 mt-1" data-node-id="1155:26120">
+              Choisissez l’espace que vous souhaitez utiliser
+            </p>
+          </div>
+
           <button
             type="button"
-            onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-1.5 text-xs text-[#0b2c25]/70 hover:text-[#0b2c25] mb-2 cursor-pointer transition-colors"
+            onClick={() => navigate('/settings')}
+            className="self-start sm:self-auto border border-[#0b2c25]/30 hover:bg-stone-100 text-[#0b2c25] text-xs font-semibold px-4 py-2 rounded-full transition cursor-pointer"
           >
-            <ArrowLeft className="size-3.5" />
-            <span>Mon espace / Mode d’utilisation</span>
+            ← Retour aux paramètres
           </button>
-
-          <h1 className="font-semibold text-3xl sm:text-[44px] text-[#0b2c25] leading-tight" data-node-id="1155:26119">
-            Mode d’utilisation
-          </h1>
-          <p className="text-base sm:text-xl text-[#0b2c25]/80 mt-1" data-node-id="1155:26120">
-            Choisissez l’espace que vous souhaitez utiliser
-          </p>
         </div>
 
         {error && (
