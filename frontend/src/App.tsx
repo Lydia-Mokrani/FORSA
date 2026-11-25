@@ -24,6 +24,11 @@ import { ShopEditPage } from './features/catalogue/pages/ShopEditPage';
 
 // Profil & Compte MS1 (Sections B, C, D)
 import { ProfilePage } from './features/profile';
+import {
+  SettingsPage,
+  ModeSwitchPage,
+  AccountDangerPage,
+} from './features/settings';
 
 // Suite Authentification Telegram & Profil MS1
 import {
@@ -98,6 +103,9 @@ export const App: React.FC = () => {
               }
             />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/mode" element={<ModeSwitchPage />} />
+            <Route path="/settings/account" element={<AccountDangerPage />} />
           </Route>
 
           {/* AUTHENTICATION SUITE MS1 (Telegram-first) */}

@@ -5,6 +5,12 @@ import { QRCodeSVG } from 'qrcode.react';
 import { UserProfile } from './types';
 import { useLocation } from '../catalogue/context/LocationContext';
 import {
+  ResponsiveDialog,
+  Button,
+  Banner,
+  Chip,
+} from '../../components/ui';
+import {
   startPhoneChange,
   verifyPhoneChange,
   getTelegramChallengeStatus,
@@ -168,6 +174,9 @@ export const ProfilePage: React.FC = () => {
   // Resend Email State
   const [resendEmailSuccess, setResendEmailSuccess] = useState(false);
   const [isResendingEmail, setIsResendingEmail] = useState(false);
+
+  // Unsaved Changes Confirmation Modal State
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
 
   // Fetch Current User Profile
   const fetchProfile = async () => {
@@ -363,6 +372,24 @@ export const ProfilePage: React.FC = () => {
     (fullName !== (initialProfile.fullName || '') ||
       email !== (initialProfile.email || '') ||
       phone !== (initialProfile.phone || ''));
+
+  const handleCancelEdit = () => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedChangesModal(true);
+    } else {
+      setViewMode('view');
+    }
+  };
+
+  const handleConfirmDiscardChanges = () => {
+    if (initialProfile) {
+      setFullName(initialProfile.fullName || '');
+      setEmail(initialProfile.email || '');
+      setPhone(extractAlgerianMobile9(initialProfile.phone));
+    }
+    setShowUnsavedChangesModal(false);
+    setViewMode('view');
+  };
 
   // Strict Phone Validation (Algerian 9 digits starting with 5, 6, 7)
   const validatePhone = (raw: string): boolean => {
@@ -653,7 +680,9 @@ export const ProfilePage: React.FC = () => {
       if (err.status === 409 || err.code === 'CONFLICT') {
         setPhoneChangeError('Ce numéro de téléphone est déjà associé à un autre compte FORSA.');
       } else {
-        setPhoneChangeError(err.message || 'Code de confirmation invalide ou expiré.');
+        // Fix phone-change UX defect: keep user in the verification step so the error appears on the code field
+        setPhoneChangeStep(1);
+        setPhoneChangeError(err.message || 'Code de confirmation invalide ou expiré. Veuillez vérifier le code saisi.');
       }
     } finally {
       setPhoneChangeLoading(false);
@@ -749,6 +778,8 @@ export const ProfilePage: React.FC = () => {
   const isPhoneVerified = Boolean(profile?.phoneVerified && hasPhone);
   const isEmailVerified = Boolean(profile?.emailVerified);
   const isProfileIncomplete = !profile?.fullName || !hasPhone;
+  const isMerchant = profile?.role === 'MERCHANT' || (profile as any)?.roles?.includes('MERCHANT');
+  const isMerchantVerified = Boolean(isMerchant && profile?.shop?.status === 'APPROVED');
 
   const displayName = profile?.fullName || (profile?.phone ? profile.phone : 'Mon Compte');
   const displayEmail = profile?.email || '';
@@ -784,7 +815,16 @@ export const ProfilePage: React.FC = () => {
           </div>
 
           {/* Account Actions (732:15080) */}
-          <div className="flex items-center gap-[14px] self-start md:self-center shrink-0">
+          <div className="flex items-center gap-[12px] flex-wrap self-start md:self-center shrink-0">
+            {/* Bouton Changer de mode */}
+            <button
+              type="button"
+              onClick={() => navigate('/settings/mode')}
+              className="h-[42px] px-[16px] rounded-[12px] border border-ui-emerald/40 text-ui-emerald text-[13px] font-semibold flex items-center gap-[8px] hover:bg-ui-mint/30 transition cursor-pointer bg-white"
+            >
+              <span>{isMerchant ? 'Mode Commerçant' : 'Changer de mode'}</span>
+            </button>
+
             {/* Bouton Paramètres (793:23356) */}
             <button
               type="button"
@@ -832,7 +872,7 @@ export const ProfilePage: React.FC = () => {
         <div className="space-y-3 mb-6">
           {/* État Compte Suspendu (Frame 785:21652) */}
           {isSuspended && (
-            <div className="p-4 rounded-[20px] bg-[#B22222]/10 border border-[#B22222] text-[#B22222] flex items-start gap-3">
+            <div className="p-4 rounded-ui-card bg-ui-error-bg border border-ui-error/30 text-ui-error flex items-start gap-3">
               <div className="text-xs">
                 <strong className="block font-bold text-sm">Compte suspendu par l'administration</strong>
                 Votre compte a été restreint suite à un signalement. Vous ne pouvez plus passer de commande. Contactez le support à support@forsa.dz.
@@ -841,8 +881,8 @@ export const ProfilePage: React.FC = () => {
           )}
 
           {/* État E-mail non vérifié (Figma Frame 785:20789 - Bannière Vérifiez votre adresse e-mail) */}
-          {!isEmailVerified && (
-            <div className="bg-[#fdf3d8] border-[1.5px] border-[#dbf0dd] rounded-[20px] p-[18px] flex items-center justify-between gap-4 w-full flex-wrap">
+          {!isEmailVerified && profile?.email && (
+            <div className="bg-[#fdf3d8] border-[1.5px] border-[#dbf0dd] rounded-ui-card p-[18px] flex items-center justify-between gap-4 w-full flex-wrap">
               <div className="flex items-center gap-[16px]">
                 <div className="size-[44px] rounded-full bg-[#edbd4d] flex items-center justify-center shrink-0">
                   <img src={figmaAlertCircle} alt="" className="size-[22px] text-[#0b2c25]" />
@@ -876,7 +916,7 @@ export const ProfilePage: React.FC = () => {
 
           {/* État Téléphone non vérifié (Bannière d'alerte contextuelle) */}
           {!isPhoneVerified && (
-            <div className="bg-[#fdf3d8] border-[1.5px] border-[#dbf0dd] rounded-[20px] p-[18px] flex items-center justify-between gap-4 w-full flex-wrap">
+            <div className="bg-[#fdf3d8] border-[1.5px] border-[#dbf0dd] rounded-ui-card p-[18px] flex items-center justify-between gap-4 w-full flex-wrap">
               <div className="flex items-center gap-[16px]">
                 <div className="size-[44px] rounded-full bg-[#edbd4d] flex items-center justify-center shrink-0">
                   <img src={figmaAlertCircle} alt="" className="size-[22px] text-[#0b2c25]" />
@@ -1030,6 +1070,14 @@ export const ProfilePage: React.FC = () => {
                           Membre depuis oct. 2026
                         </span>
                       </div>
+
+                      {/* Pastille Commerçant vérifié */}
+                      {isMerchantVerified && (
+                        <div className="bg-[#dbf0dd] text-[#17664e] flex items-center gap-[6px] pl-[10px] pr-[12px] py-[5px] rounded-[100px] shrink-0 font-semibold text-[12px]">
+                          <img src={figmaTickPill} alt="" className="size-[14px] shrink-0" />
+                          <span>Commerçant vérifié</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1469,7 +1517,7 @@ export const ProfilePage: React.FC = () => {
                           type="button"
                           onClick={handleDeleteAvatar}
                           disabled={isUploadingAvatar}
-                          className="flex items-center justify-center gap-[8px] pl-[18px] pr-[20px] py-[12px] rounded-[12px] text-[14px] font-semibold text-[#17664e] hover:text-[#b22222] transition cursor-pointer"
+                          className="flex items-center justify-center gap-[8px] pl-[18px] pr-[20px] py-[12px] rounded-[12px] text-[14px] font-semibold text-[#17664e] hover:text-ui-error transition cursor-pointer"
                         >
                           <img src={figmaDeleteTrash} alt="" className="size-[18px]" />
                           <span>Supprimer</span>
@@ -1478,7 +1526,7 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     {avatarError && (
-                      <p className="text-xs text-[#b22222] font-semibold">{avatarError}</p>
+                      <p className="text-xs text-ui-error font-semibold">{avatarError}</p>
                     )}
                   </div>
                 </div>
@@ -1548,7 +1596,7 @@ export const ProfilePage: React.FC = () => {
                 {/* Champ Téléphone (797:29401) */}
                 <div className="flex flex-col gap-[6px] w-full">
                   <label className="text-[12px] font-semibold text-[#0b2c25]">Téléphone</label>
-                  <div className={`w-full h-[48px] bg-[#fffaf0] border-[1.5px] ${phoneError ? 'border-[#b22222]' : 'border-[#78847f]'} rounded-[12px] px-[14px] flex items-center gap-[10px]`}>
+                  <div className={`w-full h-[48px] bg-[#fffaf0] border-[1.5px] ${phoneError ? 'border-ui-error' : 'border-[#78847f]'} rounded-[12px] px-[14px] flex items-center gap-[10px]`}>
                     <img src={figmaPhoneInput} alt="" className="size-[18px] shrink-0" />
                     <span className="text-xs font-semibold text-[#0b2c25]/80 select-none">🇩🇿 +213</span>
                     <input
@@ -1595,7 +1643,7 @@ export const ProfilePage: React.FC = () => {
                     ) : null}
                   </div>
                   {phoneError ? (
-                    <p className="text-[11px] text-[#b22222] font-semibold">{phoneError}</p>
+                    <p className="text-[11px] text-ui-error font-semibold">{phoneError}</p>
                   ) : (
                     <p className="text-[11px] font-normal text-[#0b2c25]/70">
                       Doit comporter 9 chiffres et commencer par 5, 6 ou 7 (ex: 6 61 45 17 40).
@@ -1627,7 +1675,7 @@ export const ProfilePage: React.FC = () => {
                 <div className="flex items-center justify-end gap-[12px] pt-[16px]">
                   <button
                     type="button"
-                    onClick={() => setViewMode('view')}
+                    onClick={handleCancelEdit}
                     className="border border-[#0b2c25] hover:bg-[#ebeee1] px-[20px] py-[12px] rounded-[12px] text-[14px] font-semibold text-[#0b2c25] transition cursor-pointer"
                   >
                     Annuler
@@ -1735,25 +1783,35 @@ export const ProfilePage: React.FC = () => {
       </div>
 
       {/* ── MODALE CHANGEMENT DE NUMÉRO EN 2 ÉTAPES VIA TELEGRAM ───────────────── */}
-      {showPhoneOtpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="w-full max-w-[500px] rounded-[24px] bg-white border border-[#e6ece7] p-8 sm:p-10 shadow-[0px_16px_40px_rgba(0,0,0,0.12)] relative font-poppins flex flex-col items-center gap-[16px]">
-            {/* Bouton Fermer */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowPhoneOtpModal(false);
-                setPhoneChangeSuccess(false);
-                setPhoneChangeError(null);
-                if (phoneChangePollRef.current) clearInterval(phoneChangePollRef.current);
-              }}
-              className="absolute top-5 right-5 size-9 rounded-full border border-[#dbf0dd] bg-white hover:bg-[#FAF6ED] flex items-center justify-center text-[#0b2c25] transition shadow-xs cursor-pointer"
-              aria-label="Fermer"
-            >
-              <img src={figmaMultiplicationSign} alt="" className="size-3 text-[#0b2c25]" />
-            </button>
-
-            {/* ÉTAT SUCCÈS */}
+      <ResponsiveDialog
+        isOpen={showPhoneOtpModal}
+        onClose={() => {
+          setShowPhoneOtpModal(false);
+          setPhoneChangeSuccess(false);
+          setPhoneChangeError(null);
+          if (phoneChangePollRef.current) clearInterval(phoneChangePollRef.current);
+        }}
+        title={
+          phoneChangeSuccess
+            ? 'Numéro mis à jour !'
+            : phoneChangeStep === 1
+            ? 'Confirmez votre identité'
+            : phoneChangeStep === 2
+            ? 'Votre nouveau mobile'
+            : 'Confirmez sur votre Telegram'
+        }
+        description={
+          phoneChangeSuccess
+            ? 'Votre nouveau numéro est validé et lié à votre compte'
+            : phoneChangeStep === 1
+            ? 'Code à 6 chiffres envoyé sur votre compte Telegram actuel'
+            : phoneChangeStep === 2
+            ? 'Saisie de votre nouveau numéro mobile algérien'
+            : 'Liaison de votre nouveau numéro avec le bot Telegram'
+        }
+      >
+        <div className="w-full font-poppins flex flex-col items-center gap-[16px] py-1">
+          {/* ÉTAT SUCCÈS */}
             {phoneChangeSuccess ? (
               <div className="flex flex-col items-center justify-center text-center py-4 space-y-3">
                 <div className="size-[80px] rounded-[22px] bg-[#dbf0dd] border border-[#17664e]/20 flex items-center justify-center shadow-xs">
@@ -1791,7 +1849,7 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     {phoneChangeError && (
-                      <div className="flex items-center gap-2 p-3 rounded-xl bg-[#fff5f5] border border-[#b22222]/30 text-[#b22222] text-xs font-medium w-full text-left">
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-ui-error-bg border border-ui-error/30 text-ui-error text-xs font-medium w-full text-left">
                         <img src={figmaAlertCircle} alt="" className="size-4 shrink-0" />
                         <span>{phoneChangeError}</span>
                       </div>
@@ -1868,7 +1926,7 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     {phoneChangeError && (
-                      <div className="flex items-center gap-2 p-3 rounded-xl bg-[#fff5f5] border border-[#b22222]/30 text-[#b22222] text-xs font-medium w-full text-left">
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-ui-error-bg border border-ui-error/30 text-ui-error text-xs font-medium w-full text-left">
                         <img src={figmaAlertCircle} alt="" className="size-4 shrink-0" />
                         <span>{phoneChangeError}</span>
                       </div>
@@ -1930,7 +1988,7 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     {phoneChangeError && (
-                      <div className="flex items-center gap-2 p-3 rounded-xl bg-[#fff5f5] border border-[#b22222]/30 text-[#b22222] text-xs font-medium w-full text-left">
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-ui-error-bg border border-ui-error/30 text-ui-error text-xs font-medium w-full text-left">
                         <img src={figmaAlertCircle} alt="" className="size-4 shrink-0" />
                         <span>{phoneChangeError}</span>
                       </div>
@@ -1976,9 +2034,8 @@ export const ProfilePage: React.FC = () => {
                 )}
               </>
             )}
-          </div>
         </div>
-      )}
+      </ResponsiveDialog>
 
       {/* ── MODALE MODIFIER LA LOCALISATION ─────────────────────────────────── */}
       {showLocationModal && (
@@ -2091,6 +2148,33 @@ export const ProfilePage: React.FC = () => {
           </div>
         </div>
       )}
+      {/* ── MODALE MODIFICATIONS NON ENREGISTRÉES ───────────────────────── */}
+      <ResponsiveDialog
+        isOpen={showUnsavedChangesModal}
+        onClose={() => setShowUnsavedChangesModal(false)}
+        title="Modifications non enregistrées"
+        description="Vous avez apporté des modifications à votre profil sans les enregistrer."
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setShowUnsavedChangesModal(false)}
+            >
+              Continuer l'édition
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleConfirmDiscardChanges}
+            >
+              Abandonner les modifications
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ui-text-70">
+          Êtes-vous sûr de vouloir quitter le mode édition ? Toutes les données modifiées seront réinitialisées.
+        </p>
+      </ResponsiveDialog>
     </div>
   );
 };

@@ -373,3 +373,47 @@ export function getPostLoginRedirect(user: AuthUser, requestedRole?: 'CUSTOMER' 
 
   return '/';
 }
+
+/**
+ * GET /api/auth/sessions (MS1 Settings)
+ */
+export interface UserSession {
+  id: string;
+  device?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  lastActiveAt?: string;
+  createdAt?: string;
+  current?: boolean;
+}
+
+export async function getActiveSessions(): Promise<UserSession[]> {
+  try {
+    const res = await authFetch('/api/auth/sessions');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data?.sessions || (Array.isArray(data) ? data : []);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * POST /api/auth/switch-mode (MS1 Settings Mode)
+ */
+export async function switchUserMode(targetRole: 'CUSTOMER' | 'MERCHANT'): Promise<any> {
+  const res = await authFetch('/api/auth/switch-mode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targetRole }),
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = data?.error?.message || data?.message || 'Impossible de changer de mode.';
+    const err: any = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
