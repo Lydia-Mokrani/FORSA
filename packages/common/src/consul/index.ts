@@ -55,8 +55,7 @@ export class ConsulRegistry {
     const healthUrl = `http://${this.config.serviceHost}:${this.config.servicePort}${this.config.healthPath || '/health'}`;
     
     // Construction des règles Traefik v3 lues dynamiquement depuis Consul (backticks obligatoires dans Traefik v3)
-    const formattedPrefixes = this.config.traefikPathPrefixes.map(p => `\`${p}\``).join(', ');
-    const pathRule = `PathPrefix(${formattedPrefixes})`;
+    const pathRule = this.config.traefikPathPrefixes.map(p => "PathPrefix(`" + p + "`)").join(' || ');
     
     const tags = [
       'traefik.enable=true',
