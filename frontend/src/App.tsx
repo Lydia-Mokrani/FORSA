@@ -52,7 +52,7 @@ export const App: React.FC = () => {
     <LocationProvider>
       <BrowserRouter>
         <Routes>
-          {/* MERCHANT LAYOUT (MS2) */}
+          {/* MERCHANT LAYOUT (MS2 & MS1) */}
           <Route element={<MerchantLayout />}>
             <Route
               path="/merchant"
@@ -80,7 +80,7 @@ export const App: React.FC = () => {
             />
           </Route>
 
-          {/* CLIENT LAYOUT (MS2) */}
+          {/* CLIENT LAYOUT (MS2 & MS1) */}
           <Route element={<ClientLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/explore" element={<ExploreOffersPage />} />

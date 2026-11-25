@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation as useRouterLocation } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
-import { MapPin, Search, Store, ShoppingBag, LayoutDashboard, Menu, X, User } from 'lucide-react';
+import { MapPin, Search, Store, ShoppingBag, LayoutDashboard, Menu, X } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { location, openModal } = useLocation();
@@ -126,17 +126,6 @@ export const Navbar: React.FC = () => {
                 >
                   Carte des commerces
                 </Link>
-                <Link
-                  to="/profile"
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
-                    routerLocation.pathname === '/profile'
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <User className="w-3.5 h-3.5" />
-                  Mon Profil
-                </Link>
                 <div className="h-4 w-px bg-gray-200 mx-1" />
                 <Link
                   to="/merchant/dashboard"
@@ -200,14 +189,6 @@ export const Navbar: React.FC = () => {
               className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Carte des commerces
-            </Link>
-            <Link
-              to="/profile"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-            >
-              <User className="w-4 h-4 text-emerald-600" />
-              Mon Profil
             </Link>
             <Link
               to="/merchant/dashboard"

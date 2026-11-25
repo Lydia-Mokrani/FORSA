@@ -178,8 +178,8 @@ interface EventEnvelope<T> {
 ```
 
 ### `offer.expired`
-* **Rôle :** Retrait de l'offre expirée par cron job.
-* **Consommateurs :** MS3 (annulation réservations en attente), MS5 (Notifications)
+* **Rôle :** Retrait de l'offre expirée par cron job / dépassement de la date/heure de validité et retrait du catalogue.
+* **Consommateurs :** MS3 (annule réservations en attente), MS5 (Notifications)
 * **Payload :**
 ```json
 {
@@ -240,8 +240,8 @@ interface EventEnvelope<T> {
 ```
 
 ### `reservation.expired` / `reservation.cancelled` / `reservation.refused`
-* **Rôle :** Annulation ou expiration d'une réservation (restitution du stock via appel MS2 et trace no-show).
-* **Consommateurs :** MS2 (restitution stock via appel synchrone /internal), MS5 (Notifications)
+* **Rôle :** Notifie l'annulation, l'expiration ou le refus d'une réservation (libère le stock via remise en stock / restitution et trace le no-show).
+* **Consommateurs :** MS2 (remise en stock via appel synchrone /internal ou événement), MS5 (Notifications)
 * **Payload :**
 ```json
 {
@@ -333,5 +333,36 @@ interface EventEnvelope<T> {
   "averageRating": 4.65,
   "salesCount": 38,
   "totalReviews": 38
+}
+```
+
+---
+
+## 6. Événements Telegram & Notifications (MS1 <-> MS5)
+
+### `telegram.send.otp`
+* **Rôle :** Demande à MS5 d'envoyer un code OTP à un utilisateur Telegram via le bot.
+* **Émetteur :** MS1 (Accounts & Auth)
+* **Consommateurs :** MS5 (Notifications / Telegram Bot)
+* **Payload :**
+```json
+{
+  "telegramId": "123456789",
+  "phone": "+213555123456",
+  "code": "123456",
+  "ttlSeconds": 300
+}
+```
+
+### `telegram.contact.received`
+* **Rôle :** Transmet à MS1 les coordonnées vérifiées (numéro de téléphone + ID Telegram) partagées par l'utilisateur avec le bot Telegram.
+* **Émetteur :** MS5 (Telegram Bot)
+* **Consommateurs :** MS1 (Accounts & Auth)
+* **Payload :**
+```json
+{
+  "telegramId": "123456789",
+  "phoneNumber": "+213555123456",
+  "authNonce": "uuid-nonce"
 }
 ```

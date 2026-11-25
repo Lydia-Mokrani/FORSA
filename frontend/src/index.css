@@ -1,16 +1,25 @@
 @import "tailwindcss";
+@import 'leaflet/dist/leaflet.css';
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+@config "../tailwind.config.js";
 
 @theme {
+  --color-forsa-cream: #FFFAF0;
   --color-forsa-dark: #0B2C25;
+  --color-forsa-green: #0B2C25;
+  --color-forsa-leaf: #84B140;
+  --color-forsa-emerald: #17664E;
+  --color-forsa-price: #17664E;
+  --color-forsa-sand: #C0B49B;
+  --color-forsa-muted: #78847F;
+  --font-poppins: 'Poppins', system-ui, sans-serif;
+
+  /* MS1 additions */
   --color-forsa-primary: #17664E;
-  --color-forsa-leaf: #2A9D74;
   --color-forsa-soft: #4E8773;
   --color-forsa-mint: #E1EBE6;
-  --color-forsa-cream: #FAF6ED;
   --color-forsa-card: #FFFFFF;
   --color-forsa-terracotta: #D96B43;
-  --color-forsa-sand: #F0EAD6;
-  --font-poppins: 'Poppins', sans-serif;
   --radius-card: 28px;
   --radius-btn: 14px;
 
@@ -42,14 +51,15 @@
 }
 
 body {
-  background-color: #FAF6ED;
-  color: #0B2C25;
-  font-family: 'Poppins', sans-serif;
-  -webkit-font-smoothing: antialiased;
+  margin: 0;
   min-height: 100vh;
+  background-color: #FFFAF0;
+  color: #0B2C25;
+  font-family: 'Poppins', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Carte Glassmorphism fidèle au style ScentCraft & FORSA */
+/* Carte Glassmorphism fidèle au style FORSA */
 .forsa-glass-card {
   background: rgba(255, 255, 255, 0.40);
   backdrop-filter: blur(40px);
@@ -82,8 +92,8 @@ body {
   background-color: #0B2C25;
   color: white;
   font-weight: 500;
-  border-radius: 14px;
-  transition: all 0.2s ease-in-out;
+  border-radius: 16px;
+  transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -104,11 +114,11 @@ body {
   height: 48px;
   font-weight: 500;
   color: #0B2C25;
-  transition: all 0.2s ease-in-out;
+  transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .forsa-btn-social:hover {
@@ -125,4 +135,52 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Pilule de Rôle (MS1) */
+.forsa-role-pill {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(11, 44, 37, 0.18);
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Active merchant sidebar item */
+.forsa-nav-active {
+  position: relative;
+  background: #FFFAF0;
+  border-radius: 30px 0 0 30px;
+}
+
+.forsa-nav-active::before,
+.forsa-nav-active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+}
+
+.forsa-nav-active::before {
+  top: -30px;
+  background: radial-gradient(
+    circle at 0 0,
+    transparent 30px,
+    #FFFAF0 30px
+  );
+}
+
+.forsa-nav-active::after {
+  bottom: -30px;
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent 30px,
+    #FFFAF0 30px
+  );
 }
