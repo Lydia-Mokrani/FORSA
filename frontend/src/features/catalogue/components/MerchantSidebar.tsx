@@ -25,10 +25,10 @@ interface MerchantSidebarProps {
 
 const MERCHANT_ITEMS: SidebarItem[] = [
   { label: 'Tableau de bord', icon: LayoutGrid, to: '/merchant/dashboard' },
+  { label: 'Réservations', icon: CalendarCheck },
   { label: 'Ajouter une offre', icon: Plus, to: '/merchant/create-offer' },
   { label: 'Avis', icon: Star },
   { label: 'Compte', icon: User, to: '/merchant/account' },
-  { label: 'Réservations', icon: CalendarCheck },
 ];
 
 const CLIENT_ITEMS: SidebarItem[] = [
