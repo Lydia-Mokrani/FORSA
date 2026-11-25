@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid,
   CalendarCheck,
@@ -11,6 +11,7 @@ import {
   MapPin,
   Bell,
 } from 'lucide-react';
+import { logout } from '../../auth/services/authService';
 
 interface SidebarItem {
   label: string;
@@ -27,7 +28,7 @@ const MERCHANT_ITEMS: SidebarItem[] = [
   { label: 'Réservations', icon: CalendarCheck },
   { label: 'Ajouter une offre', icon: Plus, to: '/merchant/create-offer' },
   { label: 'Avis', icon: Star },
-  { label: 'Compte', icon: User },
+  { label: 'Compte', icon: User, to: '/merchant/account' },
 ];
 
 const CLIENT_ITEMS: SidebarItem[] = [
@@ -55,10 +56,19 @@ const ItemContent: React.FC<{ item: SidebarItem }> = ({ item }) => {
 export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
   variant = 'merchant',
 }) => {
+  const navigate = useNavigate();
   const items = variant === 'client' ? CLIENT_ITEMS : MERCHANT_ITEMS;
 
   const homePath =
     variant === 'client' ? '/' : '/merchant/dashboard';
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate('/login');
+    }
+  };
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[238px] rounded-r-[31px] bg-[#0B2C25] shadow-[10px_11px_72px_rgba(0,0,0,0.18)] md:block">
@@ -99,7 +109,8 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
 
       <button
         type="button"
-        className="absolute bottom-[54px] left-[37px] flex h-[46px] w-[164px] items-center gap-[15px] rounded-[10.8px] bg-white pl-5 font-poppins text-[13.87px] font-semibold text-[#0B2C25]"
+        onClick={handleLogout}
+        className="absolute bottom-[54px] left-[37px] flex h-[46px] w-[164px] items-center gap-[15px] rounded-[10.8px] bg-white pl-5 font-poppins text-[13.87px] font-semibold text-[#0B2C25] cursor-pointer hover:bg-stone-50 transition-colors shadow-xs"
       >
         <LogOut className="h-[18.5px] w-[18.5px]" strokeWidth={1.75} />
         Déconnexion

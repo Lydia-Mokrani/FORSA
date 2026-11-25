@@ -22,6 +22,14 @@ import { CreateOfferPage } from './features/catalogue/pages/CreateOfferPage';
 import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
 import { ShopEditPage } from './features/catalogue/pages/ShopEditPage';
 
+// Hub Commerçant & Paramètres MS1
+import {
+  MerchantAccountPage,
+  MerchantEditProfilePage,
+  MerchantPreferencesPage,
+  MerchantChangeEmailPage,
+} from './features/account';
+
 // Profil & Compte MS1 (Sections B, C, D)
 import { ProfilePage } from './features/profile';
 import {
@@ -40,6 +48,8 @@ import {
   AccountSuspendedPage,
   MerchantDocumentsPage,
   DocumentResubmitPage,
+  AccessDeniedPage,
+  SessionExpiredPage,
 } from './features/auth';
 
 // Dev Gallery (Lot R0) - STRICTEMENT réservé au mode développement
@@ -77,6 +87,22 @@ export const App: React.FC = () => {
             <Route
               path="/merchant/shop"
               element={<ShopEditPage />}
+            />
+            <Route
+              path="/merchant/account"
+              element={<MerchantAccountPage />}
+            />
+            <Route
+              path="/merchant/account/edit-profile"
+              element={<MerchantEditProfilePage />}
+            />
+            <Route
+              path="/merchant/account/preferences"
+              element={<MerchantPreferencesPage />}
+            />
+            <Route
+              path="/merchant/account/change-email"
+              element={<MerchantChangeEmailPage />}
             />
           </Route>
 
@@ -119,6 +145,10 @@ export const App: React.FC = () => {
           <Route path="/merchant/documents" element={<MerchantDocumentsPage />} />
           <Route path="/merchant/documents/resubmit" element={<DocumentResubmitPage />} />
           <Route path="/account/suspended" element={<AccountSuspendedPage />} />
+          <Route path="/403" element={<AccessDeniedPage />} />
+          <Route path="/access-denied" element={<AccessDeniedPage />} />
+          <Route path="/401" element={<SessionExpiredPage />} />
+          <Route path="/session-expired" element={<SessionExpiredPage />} />
 
           {/* DEV ONLY ROUTE (Lot R0) */}
           {import.meta.env.DEV && DevUiGallery && (

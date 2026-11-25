@@ -6,4 +6,6 @@ export * from './MerchantStatusPage';
 export * from './AccountSuspendedPage';
 export * from './MerchantDocumentsPage';
 export * from './DocumentResubmitPage';
+export * from './AccessDeniedPage';
+export * from './SessionExpiredPage';
 export * from './services/authService';

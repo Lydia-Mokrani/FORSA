@@ -10,6 +10,7 @@ import {
   Banner,
   Chip,
 } from '../../components/ui';
+import { AvatarCropperModal } from '../account/AvatarCropperModal';
 import {
   startPhoneChange,
   verifyPhoneChange,
@@ -139,11 +140,14 @@ export const ProfilePage: React.FC = () => {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Avatar Upload
+  // Avatar Upload & Cropper
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [showCropperModal, setShowCropperModal] = useState(false);
+  const [cropperRawImage, setCropperRawImage] = useState<string | null>(null);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
 
   // Phone Change 2-Step Telegram Flow State
   const [showPhoneOtpModal, setShowPhoneOtpModal] = useState(false);
@@ -476,8 +480,8 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
-  // Avatar Upload
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Avatar Upload & Cropper
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -493,17 +497,29 @@ export const ProfilePage: React.FC = () => {
       return;
     }
 
+    setPendingAvatarFile(file);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropperRawImage(reader.result as string);
+      setShowCropperModal(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadAvatarAfterCrop = async (croppedImage: string) => {
     const token =
       localStorage.getItem('forsa_access_token') ||
       localStorage.getItem('token') ||
       localStorage.getItem('forsa_auth_token');
     if (!token) return;
 
-    const formData = new FormData();
-    formData.append('avatar', file);
-
     setIsUploadingAvatar(true);
     try {
+      const formData = new FormData();
+      if (pendingAvatarFile) {
+        formData.append('avatar', pendingAvatarFile);
+      }
+
       const res = await fetch('/api/users/me/avatar', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -513,9 +529,9 @@ export const ProfilePage: React.FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || "Échec de l'envoi de la photo.");
 
-      setAvatarPreview(data.avatarUrl);
+      setAvatarPreview(data.avatarUrl || croppedImage);
       if (profile) {
-        const updated = { ...profile, avatarUrl: data.avatarUrl };
+        const updated = { ...profile, avatarUrl: data.avatarUrl || croppedImage };
         setProfile(updated);
         localStorage.setItem('forsa_user', JSON.stringify(updated));
       }
@@ -525,6 +541,7 @@ export const ProfilePage: React.FC = () => {
       setAvatarError(err.message || 'Erreur lors du téléversement.');
     } finally {
       setIsUploadingAvatar(false);
+      setPendingAvatarFile(null);
     }
   };
 
@@ -2175,6 +2192,22 @@ export const ProfilePage: React.FC = () => {
           Êtes-vous sûr de vouloir quitter le mode édition ? Toutes les données modifiées seront réinitialisées.
         </p>
       </ResponsiveDialog>
+
+      {/* ── MODALE RECADRAGE AVATAR ───────────────────────────────────── */}
+      {showCropperModal && cropperRawImage && (
+        <AvatarCropperModal
+          isOpen={showCropperModal}
+          imageSrc={cropperRawImage}
+          onClose={() => {
+            setShowCropperModal(false);
+            setCropperRawImage(null);
+            setPendingAvatarFile(null);
+          }}
+          onCropComplete={(cropped) => {
+            handleUploadAvatarAfterCrop(cropped);
+          }}
+        />
+      )}
     </div>
   );
 };

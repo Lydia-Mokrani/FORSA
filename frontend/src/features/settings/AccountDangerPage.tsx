@@ -1,143 +1,326 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Header,
-  Card,
-  Banner,
-  Button,
-  ResponsiveDialog,
-  Icon,
-} from '../../components/ui';
+  PauseCircle,
+  Trash2,
+  AlertTriangle,
+  AlertCircle,
+  ArrowLeft,
+  Info,
+  CheckCircle2,
+  X,
+  Lock,
+} from 'lucide-react';
 
 export const AccountDangerPage: React.FC = () => {
   const navigate = useNavigate();
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [confirmCheckbox, setConfirmCheckbox] = useState(false);
+
+  // Simulation état : commerçant avec commandes ou réservations en cours
+  const [hasActiveOrders, setHasActiveOrders] = useState(true);
 
   return (
-    <div className="min-h-screen bg-ui-page p-4 sm:p-6 md:p-10 font-poppins text-ui-ink">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <Header
-          breadcrumb={['Mon compte', 'Paramètres', 'Gestion du compte']}
-          title="Gestion du compte"
-          subtitle="Désactivation temporaire ou suppression irréversible de votre compte FORSA"
-          mobileSubtitle="Zone sensible du compte"
-          onBack={() => navigate('/settings')}
-        />
+    <div
+      className="min-h-screen bg-[#fffaf0] p-4 sm:p-6 md:p-10 font-poppins text-[#0B2C25]"
+      data-node-id="1156:26272"
+      data-name="Desktop · Compte — Zone sensible"
+    >
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Fil d'ariane & En-tête */}
+        <div>
+          <button
+            type="button"
+            onClick={() => navigate('/settings')}
+            className="inline-flex items-center gap-1.5 text-xs text-[#0b2c25]/70 hover:text-[#0b2c25] mb-2 cursor-pointer transition-colors"
+          >
+            <ArrowLeft className="size-3.5" />
+            <span>Mon compte / Paramètres / Gestion du compte</span>
+          </button>
 
-        <Banner
-          variant="warn"
-          title="Zone sensible"
-          description="Ces actions impactent directement la disponibilité de vos données, de vos offres et de votre identifiant Telegram."
-        />
+          <h1 className="font-semibold text-3xl sm:text-4xl text-[#0b2c25]">
+            Gérer mon compte
+          </h1>
+          <p className="text-sm sm:text-base text-[#0b2c25]/75 mt-1">
+            Désactivez ou supprimez définitivement votre compte FORSA
+          </p>
+        </div>
 
-        {/* Carte 1 : Désactivation temporaire */}
-        <Card
-          icon={<Icon name="clock" size={20} />}
-          title="Désactivation temporaire"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-ui-text-70 leading-relaxed">
-              Mettre en pause votre compte masque temporairement votre profil et vos annonces.
-              Vos coupons actifs resteront enregistrés. Vous pourrez réactiver votre compte à tout
-              moment en vous reconnectant avec votre numéro Telegram vérifié.
-            </p>
+        {/* Bannière Blocage : Suppression impossible si commandes en cours */}
+        {hasActiveOrders && (
+          <div
+            className="p-5 sm:p-6 rounded-[20px] bg-[#fdecea] border border-[#f2b8b3] text-[#b3261e] flex flex-col sm:flex-row items-start gap-4 shadow-xs animate-fade-in"
+            data-node-id="1156:26649"
+            data-name="Bannière — Suppression impossible (commandes en cours)"
+          >
+            <div className="size-10 rounded-full bg-white/80 flex items-center justify-center shrink-0 text-[#b3261e] shadow-xs">
+              <AlertTriangle className="size-5" />
+            </div>
 
-            <div className="pt-2 flex items-center justify-between gap-4 border-t border-ui-field-border">
-              <span className="text-xs text-ui-text-70">
-                La réactivation est immédiate dès la prochaine connexion.
-              </span>
-              <Button
-                variant="secondary"
-                disabled
-                onClick={() => setShowDeactivateDialog(true)}
-              >
-                Désactiver le compte (Bientôt disponible)
-              </Button>
+            <div className="flex-1">
+              <h3 className="font-semibold text-base sm:text-lg text-[#b3261e] mb-1">
+                Suppression impossible pour le moment
+              </h3>
+              <p className="text-xs sm:text-sm text-[#b3261e]/90 leading-relaxed">
+                Vous avez actuellement des réservations ou commandes en cours. Conformément aux règles de sécurité FORSA, vous devez finaliser ou annuler toutes vos transactions actives avant de pouvoir supprimer votre compte.
+              </p>
+
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate('/reservations')}
+                  className="px-4 py-2 rounded-xl bg-[#b3261e] hover:bg-[#962019] text-white text-xs font-semibold cursor-pointer transition-all shadow-xs"
+                >
+                  Gérer mes commandes en cours
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHasActiveOrders(false)}
+                  className="px-3 py-2 rounded-xl text-xs text-[#b3261e] underline hover:no-underline cursor-pointer"
+                >
+                  (Simuler 0 commande active)
+                </button>
+              </div>
             </div>
           </div>
-        </Card>
+        )}
 
-        {/* Carte 2 : Suppression définitive */}
-        <div className="rounded-ui-card border border-ui-error/30 bg-white p-6 shadow-sm space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-full bg-ui-error-bg flex items-center justify-center text-ui-error shrink-0">
-              <Icon name="alert-circle" size={20} />
-            </div>
+        {/* Grille 2 cartes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+          {/* Carte 1 : Désactiver mon compte */}
+          <div
+            className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-6 sm:p-8 flex flex-col justify-between shadow-xs"
+            data-node-id="1156:26330"
+          >
             <div>
-              <h3 className="text-lg font-semibold text-ui-error">
-                Suppression définitive du compte
-              </h3>
-              <p className="text-xs text-ui-text-70">
-                Action irréversible : suppression complète de vos données personnelles
+              <div className="flex items-center gap-3 mb-4">
+                <div className="size-11 rounded-full bg-[#eef7ec] border border-[#dbf0dd] flex items-center justify-center text-[#17664e]">
+                  <PauseCircle className="size-5" />
+                </div>
+                <h2 className="font-semibold text-xl text-[#0b2c25]" data-node-id="1156:26337">
+                  Désactiver mon compte
+                </h2>
+              </div>
+
+              <p className="text-sm text-[#0b2c25]/75 leading-relaxed mb-6" data-node-id="1156:26348">
+                Votre profil, vos offres et vos informations seront temporairement masqués. Vous pourrez réactiver votre compte à tout moment en vous reconnectant simplement.
               </p>
             </div>
+
+            <div className="pt-4 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setShowDeactivateDialog(true)}
+                className="w-full sm:w-auto px-6 py-3 rounded-2xl border-[1.5px] border-[#0b2c25] hover:bg-stone-50 active:scale-98 text-[#0b2c25] font-semibold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                data-node-id="1156:26349"
+              >
+                <PauseCircle className="size-4.5" />
+                <span>Désactiver temporairement</span>
+              </button>
+            </div>
           </div>
 
-          <p className="text-sm text-ui-text-70 leading-relaxed">
-            La suppression de votre compte effacera l'ensemble de votre historique, vos préférences,
-            vos favoris et dissociera votre numéro de téléphone. Si vous êtes commerçant, votre boutique
-            et vos catalogues seront définitivement archivés conformément aux obligations légales.
-          </p>
+          {/* Carte 2 : Supprimer mon compte */}
+          <div
+            className="bg-[#fffafa] border-[1.5px] border-[#f2b8b3] rounded-[24px] p-6 sm:p-8 flex flex-col justify-between shadow-xs"
+            data-node-id="1156:26338"
+          >
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="size-11 rounded-full bg-[#fdecea] border border-[#f2b8b3] flex items-center justify-center text-[#b3261e]">
+                  <Trash2 className="size-5" />
+                </div>
+                <h2 className="font-semibold text-xl text-[#b3261e]" data-node-id="1156:26347">
+                  Supprimer mon compte
+                </h2>
+              </div>
 
-          <div className="pt-3 border-t border-ui-field-border flex items-center justify-between gap-4">
-            <span className="text-xs text-ui-error font-medium">
-              [NOT WIRED] Cette action requiert une confirmation administrative.
-            </span>
-            <Button
-              variant="danger"
-              disabled
-              onClick={() => setShowDeleteDialog(true)}
+              <p className="text-sm text-[#0b2c25]/75 leading-relaxed mb-6" data-node-id="1156:26355">
+                Vos données personnelles, vos réservations et vos préférences seront définitivement effacées. Cette action est irréversible.
+              </p>
+            </div>
+
+            <div className="pt-4 border-t border-red-100">
+              <button
+                type="button"
+                disabled={hasActiveOrders}
+                onClick={() => setShowDeleteDialog(true)}
+                className={`w-full sm:w-auto px-6 py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
+                  hasActiveOrders
+                    ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                    : 'bg-[#b3261e] hover:bg-[#962019] text-white active:scale-98 cursor-pointer shadow-xs'
+                }`}
+                data-node-id="1156:26356"
+              >
+                <Trash2 className="size-4.5" />
+                <span>Supprimer mon compte</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Bannière — info support */}
+        <div
+          className="p-5 sm:p-6 rounded-[20px] bg-white border border-[#dbf0dd] flex items-start gap-4 shadow-xs"
+          data-node-id="1156:26364"
+        >
+          <div className="size-9 rounded-full bg-[#eef7ec] border border-[#dbf0dd] flex items-center justify-center text-[#17664e] shrink-0">
+            <Info className="size-4.5" />
+          </div>
+          <div>
+            <h4 className="font-semibold text-sm text-[#0b2c25]" data-node-id="1156:26371">
+              Un souci avec votre compte ?
+            </h4>
+            <p className="text-xs text-[#0b2c25]/70 mt-0.5" data-node-id="1156:26372">
+              Contactez le support avant de supprimer votre compte. Notre équipe peut vous aider à résoudre la majorité des difficultés.
+            </p>
+            <a
+              href="mailto:support@forsa.dz"
+              className="inline-block mt-2 text-xs font-semibold text-[#17664e] hover:underline"
             >
-              Supprimer mon compte (Bientôt disponible)
-            </Button>
+              Écrire au support FORSA →
+            </a>
           </div>
         </div>
       </div>
 
-      {/* Dialog Désactivation */}
-      <ResponsiveDialog
-        isOpen={showDeactivateDialog}
-        onClose={() => setShowDeactivateDialog(false)}
-        title="Désactiver mon compte"
-        description="Voulez-vous suspendre temporairement votre activité sur FORSA ?"
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setShowDeactivateDialog(false)}>
-              Annuler
-            </Button>
-            <Button variant="primary" disabled>
-              Bientôt disponible
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-ui-text-70">
-          Cette fonctionnalité sera disponible dans une prochaine mise à jour.
-        </p>
-      </ResponsiveDialog>
+      {/* Modal Confirmation Désactivation */}
+      {showDeactivateDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs font-poppins">
+          <div className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-6 sm:p-8 max-w-lg w-full shadow-2xl relative animate-scale-in">
+            <button
+              type="button"
+              onClick={() => setShowDeactivateDialog(false)}
+              className="absolute top-5 right-5 text-stone-400 hover:text-stone-700 cursor-pointer p-1"
+            >
+              <X className="size-5" />
+            </button>
 
-      {/* Dialog Suppression */}
-      <ResponsiveDialog
-        isOpen={showDeleteDialog}
-        onClose={() => setShowDeleteDialog(false)}
-        title="Supprimer définitivement mon compte"
-        description="Cette action est irréversible. Êtes-vous certain de vouloir supprimer vos données ?"
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setShowDeleteDialog(false)}>
-              Annuler
-            </Button>
-            <Button variant="danger" disabled>
-              Bientôt disponible
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-ui-text-70">
-          Cette fonctionnalité sera disponible dans une prochaine mise à jour de sécurité.
-        </p>
-      </ResponsiveDialog>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="size-11 rounded-full bg-[#eef7ec] flex items-center justify-center text-[#17664e]">
+                <PauseCircle className="size-6" />
+              </div>
+              <h3 className="font-semibold text-xl text-[#0b2c25]">
+                Désactiver temporairement
+              </h3>
+            </div>
+
+            <p className="text-sm text-[#0b2c25]/75 leading-relaxed mb-6">
+              Êtes-vous certain de vouloir mettre votre compte en pause ? Vos offres ne seront plus visibles des acheteurs jusqu'à votre prochaine reconnexion.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setShowDeactivateDialog(false)}
+                className="px-5 py-2.5 rounded-xl border border-stone-200 text-xs font-medium text-[#0b2c25] hover:bg-stone-50 cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeactivateDialog(false);
+                  navigate('/welcome');
+                }}
+                className="px-5 py-2.5 rounded-xl bg-[#0b2c25] hover:bg-[#12443a] text-white text-xs font-semibold cursor-pointer shadow-xs"
+              >
+                Confirmer la désactivation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmation Suppression (1156:26512) */}
+      {showDeleteDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs font-poppins">
+          <div
+            className="bg-white border-[1.5px] border-[#f2b8b3] rounded-[28px] p-6 sm:p-8 max-w-lg w-full shadow-2xl relative animate-scale-in"
+            data-node-id="1156:26512"
+          >
+            <button
+              type="button"
+              onClick={() => setShowDeleteDialog(false)}
+              className="absolute top-5 right-5 text-stone-400 hover:text-stone-700 cursor-pointer p-1"
+              data-node-id="1156:26521"
+            >
+              <X className="size-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="size-12 rounded-full bg-[#fdecea] flex items-center justify-center text-[#b3261e]">
+                <Trash2 className="size-6" />
+              </div>
+              <h3 className="font-semibold text-xl text-[#b3261e]" data-node-id="1156:26525">
+                Supprimer définitivement votre compte
+              </h3>
+            </div>
+
+            <p className="text-sm text-[#0b2c25]/80 leading-relaxed mb-4" data-node-id="1156:26526">
+              Cette action est irréversible. Vos données personnelles et votre accès ne pourront pas être restaurés.
+            </p>
+
+            {/* Conséquences */}
+            <div className="bg-[#fdecea]/40 border border-[#f2b8b3]/60 rounded-2xl p-4 space-y-2.5 mb-5 text-xs text-[#0b2c25]/85" data-node-id="1156:26474">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="size-4 text-[#b3261e] shrink-0 mt-0.5" />
+                <span>Vos données personnelles et votre profil seront définitivement effacés.</span>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="size-4 text-[#b3261e] shrink-0 mt-0.5" />
+                <span>Vos offres et historiques de réservations seront archivés sans association nominative.</span>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="size-4 text-[#b3261e] shrink-0 mt-0.5" />
+                <span>Votre numéro de téléphone sera dissocié de notre système d'authentification.</span>
+              </div>
+            </div>
+
+            {/* Case à cocher */}
+            <label className="flex items-start gap-3 mb-6 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={confirmCheckbox}
+                onChange={(e) => setConfirmCheckbox(e.target.checked)}
+                className="mt-0.5 size-4 accent-[#b3261e] rounded cursor-pointer"
+                data-node-id="1156:26505"
+              />
+              <span className="text-xs text-[#0b2c25] leading-relaxed" data-node-id="1156:26510">
+                Je comprends que cette action est définitive et que je ne pourrai pas récupérer mes informations.
+              </span>
+            </label>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setShowDeleteDialog(false)}
+                className="px-5 py-2.5 rounded-xl border border-stone-200 text-xs font-medium text-[#0b2c25] hover:bg-stone-50 cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={!confirmCheckbox}
+                onClick={() => {
+                  setShowDeleteDialog(false);
+                  navigate('/welcome');
+                }}
+                className={`px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  confirmCheckbox
+                    ? 'bg-[#b3261e] hover:bg-[#962019] text-white cursor-pointer shadow-xs active:scale-98'
+                    : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                }`}
+              >
+                <Trash2 className="size-3.5" />
+                <span>Confirmer la suppression</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
