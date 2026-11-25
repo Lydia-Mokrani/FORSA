@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import loginBg from '../../assets/login-bg.png';
+import {
+  Button,
+  Field,
+  Banner,
+  Chip,
+  Stepper,
+  Dropzone,
+  MapBox,
+  Icon,
+} from '../../components/ui';
+
 import arrowRightIcon from '../../assets/icons/arrow-right.svg';
 import arrowLeftIcon from '../../assets/icons/arrow-left.svg';
-import uploadIcon from '../../assets/icons/upload-01.svg';
-import infoCircleIcon from '../../assets/icons/information-circle.svg';
-import inputStoreIcon from '../../assets/icons/input-store.svg';
-import inputChevronDownIcon from '../../assets/icons/input-chevron-down.svg';
-import inputFileTextIcon from '../../assets/icons/input-file-text.svg';
-import inputPinIcon from '../../assets/icons/input-pin-location.svg';
-import inputUserIcon from '../../assets/icons/input-user.svg';
-import inputMailIcon from '../../assets/icons/input-mail.svg';
-import inputPhoneIcon from '../../assets/icons/input-phone.svg';
 import badgeRoleIcon from '../../assets/icons/badge-role-icon.svg';
-import figmaAlertCircle from '../../assets/icons/figma/icone-alert-circle.svg';
 import figmaClock from '../../assets/icons/figma/icone-clock-01.svg';
 import figmaRefresh from '../../assets/icons/figma/icone-refresh.svg';
 import figmaSmartPhone from '../../assets/icons/figma/icone-smart-phone-01.svg';
@@ -27,6 +27,7 @@ import {
 } from './services/authService';
 
 import { SHOP_CATEGORIES } from '../shop/shopCategories';
+import { useShopGeocode } from '../shop/useShopGeocode';
 
 type ClientStep = 'FORM' | 'WAITING_TELEGRAM' | 'VERIFY_OTP';
 type MerchantStep = 1 | 2 | 3;
@@ -93,7 +94,7 @@ export const RegisterPage: React.FC = () => {
     rcNumber: '',
     address: '',
     proPhone: '',
-    latitude: 36.7588, // Boumerdès / Alger par défaut
+    latitude: 36.7588,
     longitude: 3.4756,
     openingHours: DEFAULT_OPENING_HOURS,
     // Étape 3 : Documents
@@ -102,6 +103,31 @@ export const RegisterPage: React.FC = () => {
     storefrontFile: null as File | null,
     confirmDocuments: false,
   });
+
+  // Géocodage réel pour l'Étape 2 Commerçant
+  const {
+    geoStatus,
+    coordinates: geoCoordinates,
+    displayName: geoDisplayName,
+    setAddress: setGeoAddress,
+    handleBlur: handleGeoBlur,
+    handleKeyDown: handleGeoKeyDown,
+    retry: retryGeocode,
+  } = useShopGeocode({
+    initialAddress: merchantData.address,
+    initialCoordinates: { latitude: merchantData.latitude, longitude: merchantData.longitude },
+  });
+
+  // Synchroniser les coordonnées trouvées vers merchantData
+  useEffect(() => {
+    if (geoCoordinates) {
+      setMerchantData((prev) => ({
+        ...prev,
+        latitude: geoCoordinates.latitude,
+        longitude: geoCoordinates.longitude,
+      }));
+    }
+  }, [geoCoordinates]);
 
   // États Telegram partagés (start / waiting / OTP)
   const [challengeId, setChallengeId] = useState<string | null>(null);
@@ -119,7 +145,7 @@ export const RegisterPage: React.FC = () => {
   // Feedback UI
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+  const [, setAttemptsLeft] = useState<number | null>(null);
 
   useEffect(() => {
     if (searchParams.get('role') === 'merchant') setRole('MERCHANT');
@@ -192,11 +218,21 @@ export const RegisterPage: React.FC = () => {
     }
 
     setNormalizedPhone(normalized);
-    const data = await startTelegramAuth(normalized);
-    setChallengeId(data.challengeId);
-    setDeepLink(data.deepLink);
-    setWaitingCountdown(600);
-    startPolling(data.challengeId);
+    try {
+      const data = await startTelegramAuth(normalized);
+      setChallengeId(data.challengeId);
+      setDeepLink(data.deepLink);
+      setWaitingCountdown(600);
+      startPolling(data.challengeId);
+    } catch (err: any) {
+      if (err.status === 409 || err.code === 'CONFLICT' || err.message?.includes('already')) {
+        throw new Error('Ce numéro de téléphone est déjà associé à un compte. Veuillez vous connecter.');
+      }
+      if (err.status === 429) {
+        throw new Error('Trop de demandes. Veuillez patienter avant de réessayer.');
+      }
+      throw err;
+    }
   };
 
   const startPolling = (cId: string) => {
@@ -231,6 +267,11 @@ export const RegisterPage: React.FC = () => {
 
     if (!clientData.fullName.trim()) {
       setErrorMessage('Veuillez renseigner votre nom complet.');
+      return;
+    }
+    // Validation e-mail obligatoire (spécification R0b/F1)
+    if (!clientData.email.trim() || !clientData.email.includes('@')) {
+      setErrorMessage('L’adresse e-mail est obligatoire et doit être valide.');
       return;
     }
     if (!clientData.acceptTerms) {
@@ -354,6 +395,11 @@ export const RegisterPage: React.FC = () => {
       setErrorMessage('Le nom complet du gérant est requis.');
       return;
     }
+    // E-mail obligatoire pour commerçant
+    if (!merchantData.email.trim() || !merchantData.email.includes('@')) {
+      setErrorMessage('L’adresse e-mail est obligatoire et doit être valide.');
+      return;
+    }
     if (!merchantData.acceptTerms) {
       setErrorMessage('Veuillez accepter les Conditions d’utilisation.');
       return;
@@ -465,27 +511,22 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-forsa-leaf selection:text-white overflow-x-hidden">
-      {/* Fond photo bokeh */}
-      <div aria-hidden className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <img src={loginBg} alt="" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-[#FFFAF0]/28" />
-      </div>
-
-      {/* En-tête officiel */}
+    <div className="relative min-h-screen w-full bg-ui-auth-bg flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-ui-emerald selection:text-white overflow-x-hidden">
+      {/* En-tête */}
       <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-4">
-        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-[#0B2C25] hover:opacity-90 transition">
+        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-ui-ink hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="hidden sm:inline text-[14px] font-medium text-[#0B2C25]/85">
-          Donnez une autre vie à vos invendus
+        <span className="hidden sm:inline text-[14px] font-medium text-ui-text-80">
+          Rejoignez le mouvement anti-gaspillage
         </span>
       </header>
 
-      {/* Carte Glassmorphism */}
-      <main className="relative z-10 w-full max-w-[540px] backdrop-blur-[20px] bg-white/40 border-[1.2px] border-white/70 rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_0px_rgba(0,0,0,0.10)] flex flex-col gap-5 sm:gap-6 my-auto">
-        {/* Toggle Client / Commerçant (uniquement à l'étape initiale) */}
-        {clientStep === 'FORM' && merchantStep === 1 && merchantAuthStep === 'FORM' && (
+      {/* Carte Blanche Conforme Figma [DECISION HYB: Fond uni #dce1d0] */}
+      <main className="relative z-10 bg-white border-[1.5px] border-ui-card-border rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_rgba(11,44,37,0.08)] flex flex-col gap-[20px] my-auto max-w-[560px] w-full">
+        {/* Toggle Rôle (uniquement à l'étape initiale) */}
+        {((role === 'CUSTOMER' && clientStep === 'FORM') ||
+          (role === 'MERCHANT' && merchantStep === 1 && merchantAuthStep === 'FORM')) && (
           <div className="flex items-center justify-start w-full">
             <button
               type="button"
@@ -493,785 +534,565 @@ export const RegisterPage: React.FC = () => {
                 setRole((r) => (r === 'CUSTOMER' ? 'MERCHANT' : 'CUSTOMER'));
                 setErrorMessage(null);
               }}
-              className="group inline-flex items-center gap-2 bg-white/65 hover:bg-white/85 border border-[#0B2C25]/20 h-[38px] px-3.5 rounded-full transition shadow-sm cursor-pointer"
+              className="group inline-flex items-center gap-2 bg-ui-mint hover:bg-ui-mint/80 border border-ui-field-border h-[38px] px-3.5 rounded-full transition shadow-xs cursor-pointer"
             >
-              <img src={badgeRoleIcon} alt="Rôle" className="w-4 h-4 shrink-0" />
-              <span className="text-[13px] font-semibold text-[#0B2C25]">
-                {role === 'CUSTOMER' ? 'Compte Client' : 'Compte Professionnel'}
+              <img src={badgeRoleIcon} alt="Rôle" className="size-4 shrink-0" />
+              <span className="text-[13px] font-semibold text-ui-ink">
+                {role === 'CUSTOMER' ? 'Compte client' : 'Compte commerçant'}
               </span>
-              <span className="text-[#0B2C25]/40 text-[13px]">·</span>
-              <span className="text-[13px] font-semibold text-[#17664E] group-hover:underline">
+              <span className="text-ui-text-70 text-[13px]">·</span>
+              <span className="text-[13px] font-semibold text-ui-emerald group-hover:underline">
                 Changer
               </span>
             </button>
           </div>
         )}
 
-        {/* ─── INSCRIPTION CLIENT ────────────────────────────────────────── */}
-        {role === 'CUSTOMER' && (
+        {/* Stepper Commerçant */}
+        {role === 'MERCHANT' && (
+          <div className="w-full pb-2">
+            <Stepper
+              current={merchantStep - 1}
+              steps={[
+                { title: 'Compte' },
+                { title: 'Commerce' },
+                { title: 'Documents' },
+              ]}
+            />
+          </div>
+        )}
+
+        {/* Message d'erreur via Banner */}
+        {errorMessage && (
+          <Banner
+            variant="error"
+            description={errorMessage}
+            className="w-full text-left"
+          />
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* PARCOURS CLIENT                                                    */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+
+        {/* Client Étape 1 : Formulaire */}
+        {role === 'CUSTOMER' && clientStep === 'FORM' && (
           <>
-            {clientStep === 'FORM' && (
-              <>
-                <div className="text-center flex flex-col gap-1.5 w-full">
-                  <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[32px] leading-tight">
-                    Créer mon compte
-                  </h1>
-                  <p className="font-normal text-[14px] text-[#0B2C25]/65">
-                    Rejoignez la communauté FORSA et sauvez vos premiers paniers
-                  </p>
-                </div>
+            <div className="text-center flex flex-col gap-1 w-full">
+              <h1 className="font-semibold text-ui-ink text-2xl sm:text-[32px] leading-tight">
+                Créer un compte
+              </h1>
+              <p className="font-normal text-[15px] text-ui-text-70 leading-normal">
+                Profitez d'offres exclusives et sauvez des invendus
+              </p>
+            </div>
 
-                {errorMessage && (
-                  <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3 rounded-2xl">
-                    <img src={figmaAlertCircle} alt="" className="w-5 h-5 shrink-0" />
-                    <span>{errorMessage}</span>
-                  </div>
-                )}
+            <form onSubmit={handleClientFormSubmit} className="flex flex-col gap-4 w-full">
+              <Field
+                label="Nom complet"
+                type="text"
+                required
+                placeholder="Ex : Mohamed Brahimi"
+                value={clientData.fullName}
+                onChange={(e) => setClientData({ ...clientData, fullName: e.target.value })}
+                leftIcon={<Icon name="user" size={18} />}
+              />
 
-                <form onSubmit={handleClientFormSubmit} className="flex flex-col gap-3.5 w-full">
-                  {/* Nom complet */}
-                  <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center gap-3 transition">
-                    <img src={inputUserIcon} alt="" className="size-5 opacity-60 shrink-0" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Nom et prénom"
-                      value={clientData.fullName}
-                      onChange={(e) => setClientData({ ...clientData, fullName: e.target.value })}
-                      className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"
-                    />
-                  </div>
+              <Field
+                label="Adresse e-mail"
+                type="email"
+                required
+                placeholder="nom@exemple.dz"
+                value={clientData.email}
+                onChange={(e) => setClientData({ ...clientData, email: e.target.value })}
+                helperText="Obligatoire pour les notifications et vos reçus"
+              />
 
-                  {/* Email optionnel */}
-                  <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center gap-3 transition">
-                    <img src={inputMailIcon} alt="" className="size-5 opacity-60 shrink-0" />
-                    <input
-                      type="email"
-                      placeholder="Adresse e-mail (facultatif)"
-                      value={clientData.email}
-                      onChange={(e) => setClientData({ ...clientData, email: e.target.value })}
-                      className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"
-                    />
-                  </div>
+              <Field
+                label="Numéro de mobile"
+                type="tel"
+                required
+                prefix="+213"
+                leftIcon={<Icon name="phone" size={18} />}
+                placeholder="05 / 06 / 07 XX XX XX XX"
+                value={clientData.phone}
+                onChange={(e) => setClientData({ ...clientData, phone: e.target.value })}
+                helperText="Validation sécurisée par code Telegram"
+              />
 
-                  {/* Numéro de téléphone */}
-                  <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center gap-3 transition">
-                    <img src={inputPhoneIcon} alt="" className="size-5 opacity-60 shrink-0" />
-                    <span className="text-sm font-semibold text-[#0B2C25]/80 select-none">+213</span>
-                    <span className="text-[#0B2C25]/30">|</span>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="05 / 06 / 07 XX XX XX XX"
-                      value={clientData.phone}
-                      onChange={(e) => setClientData({ ...clientData, phone: e.target.value })}
-                      className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none font-medium"
-                    />
-                  </div>
+              <label className="flex items-start gap-2.5 cursor-pointer select-none text-[13px] text-ui-text-70 pt-1">
+                <input
+                  type="checkbox"
+                  required
+                  checked={clientData.acceptTerms}
+                  onChange={(e) => setClientData({ ...clientData, acceptTerms: e.target.checked })}
+                  className="mt-0.5 rounded border-ui-field-border text-ui-emerald focus:ring-ui-emerald"
+                />
+                <span>
+                  J’accepte les{' '}
+                  <Link to="/cgu" className="text-ui-emerald underline">
+                    Conditions Générales d'Utilisation
+                  </Link>{' '}
+                  de FORSA.
+                </span>
+              </label>
 
-                  {/* Conditions d'utilisation */}
-                  <label className="flex items-start gap-2.5 cursor-pointer text-xs sm:text-[13px] text-[#0B2C25]/80 pt-1">
-                    <input
-                      type="checkbox"
-                      checked={clientData.acceptTerms}
-                      onChange={(e) => setClientData({ ...clientData, acceptTerms: e.target.checked })}
-                      className="mt-0.5 size-4 rounded border-gray-300 text-[#0B2C25] focus:ring-0 cursor-pointer"
-                    />
-                    <span>
-                      J'accepte les{' '}
-                      <span className="font-semibold text-[#17664E] underline">Conditions générales</span> et la{' '}
-                      <span className="font-semibold text-[#17664E] underline">Politique de confidentialité</span>.
-                    </span>
-                  </label>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={loading}
+                fullWidth
+                rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+              >
+                Continuer avec Telegram
+              </Button>
+            </form>
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full h-[54px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition mt-2 cursor-pointer active:scale-[0.99] disabled:opacity-60"
-                  >
-                    {loading ? (
-                      <span>Initialisation...</span>
-                    ) : (
-                      <>
-                        <span>Continuer avec Telegram</span>
-                        <img src={arrowRightIcon} alt="" className="w-5 h-5" />
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                <p className="text-center text-[13px] text-[#0B2C25]/75 pt-1">
-                  Déjà inscrit ?{' '}
-                  <Link to="/login?role=client" className="font-semibold text-[#17664E] hover:underline">
-                    Se connecter
-                  </Link>
-                </p>
-              </>
-            )}
-
-            {/* Étape Telegram Waiting (Client) */}
-            {clientStep === 'WAITING_TELEGRAM' && (
-              <div className="flex flex-col items-center text-center gap-5 w-full">
-                <div className="flex items-center justify-between w-full">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (pollingRef.current) clearInterval(pollingRef.current);
-                      setClientStep('FORM');
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B2C25]/70 hover:text-[#0B2C25] cursor-pointer"
-                  >
-                    <img src={arrowLeftIcon} alt="" className="w-4 h-4" />
-                    <span>Retour au formulaire</span>
-                  </button>
-                  <span className="text-xs font-medium text-[#17664E] bg-[#17664E]/10 px-2.5 py-1 rounded-full">
-                    {normalizedPhone}
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <h2 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
-                    Validez sur Telegram
-                  </h2>
-                  <p className="text-xs sm:text-[14px] text-[#0B2C25]/70 max-w-sm mx-auto">
-                    Partagez votre contact avec le bot FORSA pour vérifier votre numéro.
-                  </p>
-                </div>
-
-                {deepLink && (
-                  <a
-                    href={deepLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full h-[52px] bg-[#229ED9] hover:bg-[#1E88BE] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-md transition cursor-pointer"
-                  >
-                    <img src={figmaSmartPhone} alt="" className="w-5 h-5 invert" />
-                    <span>Ouvrir dans Telegram</span>
-                  </a>
-                )}
-
-                {deepLink && (
-                  <div className="bg-white/80 p-4 rounded-[20px] border border-[#0B2C25]/15 shadow-sm flex flex-col items-center gap-2">
-                    <QRCodeSVG value={deepLink} size={150} level="M" />
-                    <span className="text-[11px] text-[#0B2C25]/60">
-                      Scannez avec votre téléphone
-                    </span>
-                  </div>
-                )}
-
-                <div className="flex flex-col items-center gap-2 pt-1">
-                  <div className="inline-flex items-center gap-2 text-xs font-medium text-[#0B2C25]/80 bg-white/50 px-3.5 py-1.5 rounded-full border border-[#0B2C25]/10">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#17664E] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#17664E]" />
-                    </span>
-                    <span>En attente de votre confirmation...</span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-xs text-[#0B2C25]/60">
-                    <img src={figmaClock} alt="" className="w-3.5 h-3.5 opacity-60" />
-                    <span>Temps restant : {formatTimer(waitingCountdown)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Étape OTP (Client) */}
-            {clientStep === 'VERIFY_OTP' && (
-              <div className="flex flex-col items-center text-center gap-5 w-full">
-                <div className="flex flex-col gap-1.5">
-                  <h2 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
-                    Code de vérification
-                  </h2>
-                  <p className="text-xs sm:text-[14px] text-[#0B2C25]/70 max-w-sm mx-auto">
-                    Saisissez le code à 6 chiffres envoyé sur votre Telegram
-                  </p>
-                </div>
-
-                {errorMessage && (
-                  <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3 rounded-2xl w-full text-left">
-                    <img src={figmaAlertCircle} alt="" className="w-5 h-5 shrink-0" />
-                    <span>{errorMessage}</span>
-                  </div>
-                )}
-
-                <div className="flex justify-center gap-2 sm:gap-3 w-full my-2">
-                  {otp.map((digit, idx) => (
-                    <input
-                      key={idx}
-                      ref={(el) => {
-                        otpRefs.current[idx] = el;
-                      }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpChange(idx, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                      className="w-11 sm:w-13 h-14 sm:h-16 text-center text-2xl font-bold bg-white/70 border-[1.5px] border-[#0B2C25]/25 focus:border-[#17664E] focus:bg-white rounded-2xl text-[#0B2C25] shadow-sm focus:outline-none transition"
-                    />
-                  ))}
-                </div>
-
-                <div className="flex flex-col items-center gap-2 w-full text-xs text-[#0B2C25]/70">
-                  <div className="flex items-center gap-1.5">
-                    <img src={figmaClock} alt="" className="w-3.5 h-3.5 opacity-60" />
-                    <span>Expire dans : <strong className="text-[#0B2C25]">{formatTimer(otpCountdown)}</strong></span>
-                  </div>
-                  {resendCooldown > 0 ? (
-                    <span className="text-[#0B2C25]/50">Renvoyer ({resendCooldown}s)</span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => initiateTelegramAuth(clientData.phone)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#17664E] hover:underline cursor-pointer"
-                    >
-                      <img src={figmaRefresh} alt="" className="w-3.5 h-3.5" />
-                      <span>Renvoyer un code</span>
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  disabled={loading || otp.join('').length !== 6}
-                  onClick={() => submitOtp()}
-                  className="w-full h-[52px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer disabled:opacity-50 mt-2"
-                >
-                  {loading ? <span>Finalisation...</span> : <span>Valider mon inscription</span>}
-                </button>
-              </div>
-            )}
+            <p className="text-center text-[14px] text-ui-text-70 pt-1">
+              Vous avez déjà un compte ?{' '}
+              <Link to="/login?role=client" className="font-semibold text-ui-emerald hover:underline">
+                Se connecter
+              </Link>
+            </p>
           </>
         )}
 
-        {/* ─── INSCRIPTION COMMERÇANT (3 ÉTAPES) ──────────────────────────── */}
-        {role === 'MERCHANT' && (
-          <>
-            {/* Barre de progression des 3 étapes */}
-            <div className="flex items-center justify-between w-full px-2">
-              {[
-                { num: 1, label: 'Compte' },
-                { num: 2, label: 'Commerce' },
-                { num: 3, label: 'Documents' },
-              ].map((s) => (
-                <div key={s.num} className="flex items-center gap-2">
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                      merchantStep === s.num
-                        ? 'bg-[#0B2C25] text-white shadow'
-                        : merchantStep > s.num
-                        ? 'bg-[#17664E] text-white'
-                        : 'bg-white/60 text-[#0B2C25]/50 border border-[#0B2C25]/15'
-                    }`}
-                  >
-                    {merchantStep > s.num ? '✓' : s.num}
-                  </div>
-                  <span
-                    className={`text-xs font-medium hidden sm:inline ${
-                      merchantStep === s.num ? 'text-[#0B2C25]' : 'text-[#0B2C25]/50'
-                    }`}
-                  >
-                    {s.label}
-                  </span>
-                </div>
+        {/* Client & Commerçant Étape Telegram : Attente bot */}
+        {((role === 'CUSTOMER' && clientStep === 'WAITING_TELEGRAM') ||
+          (role === 'MERCHANT' && merchantAuthStep === 'WAITING_TELEGRAM')) && (
+          <div className="flex flex-col items-center text-center gap-5 w-full">
+            <div className="flex items-center justify-between w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  if (pollingRef.current) clearInterval(pollingRef.current);
+                  if (role === 'CUSTOMER') setClientStep('FORM');
+                  else setMerchantAuthStep('FORM');
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-ui-text-70 hover:text-ui-ink transition cursor-pointer"
+              >
+                <img src={arrowLeftIcon} alt="" className="size-4" />
+                <span>Modifier les informations</span>
+              </button>
+              <Chip variant="success">{normalizedPhone}</Chip>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <h2 className="font-semibold text-ui-ink text-2xl sm:text-[28px] leading-tight">
+                Ouvrez Telegram
+              </h2>
+              <p className="text-xs sm:text-[14px] text-ui-text-70 max-w-sm mx-auto">
+                Confirmez votre numéro avec le bot FORSA pour valider votre compte.
+              </p>
+            </div>
+
+            {deepLink && (
+              <a
+                href={deepLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full h-[52px] bg-[#229ED9] hover:bg-[#1E88BE] text-white font-medium text-[16px] rounded-ui-ctl flex items-center justify-center gap-2.5 shadow-sm transition cursor-pointer"
+              >
+                <img src={figmaSmartPhone} alt="" className="size-5 invert" />
+                <span>Ouvrir dans Telegram</span>
+              </a>
+            )}
+
+            {deepLink && (
+              <div className="bg-white p-4 rounded-ui-card border border-ui-card-border shadow-xs flex flex-col items-center gap-2">
+                <QRCodeSVG value={deepLink} size={150} level="M" />
+                <span className="text-[11px] text-ui-text-70">
+                  Ou scannez avec votre smartphone
+                </span>
+              </div>
+            )}
+
+            <div className="flex flex-col items-center gap-2 pt-1 w-full">
+              <div className="inline-flex items-center gap-2 text-xs font-medium text-ui-ink bg-ui-mint px-3.5 py-1.5 rounded-full border border-ui-card-border">
+                <span className="relative flex size-2">
+                  <span className="animate-ping absolute inline-flex size-full rounded-full bg-ui-emerald opacity-75" />
+                  <span className="relative inline-flex rounded-full size-2 bg-ui-emerald" />
+                </span>
+                <span>En attente de confirmation dans Telegram...</span>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs text-ui-text-70">
+                <img src={figmaClock} alt="" className="size-3.5 opacity-60" />
+                <span>Temps restant : {formatTimer(waitingCountdown)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Client & Commerçant Étape Telegram : Saisie OTP */}
+        {((role === 'CUSTOMER' && clientStep === 'VERIFY_OTP') ||
+          (role === 'MERCHANT' && merchantAuthStep === 'VERIFY_OTP')) && (
+          <div className="flex flex-col items-center text-center gap-5 w-full">
+            <div className="flex items-center justify-between w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  if (role === 'CUSTOMER') setClientStep('FORM');
+                  else setMerchantAuthStep('FORM');
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-ui-text-70 hover:text-ui-ink transition cursor-pointer"
+              >
+                <img src={arrowLeftIcon} alt="" className="size-4" />
+                <span>Changer de numéro</span>
+              </button>
+              <Chip variant="success">{normalizedPhone}</Chip>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <h2 className="font-semibold text-ui-ink text-2xl sm:text-[28px] leading-tight">
+                Code de confirmation
+              </h2>
+              <p className="text-xs sm:text-[14px] text-ui-text-70 max-w-sm mx-auto">
+                Entrez le code à 6 chiffres reçu sur Telegram
+              </p>
+            </div>
+
+            <div className="flex justify-center gap-2 sm:gap-3 w-full my-2">
+              {otp.map((digit, idx) => (
+                <input
+                  key={idx}
+                  ref={(el) => {
+                    otpRefs.current[idx] = el;
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                  className="size-12 sm:size-14 text-center text-2xl font-bold bg-white border-[1.5px] border-ui-field-border focus:border-2 focus:border-ui-emerald focus:bg-white rounded-ui-ctl text-ui-ink shadow-xs focus:outline-none transition"
+                />
               ))}
             </div>
 
-            {/* ÉTAPE 1 COMMERÇANT : Compte gérant */}
-            {merchantStep === 1 && (
-              <>
-                {merchantAuthStep === 'FORM' && (
-                  <>
-                    <div className="text-center flex flex-col gap-1 w-full">
-                      <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[30px] leading-tight">
-                        Espace professionnel
-                      </h1>
-                      <p className="font-normal text-[14px] text-[#0B2C25]/65">
-                        Étape 1/3 · Informations du responsable légal
-                      </p>
-                    </div>
+            <div className="flex items-center gap-1.5 text-xs text-ui-text-70">
+              <img src={figmaClock} alt="" className="size-3.5 opacity-60" />
+              <span>Expire dans : <strong className="text-ui-ink">{formatTimer(otpCountdown)}</strong></span>
+            </div>
 
-                    {errorMessage && (
-                      <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3 rounded-2xl">
-                        <img src={figmaAlertCircle} alt="" className="w-5 h-5 shrink-0" />
-                        <span>{errorMessage}</span>
-                      </div>
-                    )}
+            <Button
+              type="button"
+              variant="primary"
+              disabled={loading || otp.join('').length !== 6}
+              onClick={() => submitOtp()}
+              loading={loading}
+              fullWidth
+              rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+            >
+              Confirmer le compte
+            </Button>
+          </div>
+        )}
 
-                    <form onSubmit={handleMerchantStep1Submit} className="flex flex-col gap-3.5 w-full">
-                      <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center gap-3 transition">
-                        <img src={inputUserIcon} alt="" className="size-5 opacity-60 shrink-0" />
-                        <input
-                          type="text"
-                          required
-                          placeholder="Nom et prénom du gérant"
-                          value={merchantData.ownerName}
-                          onChange={(e) => setMerchantData({ ...merchantData, ownerName: e.target.value })}
-                          className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"
-                        />
-                      </div>
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* PARCOURS COMMERÇANT                                                 */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
 
-                      <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center gap-3 transition">
-                        <img src={inputMailIcon} alt="" className="size-5 opacity-60 shrink-0" />
-                        <input
-                          type="email"
-                          required
-                          placeholder="Email professionnel"
-                          value={merchantData.email}
-                          onChange={(e) => setMerchantData({ ...merchantData, email: e.target.value })}
-                          className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"
-                        />
-                      </div>
+        {/* Commerçant Étape 1 : Compte & Gérant */}
+        {role === 'MERCHANT' && merchantStep === 1 && merchantAuthStep === 'FORM' && (
+          <>
+            <div className="text-center flex flex-col gap-1 w-full">
+              <h1 className="font-semibold text-ui-ink text-2xl sm:text-[32px] leading-tight">
+                Étape 1 : Votre compte gérant
+              </h1>
+              <p className="font-normal text-[15px] text-ui-text-70 leading-normal">
+                Informations du responsable de l’établissement
+              </p>
+            </div>
 
-                      <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center gap-3 transition">
-                        <img src={inputPhoneIcon} alt="" className="size-5 opacity-60 shrink-0" />
-                        <span className="text-sm font-semibold text-[#0B2C25]/80 select-none">+213</span>
-                        <span className="text-[#0B2C25]/30">|</span>
-                        <input
-                          type="tel"
-                          required
-                          placeholder="05 / 06 / 07 XX XX XX XX"
-                          value={merchantData.phone}
-                          onChange={(e) => setMerchantData({ ...merchantData, phone: e.target.value })}
-                          className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none font-medium"
-                        />
-                      </div>
+            <form onSubmit={handleMerchantStep1Submit} className="flex flex-col gap-4 w-full">
+              <Field
+                label="Nom et prénom du gérant"
+                type="text"
+                required
+                placeholder="Ex : Karim Meziane"
+                value={merchantData.ownerName}
+                onChange={(e) => setMerchantData({ ...merchantData, ownerName: e.target.value })}
+                leftIcon={<Icon name="user" size={18} />}
+              />
 
-                      <label className="flex items-start gap-2.5 cursor-pointer text-xs sm:text-[13px] text-[#0B2C25]/80 pt-1">
-                        <input
-                          type="checkbox"
-                          checked={merchantData.acceptTerms}
-                          onChange={(e) => setMerchantData({ ...merchantData, acceptTerms: e.target.checked })}
-                          className="mt-0.5 size-4 rounded border-gray-300 text-[#0B2C25] focus:ring-0 cursor-pointer"
-                        />
-                        <span>
-                          Je certifie être le représentant légal du commerce et j'accepte les{' '}
-                          <span className="font-semibold text-[#17664E] underline">Conditions commerçants</span>.
-                        </span>
-                      </label>
+              <Field
+                label="Adresse e-mail professionnelle"
+                type="email"
+                required
+                placeholder="contact@boutique.dz"
+                value={merchantData.email}
+                onChange={(e) => setMerchantData({ ...merchantData, email: e.target.value })}
+                helperText="Sert aux notifications administratives et de validation"
+              />
 
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full h-[54px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition mt-2 cursor-pointer disabled:opacity-60"
-                      >
-                        {loading ? <span>Initialisation...</span> : <><span>Vérifier mon numéro sur Telegram</span><img src={arrowRightIcon} alt="" className="w-5 h-5" /></>}
-                      </button>
-                    </form>
+              <Field
+                label="Numéro de mobile personnel"
+                type="tel"
+                required
+                prefix="+213"
+                leftIcon={<Icon name="phone" size={18} />}
+                placeholder="05 / 06 / 07 XX XX XX XX"
+                value={merchantData.phone}
+                onChange={(e) => setMerchantData({ ...merchantData, phone: e.target.value })}
+                helperText="Ce numéro sera vérifié via Telegram"
+              />
 
-                    <p className="text-center text-[13px] text-[#0B2C25]/75 pt-1">
-                      Déjà partenaire ?{' '}
-                      <Link to="/login?role=merchant" className="font-semibold text-[#17664E] hover:underline">
-                        Se connecter
-                      </Link>
-                    </p>
-                  </>
-                )}
+              <label className="flex items-start gap-2.5 cursor-pointer select-none text-[13px] text-ui-text-70 pt-1">
+                <input
+                  type="checkbox"
+                  required
+                  checked={merchantData.acceptTerms}
+                  onChange={(e) => setMerchantData({ ...merchantData, acceptTerms: e.target.checked })}
+                  className="mt-0.5 rounded border-ui-field-border text-ui-emerald focus:ring-ui-emerald"
+                />
+                <span>
+                  J’accepte les{' '}
+                  <Link to="/cgu" className="text-ui-emerald underline">
+                    Conditions Générales Commerçant
+                  </Link>{' '}
+                  de FORSA.
+                </span>
+              </label>
 
-                {merchantAuthStep === 'WAITING_TELEGRAM' && (
-                  <div className="flex flex-col items-center text-center gap-5 w-full">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (pollingRef.current) clearInterval(pollingRef.current);
-                        setMerchantAuthStep('FORM');
-                      }}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B2C25]/70 hover:text-[#0B2C25] self-start cursor-pointer"
-                    >
-                      <img src={arrowLeftIcon} alt="" className="w-4 h-4" />
-                      <span>Modifier les informations</span>
-                    </button>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={loading}
+                fullWidth
+                rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+              >
+                Vérifier le numéro sur Telegram
+              </Button>
+            </form>
 
-                    <div className="flex flex-col gap-1.5">
-                      <h2 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
-                        Validation Telegram
-                      </h2>
-                      <p className="text-xs sm:text-[14px] text-[#0B2C25]/70 max-w-sm mx-auto">
-                        Ouvrez le bot FORSA pour vérifier votre ligne commerçant.
-                      </p>
-                    </div>
+            <p className="text-center text-[14px] text-ui-text-70 pt-1">
+              Déjà inscrit ?{' '}
+              <Link to="/login?role=merchant" className="font-semibold text-ui-emerald hover:underline">
+                Se connecter
+              </Link>
+            </p>
+          </>
+        )}
 
-                    {deepLink && (
-                      <a
-                        href={deepLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full h-[52px] bg-[#229ED9] hover:bg-[#1E88BE] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-md transition cursor-pointer"
-                      >
-                        <img src={figmaSmartPhone} alt="" className="w-5 h-5 invert" />
-                        <span>Ouvrir Telegram</span>
-                      </a>
-                    )}
+        {/* Commerçant Étape 2 : Commerce, Adresse & MapBox */}
+        {role === 'MERCHANT' && merchantStep === 2 && (
+          <>
+            <div className="text-center flex flex-col gap-1 w-full">
+              <h1 className="font-semibold text-ui-ink text-2xl sm:text-[32px] leading-tight">
+                Étape 2 : Votre commerce
+              </h1>
+              <p className="font-normal text-[15px] text-ui-text-70 leading-normal">
+                Localisation et détails de votre établissement
+              </p>
+            </div>
 
-                    {deepLink && (
-                      <div className="bg-white/80 p-4 rounded-[20px] border border-[#0B2C25]/15 shadow-sm flex flex-col items-center gap-2">
-                        <QRCodeSVG value={deepLink} size={150} level="M" />
-                        <span className="text-[11px] text-[#0B2C25]/60">Scannez pour valider</span>
-                      </div>
-                    )}
+            <form onSubmit={handleMerchantStep2Submit} className="flex flex-col gap-4 w-full">
+              <Field
+                label="Nom de l'établissement"
+                type="text"
+                required
+                placeholder="Ex : Boulangerie El Baraka"
+                value={merchantData.shopName}
+                onChange={(e) => setMerchantData({ ...merchantData, shopName: e.target.value })}
+                leftIcon={<Icon name="building" size={18} />}
+              />
 
-                    <div className="flex items-center gap-1.5 text-xs text-[#0B2C25]/60">
-                      <img src={figmaClock} alt="" className="w-3.5 h-3.5 opacity-60" />
-                      <span>Temps restant : {formatTimer(waitingCountdown)}</span>
-                    </div>
-                  </div>
-                )}
+              <Field
+                as="select"
+                label="Catégorie d'activité"
+                value={merchantData.category}
+                onChange={(e) => setMerchantData({ ...merchantData, category: e.target.value })}
+                options={SHOP_CATEGORIES.map((c) => ({ value: c, label: c }))}
+              />
 
-                {merchantAuthStep === 'VERIFY_OTP' && (
-                  <div className="flex flex-col items-center text-center gap-5 w-full">
-                    <h2 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
-                      Code de confirmation
-                    </h2>
-                    <p className="text-xs sm:text-[14px] text-[#0B2C25]/70 max-w-sm mx-auto">
-                      Entrez le code reçu sur Telegram pour débloquer l'étape suivante
-                    </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field
+                  label="N° Registre de commerce"
+                  type="text"
+                  placeholder="Ex : 16/00-0123456 B 21"
+                  value={merchantData.rcNumber}
+                  onChange={(e) => setMerchantData({ ...merchantData, rcNumber: e.target.value })}
+                  leftIcon={<Icon name="file" size={18} />}
+                />
 
-                    {errorMessage && (
-                      <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3 rounded-2xl w-full text-left">
-                        <img src={figmaAlertCircle} alt="" className="w-5 h-5 shrink-0" />
-                        <span>{errorMessage}</span>
-                      </div>
-                    )}
+                <Field
+                  label="Téléphone du commerce"
+                  type="tel"
+                  prefix="+213"
+                  placeholder="05 / 06 / 07 XX..."
+                  value={merchantData.proPhone}
+                  onChange={(e) => setMerchantData({ ...merchantData, proPhone: e.target.value })}
+                  leftIcon={<Icon name="phone" size={18} />}
+                />
+              </div>
 
-                    <div className="flex justify-center gap-2 sm:gap-3 w-full my-2">
-                      {otp.map((digit, idx) => (
-                        <input
-                          key={idx}
-                          ref={(el) => {
-                        otpRefs.current[idx] = el;
-                      }}
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={1}
-                          value={digit}
-                          onChange={(e) => handleOtpChange(idx, e.target.value)}
-                          onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                          className="w-11 sm:w-13 h-14 sm:h-16 text-center text-2xl font-bold bg-white/70 border-[1.5px] border-[#0B2C25]/25 focus:border-[#17664E] focus:bg-white rounded-2xl text-[#0B2C25] shadow-sm focus:outline-none transition"
-                        />
-                      ))}
-                    </div>
+              {/* Adresse avec géocodage temps réel */}
+              <div className="space-y-1">
+                <Field
+                  label="Adresse de la boutique"
+                  type="text"
+                  required
+                  placeholder="Ex : 12 Rue des Frères Bouadou, Bir Mourad Raïs, Alger"
+                  value={merchantData.address}
+                  onChange={(e) => {
+                    setMerchantData({ ...merchantData, address: e.target.value });
+                    setGeoAddress(e.target.value);
+                  }}
+                  onBlur={handleGeoBlur}
+                  onKeyDown={handleGeoKeyDown}
+                  leftIcon={<Icon name="pin" size={18} />}
+                  helperText="Appuyez sur Entrée ou cliquez hors du champ pour actualiser la position"
+                />
 
-                    <button
-                      type="button"
-                      disabled={loading || otp.join('').length !== 6}
-                      onClick={() => submitOtp()}
-                      className="w-full h-[52px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer disabled:opacity-50"
-                    >
-                      {loading ? <span>Vérification...</span> : <span>Valider & passer au commerce</span>}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* ÉTAPE 2 COMMERÇANT : Commerce & Horaires */}
-            {merchantStep === 2 && (
-              <>
-                <div className="text-center flex flex-col gap-1 w-full">
-                  <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
-                    Votre commerce
-                  </h1>
-                  <p className="font-normal text-[14px] text-[#0B2C25]/65">
-                    Étape 2/3 · Coordonnées et horaires d'ouverture
-                  </p>
-                </div>
-
-                {errorMessage && (
-                  <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3 rounded-2xl">
-                    <img src={figmaAlertCircle} alt="" className="w-5 h-5 shrink-0" />
-                    <span>{errorMessage}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleMerchantStep2Submit} className="flex flex-col gap-3.5 w-full">
-                  {/* Nom du commerce */}
-                  <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center gap-3 transition">
-                    <img src={inputStoreIcon} alt="" className="size-5 opacity-60 shrink-0" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Nom de l'établissement (ex: Boulangerie El Yasmine)"
-                      value={merchantData.shopName}
-                      onChange={(e) => setMerchantData({ ...merchantData, shopName: e.target.value })}
-                      className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Catégorie */}
-                  <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center justify-between transition">
-                    <select
-                      value={merchantData.category}
-                      onChange={(e) => setMerchantData({ ...merchantData, category: e.target.value })}
-                      className="w-full bg-transparent text-[#0B2C25] text-[15px] focus:outline-none cursor-pointer"
-                    >
-                      {SHOP_CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                    <img src={inputChevronDownIcon} alt="" className="size-4 opacity-50 shrink-0 pointer-events-none" />
-                  </div>
-
-                  {/* Numéro de registre de commerce */}
-                  <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center gap-3 transition">
-                    <img src={inputFileTextIcon} alt="" className="size-5 opacity-60 shrink-0" />
-                    <input
-                      type="text"
-                      placeholder="N° Registre de commerce (RC)"
-                      value={merchantData.rcNumber}
-                      onChange={(e) => setMerchantData({ ...merchantData, rcNumber: e.target.value })}
-                      className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Adresse complète */}
-                  <div className="bg-white/60 focus-within:bg-white/85 border-[1.2px] border-white/90 focus-within:border-[#17664E] rounded-[14px] h-[54px] px-[18px] flex items-center gap-3 transition">
-                    <img src={inputPinIcon} alt="" className="size-5 opacity-60 shrink-0" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Adresse complète (ex: 15 Rue Didouche Mourad, Alger)"
-                      value={merchantData.address}
-                      onChange={(e) => setMerchantData({ ...merchantData, address: e.target.value })}
-                      className="w-full bg-transparent text-[#0B2C25] text-[15px] placeholder:text-[#0B2C25]/50 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Horaires d'ouverture (Accordion / Liste Figma) */}
-                  <div className="bg-white/50 border border-[#0B2C25]/15 rounded-2xl p-4 flex flex-col gap-2.5">
-                    <span className="text-xs font-semibold text-[#0B2C25] flex items-center gap-1.5">
-                      <img src={figmaClock} alt="" className="w-3.5 h-3.5 opacity-70" />
-                      Horaires d'ouverture habituels
+                {/* Pastille de statut géocodage */}
+                <div className="pt-1 flex items-center justify-between">
+                  {geoStatus === 'found' && (
+                    <Chip variant="success">Position détectée</Chip>
+                  )}
+                  {geoStatus === 'searching' && (
+                    <Chip variant="neutral">Recherche de la position...</Chip>
+                  )}
+                  {geoStatus === 'notFound' && (
+                    <Chip variant="error">Position non détectée</Chip>
+                  )}
+                  {geoStatus === 'unavailable' && (
+                    <Chip variant="warn">Position à confirmer</Chip>
+                  )}
+                  {geoCoordinates && (
+                    <span className="text-[11px] text-ui-text-70">
+                      {geoCoordinates.latitude.toFixed(4)}, {geoCoordinates.longitude.toFixed(4)}
                     </span>
-
-                    <div className="flex flex-col gap-2 pt-1">
-                      {Object.entries(merchantData.openingHours).map(([dayKey, sched]) => (
-                        <div key={dayKey} className="flex items-center justify-between text-xs py-1 border-b border-[#0B2C25]/5 last:border-0">
-                          <span className="font-medium text-[#0B2C25] w-20">{DAY_LABELS[dayKey]}</span>
-
-                          <div className="flex items-center gap-2">
-                            <label className="flex items-center gap-1 text-[11px] text-[#0B2C25]/60 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={sched.closed}
-                                onChange={(e) => {
-                                  setMerchantData({
-                                    ...merchantData,
-                                    openingHours: {
-                                      ...merchantData.openingHours,
-                                      [dayKey]: { ...sched, closed: e.target.checked },
-                                    },
-                                  });
-                                }}
-                                className="size-3 rounded"
-                              />
-                              Fermé
-                            </label>
-
-                            {!sched.closed && (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="time"
-                                  value={sched.open}
-                                  onChange={(e) => {
-                                    setMerchantData({
-                                      ...merchantData,
-                                      openingHours: {
-                                        ...merchantData.openingHours,
-                                        [dayKey]: { ...sched, open: e.target.value },
-                                      },
-                                    });
-                                  }}
-                                  className="bg-white/70 border border-[#0B2C25]/20 rounded px-1.5 py-0.5 text-xs text-[#0B2C25]"
-                                />
-                                <span>-</span>
-                                <input
-                                  type="time"
-                                  value={sched.close}
-                                  onChange={(e) => {
-                                    setMerchantData({
-                                      ...merchantData,
-                                      openingHours: {
-                                        ...merchantData.openingHours,
-                                        [dayKey]: { ...sched, close: e.target.value },
-                                      },
-                                    });
-                                  }}
-                                  className="bg-white/70 border border-[#0B2C25]/20 rounded px-1.5 py-0.5 text-xs text-[#0B2C25]"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setMerchantStep(1)}
-                      className="w-1/3 h-[52px] bg-white/60 hover:bg-white/80 border border-[#0B2C25]/20 text-[#0B2C25] font-medium text-[15px] rounded-[16px] transition cursor-pointer"
-                    >
-                      Retour
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 h-[52px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
-                    >
-                      <span>Étape suivante</span>
-                      <img src={arrowRightIcon} alt="" className="w-5 h-5" />
-                    </button>
-                  </div>
-                </form>
-              </>
-            )}
-
-            {/* ÉTAPE 3 COMMERÇANT : Documents légaux */}
-            {merchantStep === 3 && (
-              <>
-                <div className="text-center flex flex-col gap-1 w-full">
-                  <h1 className="font-semibold text-[#0B2C25] text-2xl sm:text-[28px] leading-tight">
-                    Pièces justificatives
-                  </h1>
-                  <p className="font-normal text-[14px] text-[#0B2C25]/65">
-                    Étape 3/3 · Validation légale de votre dossier
-                  </p>
+                  )}
                 </div>
+              </div>
 
-                {errorMessage && (
-                  <div className="flex items-center gap-3 bg-[#B22222]/10 border border-[#B22222]/20 text-[#B22222] text-xs sm:text-[13px] p-3 rounded-2xl">
-                    <img src={figmaAlertCircle} alt="" className="w-5 h-5 shrink-0" />
-                    <span>{errorMessage}</span>
-                  </div>
-                )}
+              {/* Aperçu cartographique MapBox */}
+              <div className="pt-1">
+                <MapBox
+                  status={geoStatus === 'found' ? 'ok' : geoStatus === 'unavailable' ? 'down' : 'empty'}
+                  position={geoCoordinates ? [geoCoordinates.latitude, geoCoordinates.longitude] : undefined}
+                  address={geoDisplayName || merchantData.address}
+                  onRetry={retryGeocode}
+                />
+              </div>
 
-                <form onSubmit={handleMerchantStep3Submit} className="flex flex-col gap-3.5 w-full">
-                  {/* Upload Registre de commerce */}
-                  <div className="bg-white/60 border border-dashed border-[#0B2C25]/30 rounded-2xl p-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-xs">
-                        <img src={uploadIcon} alt="" className="w-5 h-5 text-[#17664E]" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-[#0B2C25]">
-                          Registre du Commerce (RC)
-                        </span>
-                        <span className="text-[11px] text-[#0B2C25]/60">
-                          {merchantData.commercialRegisterFile
-                            ? merchantData.commercialRegisterFile.name
-                            : 'PDF ou image max 5 Mo'}
-                        </span>
-                      </div>
-                    </div>
-                    <label className="text-xs font-semibold text-[#17664E] bg-white/80 hover:bg-white px-3 py-1.5 rounded-xl border border-[#17664E]/30 cursor-pointer transition">
-                      <span>Parcourir</span>
-                      <input
-                        type="file"
-                        accept=".pdf,image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files?.[0]) {
-                            setMerchantData({ ...merchantData, commercialRegisterFile: e.target.files[0] });
-                          }
-                        }}
-                      />
-                    </label>
-                  </div>
-
-                  {/* Upload Carte Fiscale / NIF / CNI */}
-                  <div className="bg-white/60 border border-dashed border-[#0B2C25]/30 rounded-2xl p-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-xs">
-                        <img src={uploadIcon} alt="" className="w-5 h-5 text-[#17664E]" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-[#0B2C25]">
-                          Carte Fiscale (NIF) ou CNI
-                        </span>
-                        <span className="text-[11px] text-[#0B2C25]/60">
-                          {merchantData.taxIdFile ? merchantData.taxIdFile.name : 'PDF ou image max 5 Mo'}
-                        </span>
-                      </div>
-                    </div>
-                    <label className="text-xs font-semibold text-[#17664E] bg-white/80 hover:bg-white px-3 py-1.5 rounded-xl border border-[#17664E]/30 cursor-pointer transition">
-                      <span>Parcourir</span>
-                      <input
-                        type="file"
-                        accept=".pdf,image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files?.[0]) {
-                            setMerchantData({ ...merchantData, taxIdFile: e.target.files[0] });
-                          }
-                        }}
-                      />
-                    </label>
-                  </div>
-
-                  {/* Upload Devanture */}
-                  <div className="bg-white/60 border border-dashed border-[#0B2C25]/30 rounded-2xl p-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-xs">
-                        <img src={uploadIcon} alt="" className="w-5 h-5 text-[#17664E]" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-[#0B2C25]">
-                          Photo de la devanture
-                        </span>
-                        <span className="text-[11px] text-[#0B2C25]/60">
-                          {merchantData.storefrontFile ? merchantData.storefrontFile.name : 'Image JPG/PNG'}
-                        </span>
-                      </div>
-                    </div>
-                    <label className="text-xs font-semibold text-[#17664E] bg-white/80 hover:bg-white px-3 py-1.5 rounded-xl border border-[#17664E]/30 cursor-pointer transition">
-                      <span>Parcourir</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files?.[0]) {
-                            setMerchantData({ ...merchantData, storefrontFile: e.target.files[0] });
-                          }
-                        }}
-                      />
-                    </label>
-                  </div>
-
-                  <label className="flex items-start gap-2.5 cursor-pointer text-xs sm:text-[13px] text-[#0B2C25]/80 pt-1">
-                    <input
-                      type="checkbox"
-                      checked={merchantData.confirmDocuments}
-                      onChange={(e) => setMerchantData({ ...merchantData, confirmDocuments: e.target.checked })}
-                      className="mt-0.5 size-4 rounded border-gray-300 text-[#0B2C25] focus:ring-0 cursor-pointer"
-                    />
-                    <span>
-                      Je confirme l'authenticité des pièces justificatives fournies et sollicite l'ouverture de mon compte commerçant.
-                    </span>
-                  </label>
-
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setMerchantStep(2)}
-                      className="w-1/3 h-[52px] bg-white/60 hover:bg-white/80 border border-[#0B2C25]/20 text-[#0B2C25] font-medium text-[15px] rounded-[16px] transition cursor-pointer"
+              {/* Horaires d'ouverture */}
+              <div className="space-y-2 pt-2 border-t border-ui-field-border">
+                <span className="text-[14px] font-medium text-ui-ink">
+                  Horaires d'ouverture habituels
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {Object.entries(merchantData.openingHours).map(([dayKey, sched]) => (
+                    <div
+                      key={dayKey}
+                      className="flex items-center justify-between p-2 rounded-ui-ctl bg-stone-50 border border-ui-field-border"
                     >
-                      Retour
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="flex-1 h-[52px] bg-[#0B2C25] hover:bg-[#17664E] text-white font-medium text-[15px] rounded-[16px] flex items-center justify-center gap-2 shadow-md transition cursor-pointer disabled:opacity-60"
-                    >
-                      {loading ? <span>Envoi du dossier...</span> : <><span>Soumettre mon dossier</span><img src={arrowRightIcon} alt="" className="w-5 h-5" /></>}
-                    </button>
-                  </div>
-                </form>
-              </>
-            )}
+                      <span className="font-medium text-ui-ink">{DAY_LABELS[dayKey]}</span>
+                      <span className="text-ui-text-70">
+                        {sched.closed ? 'Fermé' : `${sched.open} - ${sched.close}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setMerchantStep(1)}
+                  className="flex-1"
+                >
+                  Précédent
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="flex-1"
+                  rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+                >
+                  Continuer vers Documents
+                </Button>
+              </div>
+            </form>
+          </>
+        )}
+
+        {/* Commerçant Étape 3 : Documents & Dépôt */}
+        {role === 'MERCHANT' && merchantStep === 3 && (
+          <>
+            <div className="text-center flex flex-col gap-1 w-full">
+              <h1 className="font-semibold text-ui-ink text-2xl sm:text-[32px] leading-tight">
+                Étape 3 : Justificatifs d'activité
+              </h1>
+              <p className="font-normal text-[15px] text-ui-text-70 leading-normal">
+                Déposez vos documents officiels (PDF, JPG, PNG - 5 Mo max)
+              </p>
+            </div>
+
+            <form onSubmit={handleMerchantStep3Submit} className="flex flex-col gap-4 w-full">
+              <Dropzone
+                label="1. Registre de commerce (C2)"
+                helperText="Extrait du registre de commerce ou carte d'artisan"
+                accept=".pdf,.jpg,.jpeg,.png"
+                maxBytes={5 * 1024 * 1024}
+                value={merchantData.commercialRegisterFile}
+                onFile={(f) => setMerchantData({ ...merchantData, commercialRegisterFile: f })}
+              />
+
+              <Dropzone
+                label="2. Identifiant fiscal (NIF / NIS)"
+                helperText="Attestation fiscale ou document d'identification"
+                accept=".pdf,.jpg,.jpeg,.png"
+                maxBytes={5 * 1024 * 1024}
+                value={merchantData.taxIdFile}
+                onFile={(f) => setMerchantData({ ...merchantData, taxIdFile: f })}
+              />
+
+              <Dropzone
+                label="3. Photo de la devanture du commerce"
+                helperText="Vue claire de l'enseigne et de l'entrée de la boutique"
+                accept=".jpg,.jpeg,.png"
+                maxBytes={5 * 1024 * 1024}
+                value={merchantData.storefrontFile}
+                onFile={(f) => setMerchantData({ ...merchantData, storefrontFile: f })}
+              />
+
+              <label className="flex items-start gap-2.5 cursor-pointer select-none text-[13px] text-ui-text-70 pt-2">
+                <input
+                  type="checkbox"
+                  required
+                  checked={merchantData.confirmDocuments}
+                  onChange={(e) => setMerchantData({ ...merchantData, confirmDocuments: e.target.checked })}
+                  className="mt-0.5 rounded border-ui-field-border text-ui-emerald focus:ring-ui-emerald"
+                />
+                <span>
+                  Je certifie sur l’honneur l’authenticité des informations et justificatifs fournis pour mon établissement.
+                </span>
+              </label>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setMerchantStep(2)}
+                  className="flex-1"
+                >
+                  Précédent
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  loading={loading}
+                  disabled={!merchantData.confirmDocuments}
+                  className="flex-1"
+                  rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+                >
+                  Finaliser la demande
+                </Button>
+              </div>
+            </form>
           </>
         )}
       </main>

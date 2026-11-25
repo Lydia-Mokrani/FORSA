@@ -7,11 +7,13 @@ export interface FieldOption {
   label: string;
 }
 
-export interface FieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface FieldProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
   label?: string;
   helperText?: string;
   error?: string;
   leftIcon?: React.ReactNode;
+  leftSlot?: React.ReactNode;
+  prefix?: React.ReactNode;
   rightSlot?: React.ReactNode;
   as?: 'input' | 'select';
   options?: FieldOption[];
@@ -31,6 +33,8 @@ export const Field = React.forwardRef<HTMLInputElement | HTMLSelectElement, Fiel
       helperText,
       error,
       leftIcon,
+      leftSlot,
+      prefix,
       rightSlot,
       as = 'input',
       options = [],
@@ -48,6 +52,7 @@ export const Field = React.forwardRef<HTMLInputElement | HTMLSelectElement, Fiel
     const errorId = error ? `${id}-error` : undefined;
     const helperId = helperText ? `${id}-helper` : undefined;
     const hasError = Boolean(error);
+    const hasLeft = Boolean(leftIcon || leftSlot || prefix);
 
     return (
       <div className={cn('flex flex-col w-full text-left font-poppins', containerClassName)}>
@@ -76,6 +81,19 @@ export const Field = React.forwardRef<HTMLInputElement | HTMLSelectElement, Fiel
             </div>
           )}
 
+          {leftSlot && (
+            <div className="pl-[16px] pr-[8px] flex items-center shrink-0">
+              {leftSlot}
+            </div>
+          )}
+
+          {prefix && (
+            <div className="pl-[16px] pr-[6px] flex items-center gap-2 shrink-0 select-none text-[14px] font-semibold text-ui-ink/80">
+              <span>{prefix}</span>
+              <span className="text-ui-field-border font-normal">|</span>
+            </div>
+          )}
+
           {as === 'select' ? (
             <div className="relative w-full flex items-center">
               <select
@@ -87,7 +105,7 @@ export const Field = React.forwardRef<HTMLInputElement | HTMLSelectElement, Fiel
                 className={cn(
                   'w-full bg-transparent text-[15px] font-normal text-ui-ink outline-none',
                   'py-[15px] cursor-pointer appearance-none',
-                  leftIcon ? 'pl-0' : 'pl-[16px]',
+                  hasLeft ? 'pl-0' : 'pl-[16px]',
                   'pr-[42px]',
                   disabled && 'cursor-not-allowed',
                   className
@@ -116,7 +134,7 @@ export const Field = React.forwardRef<HTMLInputElement | HTMLSelectElement, Fiel
                 className={cn(
                   'w-full bg-transparent text-[15px] font-normal text-ui-ink outline-none',
                   'py-[15px] placeholder:text-ui-ink/40',
-                  leftIcon ? 'pl-0' : 'pl-[16px]',
+                  hasLeft ? 'pl-0' : 'pl-[16px]',
                   rightSlot ? 'pr-[42px]' : 'pr-[16px]',
                   disabled && 'cursor-not-allowed',
                   className

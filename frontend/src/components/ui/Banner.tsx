@@ -6,7 +6,7 @@ export type BannerVariant = 'success' | 'warn' | 'error' | 'info';
 
 export interface BannerProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: BannerVariant;
-  title: string;
+  title?: string;
   description?: string;
   icon?: React.ReactNode;
   onClose?: () => void;
@@ -76,11 +76,13 @@ export const Banner: React.FC<BannerProps> = ({
       </div>
 
       <div className="flex-1 min-w-0">
-        <h3 className={cn('text-[15px] font-semibold leading-snug', style.title)}>
-          {title}
-        </h3>
+        {title && (
+          <h3 className={cn('text-[15px] font-semibold leading-snug', style.title)}>
+            {title}
+          </h3>
+        )}
         {description && (
-          <p className="mt-[4px] text-[13px] font-normal text-ui-text-70 leading-relaxed">
+          <p className={cn('text-[13px] font-normal leading-relaxed', title ? 'mt-[4px] text-ui-text-70' : style.title)}>
             {description}
           </p>
         )}
