@@ -28,6 +28,7 @@ import {
 
 import { SHOP_CATEGORIES } from '../shop/shopCategories';
 import { useShopGeocode } from '../shop/useShopGeocode';
+import { TermsModal } from './components/TermsModal';
 
 type ClientStep = 'FORM' | 'WAITING_TELEGRAM' | 'VERIFY_OTP';
 type MerchantStep = 1 | 2 | 3;
@@ -146,6 +147,10 @@ export const RegisterPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [, setAttemptsLeft] = useState<number | null>(null);
+
+  // Modal Conditions et Confidentialité
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [termsInitialTab, setTermsInitialTab] = useState<'cgu' | 'privacy'>('cgu');
 
   useEffect(() => {
     if (searchParams.get('role') === 'merchant') setRole('MERCHANT');
@@ -620,22 +625,42 @@ export const RegisterPage: React.FC = () => {
                 helperText="Validation sécurisée par code Telegram"
               />
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none text-[13px] text-ui-text-70 pt-1">
+              <div className="flex items-start gap-2.5 pt-1 text-[13px] text-ui-text-70 select-none">
                 <input
                   type="checkbox"
+                  id="client-terms-checkbox"
                   required
                   checked={clientData.acceptTerms}
                   onChange={(e) => setClientData({ ...clientData, acceptTerms: e.target.checked })}
-                  className="mt-0.5 rounded border-ui-field-border text-ui-emerald focus:ring-ui-emerald"
+                  className="mt-0.5 rounded border-ui-field-border text-ui-emerald focus:ring-ui-emerald cursor-pointer"
                 />
-                <span>
+                <label htmlFor="client-terms-checkbox" className="cursor-pointer leading-normal">
                   J’accepte les{' '}
-                  <Link to="/cgu" className="text-ui-emerald underline">
-                    Conditions Générales d'Utilisation
-                  </Link>{' '}
-                  de FORSA.
-                </span>
-              </label>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setTermsInitialTab('cgu');
+                      setTermsModalOpen(true);
+                    }}
+                    className="text-ui-emerald underline font-medium hover:text-[#0b2c25] cursor-pointer inline"
+                  >
+                    Conditions d’utilisation
+                  </button>{' '}
+                  et la{' '}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setTermsInitialTab('privacy');
+                      setTermsModalOpen(true);
+                    }}
+                    className="text-ui-emerald underline font-medium hover:text-[#0b2c25] cursor-pointer inline"
+                  >
+                    Politique de confidentialité
+                  </button>.
+                </label>
+              </div>
 
               <Button
                 type="submit"
@@ -838,22 +863,42 @@ export const RegisterPage: React.FC = () => {
                 helperText="Ce numéro sera vérifié via Telegram"
               />
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none text-[13px] text-ui-text-70 pt-1">
+              <div className="flex items-start gap-2.5 pt-1 text-[13px] text-ui-text-70 select-none">
                 <input
                   type="checkbox"
+                  id="merchant-terms-checkbox"
                   required
                   checked={merchantData.acceptTerms}
                   onChange={(e) => setMerchantData({ ...merchantData, acceptTerms: e.target.checked })}
-                  className="mt-0.5 rounded border-ui-field-border text-ui-emerald focus:ring-ui-emerald"
+                  className="mt-0.5 rounded border-ui-field-border text-ui-emerald focus:ring-ui-emerald cursor-pointer"
                 />
-                <span>
+                <label htmlFor="merchant-terms-checkbox" className="cursor-pointer leading-normal">
                   J’accepte les{' '}
-                  <Link to="/cgu" className="text-ui-emerald underline">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setTermsInitialTab('cgu');
+                      setTermsModalOpen(true);
+                    }}
+                    className="text-ui-emerald underline font-medium hover:text-[#0b2c25] cursor-pointer inline"
+                  >
                     Conditions Générales Commerçant
-                  </Link>{' '}
-                  de FORSA.
-                </span>
-              </label>
+                  </button>{' '}
+                  et la{' '}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setTermsInitialTab('privacy');
+                      setTermsModalOpen(true);
+                    }}
+                    className="text-ui-emerald underline font-medium hover:text-[#0b2c25] cursor-pointer inline"
+                  >
+                    Politique de confidentialité
+                  </button>.
+                </label>
+              </div>
 
               <Button
                 type="submit"
@@ -1096,6 +1141,19 @@ export const RegisterPage: React.FC = () => {
           </>
         )}
       </main>
+
+      <TermsModal
+        isOpen={termsModalOpen}
+        onClose={() => setTermsModalOpen(false)}
+        initialTab={termsInitialTab}
+        onAccept={() => {
+          if (role === 'CUSTOMER') {
+            setClientData((prev) => ({ ...prev, acceptTerms: true }));
+          } else {
+            setMerchantData((prev) => ({ ...prev, acceptTerms: true }));
+          }
+        }}
+      />
 
       <div className="relative z-10 w-full max-w-6xl h-8" />
     </div>

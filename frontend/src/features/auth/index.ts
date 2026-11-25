@@ -8,4 +8,6 @@ export * from './MerchantDocumentsPage';
 export * from './DocumentResubmitPage';
 export * from './AccessDeniedPage';
 export * from './SessionExpiredPage';
+export * from './TermsPage';
+export * from './components/TermsModal';
 export * from './services/authService';

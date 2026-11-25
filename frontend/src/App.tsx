@@ -50,6 +50,7 @@ import {
   DocumentResubmitPage,
   AccessDeniedPage,
   SessionExpiredPage,
+  TermsPage,
 } from './features/auth';
 
 // Dev Gallery (Lot R0) - STRICTEMENT réservé au mode développement
@@ -149,6 +150,10 @@ export const App: React.FC = () => {
           <Route path="/access-denied" element={<AccessDeniedPage />} />
           <Route path="/401" element={<SessionExpiredPage />} />
           <Route path="/session-expired" element={<SessionExpiredPage />} />
+          <Route path="/cgu" element={<TermsPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/conditions" element={<TermsPage />} />
+          <Route path="/confidentialite" element={<TermsPage />} />
 
           {/* DEV ONLY ROUTE (Lot R0) */}
           {import.meta.env.DEV && DevUiGallery && (
