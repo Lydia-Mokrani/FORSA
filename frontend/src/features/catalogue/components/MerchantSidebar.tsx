@@ -25,18 +25,18 @@ interface MerchantSidebarProps {
 
 const MERCHANT_ITEMS: SidebarItem[] = [
   { label: 'Tableau de bord', icon: LayoutGrid, to: '/merchant/dashboard' },
-  { label: 'Réservations', icon: CalendarCheck },
   { label: 'Ajouter une offre', icon: Plus, to: '/merchant/create-offer' },
   { label: 'Avis', icon: Star },
   { label: 'Compte', icon: User, to: '/merchant/account' },
+  { label: 'Réservations', icon: CalendarCheck },
 ];
 
 const CLIENT_ITEMS: SidebarItem[] = [
   { label: 'Accueil', icon: LayoutGrid, to: '/' },
   { label: 'Carte', icon: MapPin, to: '/map' },
-  { label: 'Mes réservations', icon: CalendarCheck },
-  { label: 'Notifications', icon: Bell },
-  { label: 'Compte', icon: User },
+  { label: 'Mes réservations', icon: CalendarCheck, to: '/reservations' },
+  { label: 'Notifications', icon: Bell, to: '/notifications' },
+  { label: 'Compte', icon: User, to: '/profile' },
 ];
 
 const rowBase =

@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { Mail, CheckCircle2, X, Send } from 'lucide-react';
+import { Mail, CheckCircle2, X, Send, Loader2 } from 'lucide-react';
+import {
+  updateUserProfile,
+  verifyEmailCode,
+  resendEmailCode,
+} from '../auth/services/authService';
 
 interface ChangeEmailModalProps {
   isOpen: boolean;
@@ -18,31 +23,60 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [resendStatus, setResendStatus] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail || !newEmail.includes('@')) {
       setError('Veuillez renseigner une adresse e-mail valide.');
       return;
     }
     setError('');
-    setStep(2);
+    setLoading(true);
+    try {
+      await updateUserProfile({ email: newEmail });
+      setStep(2);
+    } catch (err: any) {
+      setError(err?.message || 'Erreur lors de l’envoi de la demande.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode.length < 6) {
       setError('Le code de confirmation doit comporter 6 chiffres.');
       return;
     }
     setError('');
-    setStep(3);
-    setTimeout(() => {
-      onSuccess(newEmail);
-      handleClose();
-    }, 1500);
+    setLoading(true);
+    try {
+      await verifyEmailCode(otpCode);
+      setStep(3);
+      setTimeout(() => {
+        onSuccess(newEmail);
+        handleClose();
+      }, 1500);
+    } catch (err: any) {
+      setError(err?.message || 'Code de vérification invalide ou expiré.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setError('');
+    try {
+      await resendEmailCode();
+      setResendStatus('Nouveau code envoyé par e-mail.');
+      setTimeout(() => setResendStatus(''), 4000);
+    } catch (err: any) {
+      setError(err?.message || 'Erreur lors du renvoi du code.');
+    }
   };
 
   const handleClose = () => {
@@ -50,6 +84,8 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
     setNewEmail('');
     setOtpCode('');
     setError('');
+    setResendStatus('');
+    setLoading(false);
     onClose();
   };
 
@@ -80,7 +116,7 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
               Changer d’adresse e-mail
             </h3>
             <p className="text-xs text-[#0b2c25]/70">
-              Étape {step} sur 2
+              Étape {step} sur 2 · Vérification sécurisée
             </p>
           </div>
         </div>
@@ -88,6 +124,12 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
         {error && (
           <div className="mb-4 p-3 rounded-xl bg-[#fdecea] border border-[#f2b8b3] text-[#b3261e] text-xs">
             {error}
+          </div>
+        )}
+
+        {resendStatus && (
+          <div className="mb-4 p-3 rounded-xl bg-[#eef7ec] border border-[#dbf0dd] text-[#17664e] text-xs">
+            {resendStatus}
           </div>
         )}
 
@@ -99,7 +141,7 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
                 Adresse e-mail actuelle
               </label>
               <div className="px-3.5 py-2.5 rounded-xl bg-[#ebeee1] text-xs text-[#0b2c25] font-medium">
-                {currentEmail}
+                {currentEmail || 'Aucune adresse e-mail'}
               </div>
             </div>
 
@@ -113,12 +155,12 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="nouvelle.adresse@exemple.dz"
-                className="w-full h-11 px-3.5 rounded-xl border border-[#dbf0dd] focus:border-[#17664e] focus:ring-2 focus:ring-[#17664e]/20 outline-none text-sm transition-all"
+                className="w-full h-11 px-3.5 rounded-xl border border-[#dbf0dd] focus:border-[#17664e] focus:ring-2 focus:ring-[#17664e]/20 outline-none text-sm transition-all text-[#0b2c25]"
               />
             </div>
 
             <p className="text-xs text-[#0b2c25]/65">
-              Un code de vérification vous sera envoyé sur cette nouvelle adresse.
+              Un code de vérification à 6 chiffres vous sera envoyé par e-mail pour valider la propriété de cette adresse.
             </p>
 
             <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-stone-100">
@@ -131,9 +173,10 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-[#0b2c25] hover:bg-[#12443a] text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer shadow-xs"
+                disabled={loading}
+                className="px-5 py-2.5 rounded-xl bg-[#0b2c25] hover:bg-[#12443a] text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
               >
-                <Send className="size-3.5" />
+                {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
                 <span>Envoyer le code</span>
               </button>
             </div>
@@ -144,7 +187,7 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
         {step === 2 && (
           <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
             <div className="p-3 rounded-xl bg-[#eef7ec] border border-[#dbf0dd] text-xs text-[#17664e]">
-              Code envoyé à <strong>{newEmail}</strong>.
+              Code envoyé à <strong>{newEmail}</strong>. Veuillez saisir le code à 6 chiffres.
             </div>
 
             <div>
@@ -158,7 +201,7 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="123456"
-                className="w-full h-12 px-3.5 rounded-xl border border-[#dbf0dd] focus:border-[#17664e] focus:ring-2 focus:ring-[#17664e]/20 outline-none text-center font-mono text-xl tracking-widest transition-all"
+                className="w-full h-12 px-3.5 rounded-xl border border-[#dbf0dd] focus:border-[#17664e] focus:ring-2 focus:ring-[#17664e]/20 outline-none text-center font-mono text-xl tracking-widest transition-all text-[#0b2c25]"
               />
             </div>
 
@@ -172,7 +215,7 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => alert('Code renvoyé')}
+                onClick={handleResendCode}
                 className="text-[#17664e] font-semibold hover:underline cursor-pointer"
               >
                 Renvoyer le code
@@ -189,9 +232,10 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-[#0b2c25] hover:bg-[#12443a] text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer shadow-xs"
+                disabled={loading}
+                className="px-5 py-2.5 rounded-xl bg-[#0b2c25] hover:bg-[#12443a] text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
               >
-                <CheckCircle2 className="size-3.5" />
+                {loading ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
                 <span>Valider le changement</span>
               </button>
             </div>
@@ -206,7 +250,7 @@ export const ChangeEmailModal: React.FC<ChangeEmailModalProps> = ({
               Adresse e-mail mise à jour !
             </h4>
             <p className="text-xs text-[#0b2c25]/70">
-              Votre nouvelle adresse <strong>{newEmail}</strong> est maintenant active.
+              Votre nouvelle adresse <strong>{newEmail}</strong> est maintenant vérifiée et active.
             </p>
           </div>
         )}

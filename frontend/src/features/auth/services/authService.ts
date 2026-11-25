@@ -451,10 +451,11 @@ export async function getActiveSessions(): Promise<UserSession[]> {
  * POST /api/auth/switch-mode (MS1 Settings Mode)
  */
 export async function switchUserMode(targetRole: 'CUSTOMER' | 'MERCHANT'): Promise<any> {
+  const mode = targetRole === 'MERCHANT' ? 'merchant' : 'customer';
   const res = await authFetch('/api/auth/switch-mode', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ targetRole }),
+    body: JSON.stringify({ targetRole, mode }),
   });
 
   const data = await res.json().catch(() => null);
@@ -463,6 +464,147 @@ export async function switchUserMode(targetRole: 'CUSTOMER' | 'MERCHANT'): Promi
     const err: any = new Error(msg);
     err.status = res.status;
     throw err;
+  }
+  if (data?.user) {
+    setStoredUser(data.user);
+  }
+  return data;
+}
+
+/**
+ * DELETE /api/auth/sessions/:id
+ */
+export async function revokeUserSession(sessionId: string): Promise<boolean> {
+  try {
+    const res = await authFetch(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * POST /api/auth/email/verify
+ */
+export async function verifyEmailCode(code: string): Promise<any> {
+  const res = await authFetch('/api/auth/email/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error?.message || 'Code de vérification e-mail invalide.');
+  }
+  return data;
+}
+
+/**
+ * POST /api/auth/email/resend
+ */
+export async function resendEmailCode(): Promise<any> {
+  const res = await authFetch('/api/auth/email/resend', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error?.message || 'Erreur lors du renvoi du code.');
+  }
+  return data;
+}
+
+/**
+ * PUT /api/users/me
+ */
+export async function updateUserProfile(payload: {
+  fullName?: string;
+  email?: string;
+  preferredLocation?: string | null;
+  searchRadiusKm?: number;
+  pushEnabled?: boolean;
+  telegramNotifications?: boolean;
+}): Promise<any> {
+  const res = await authFetch('/api/users/me', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error?.message || 'Erreur lors de la mise à jour du profil.');
+  }
+  if (data?.user) {
+    setStoredUser(data.user);
+  }
+  return data?.user || data;
+}
+
+/**
+ * GET /api/shops/me
+ */
+export async function getMyShop(): Promise<any> {
+  try {
+    const res = await authFetch('/api/shops/me');
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    return data?.shop || data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * PUT /api/shops/me
+ */
+export async function updateMyShop(payload: {
+  name?: string;
+  category?: string;
+  address?: string;
+  openingHours?: string;
+  phone?: string;
+  description?: string;
+}): Promise<any> {
+  const res = await authFetch('/api/shops/me', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error?.message || 'Erreur lors de la mise à jour du commerce.');
+  }
+  return data?.shop || data;
+}
+
+/**
+ * POST /api/auth/recovery/start
+ */
+export async function startEmailRecovery(email: string): Promise<any> {
+  const res = await fetch('/api/auth/recovery/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error?.message || 'Erreur lors de l’envoi du code de récupération.');
+  }
+  return data;
+}
+
+/**
+ * POST /api/auth/recovery/verify
+ */
+export async function verifyEmailRecovery(email: string, code: string): Promise<any> {
+  const res = await fetch('/api/auth/recovery/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error?.message || 'Code de récupération incorrect ou expiré.');
   }
   return data;
 }
