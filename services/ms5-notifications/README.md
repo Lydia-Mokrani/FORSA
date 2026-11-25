@@ -1,6 +1,6 @@
-# MS5 — Notifications & Worker Service 👤 @Khoumeri-Asma
+# MS5 — Notifications & Worker Service 👤 
 
-**Responsable :** Khoumeri Asma (Personne 5)  
+**Responsable :** maroa (Personne 5)  
 **Serveur de déploiement :** S5 (`10.0.0.15`)  
 **Port HTTP :** `3005`  
 **Base de données :** `forsa_ms5_notifications` (PostgreSQL 16 - Port 5432 sur S5)  
