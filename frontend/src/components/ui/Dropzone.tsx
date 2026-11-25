@@ -2,12 +2,21 @@ import React, { useRef, useState, useId } from 'react';
 import { cn } from './cn';
 import { Icon } from './Icon';
 
+export interface ExistingFileDescriptor {
+  name: string;
+  size?: number;
+  url?: string;
+  status?: string;
+}
+
 export interface DropzoneProps {
   accept?: string;
   maxBytes?: number;
   onFile?: (file: File | null) => void;
+  onRemoveExisting?: () => void;
   error?: string;
   value?: File | null;
+  existingFile?: ExistingFileDescriptor | null;
   label?: string;
   helperText?: string;
   disabled?: boolean;
@@ -57,8 +66,10 @@ export const Dropzone: React.FC<DropzoneProps> = ({
   accept = DEFAULT_ACCEPT,
   maxBytes = DEFAULT_MAX_BYTES,
   onFile,
+  onRemoveExisting,
   error,
   value,
+  existingFile,
   label,
   helperText,
   disabled = false,
@@ -75,6 +86,9 @@ export const Dropzone: React.FC<DropzoneProps> = ({
 
   const currentFile = value !== undefined ? value : internalFile;
   const effectiveError = error || clientError;
+  const hasSelectedFile = Boolean(currentFile);
+  const hasExistingFile = !hasSelectedFile && Boolean(existingFile);
+  const hasAnyFile = hasSelectedFile || hasExistingFile;
 
   const validateAndSelectFile = (file: File) => {
     // 1. Vérification du type
@@ -190,14 +204,14 @@ export const Dropzone: React.FC<DropzoneProps> = ({
           'p-[22px] md:p-[26px] flex flex-col items-center justify-center text-center',
           // État disabled
           disabled && 'opacity-50 cursor-not-allowed bg-stone-50 border-stone-200 border-2 border-dashed',
-          // État sélectionné
-          !disabled && currentFile && 'bg-ui-mint/30 border-2 border-solid border-ui-card-border',
+          // État sélectionné ou fichier existant
+          !disabled && hasAnyFile && 'bg-ui-mint/30 border-2 border-solid border-ui-card-border',
           // État erreur
           !disabled && effectiveError && 'border-2 border-dashed border-ui-error bg-ui-error-bg/30',
           // État dragover
           !disabled && isDragOver && 'border-2 border-dashed border-ui-emerald bg-ui-mint/60 scale-[1.005]',
           // État défaut
-          !disabled && !currentFile && !effectiveError && !isDragOver && (
+          !disabled && !hasAnyFile && !effectiveError && !isDragOver && (
             'border-2 border-dashed border-ui-field-border bg-white hover:border-ui-emerald hover:bg-ui-mint/20'
           )
         )}
@@ -212,17 +226,22 @@ export const Dropzone: React.FC<DropzoneProps> = ({
           className="sr-only"
         />
 
-        {currentFile ? (
-          // État : Fichier sélectionné
+        {hasSelectedFile && currentFile ? (
+          // État : Nouveau fichier sélectionné
           <div className="flex items-center justify-between w-full max-w-md gap-3 bg-white p-3 rounded-ui-ctl border border-ui-card-border shadow-xs">
             <div className="flex items-center gap-3 min-w-0">
               <div className="size-10 rounded-full bg-ui-mint flex items-center justify-center shrink-0 text-ui-emerald">
                 <Icon name="file" size={20} />
               </div>
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-[14px] font-medium text-ui-ink truncate">
-                  {currentFile.name}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[14px] font-medium text-ui-ink truncate">
+                    {currentFile.name}
+                  </span>
+                  <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-full shrink-0">
+                    Nouveau
+                  </span>
+                </div>
                 <span className="text-[12px] text-ui-text-70">
                   {formatFileSize(currentFile.size)}
                 </span>
@@ -233,7 +252,64 @@ export const Dropzone: React.FC<DropzoneProps> = ({
               type="button"
               onClick={handleRemove}
               aria-label="Supprimer le fichier"
-              className="size-8 rounded-full flex items-center justify-center text-ui-ink/50 hover:text-ui-error hover:bg-ui-error-bg transition-colors shrink-0"
+              title="Supprimer ce fichier"
+              className="size-8 rounded-full flex items-center justify-center text-ui-ink/50 hover:text-ui-error hover:bg-ui-error-bg transition-colors shrink-0 cursor-pointer"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M12 4L4 12M4 4L12 12"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+        ) : hasExistingFile && existingFile ? (
+          // État : Document déjà enregistré (conservé jusqu'à ce que le commerçant clique sur X pour le supprimer et le remplacer)
+          <div className="flex items-center justify-between w-full max-w-md gap-3 bg-white p-3 rounded-ui-ctl border border-emerald-300/80 shadow-xs">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="size-10 rounded-full bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shrink-0 text-ui-emerald">
+                <Icon name="file" size={20} />
+              </div>
+              <div className="flex flex-col text-left min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[14px] font-medium text-ui-ink truncate">
+                    {existingFile.name}
+                  </span>
+                  <span className="text-[10px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full shrink-0">
+                    Enregistré
+                  </span>
+                </div>
+                <span className="text-[12px] text-ui-text-70">
+                  {existingFile.size && existingFile.size > 0
+                    ? formatFileSize(existingFile.size)
+                    : 'Document déjà transmis'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveExisting?.();
+                onFile?.(null);
+                if (inputRef.current) {
+                  inputRef.current.value = '';
+                }
+              }}
+              aria-label={`Supprimer ${existingFile.name}`}
+              title="Supprimer ce document pour le remplacer"
+              className="size-8 rounded-full flex items-center justify-center text-ui-ink/50 hover:text-ui-error hover:bg-ui-error-bg transition-colors shrink-0 cursor-pointer"
             >
               <svg
                 width="16"

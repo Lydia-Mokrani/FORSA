@@ -34,7 +34,7 @@ export const ModeSwitchModal: React.FC<ModeSwitchModalProps> = ({ isOpen, onClos
       data-node-id="1155:25968"
       data-name="Modal — Passer en mode client"
     >
-      <div className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-6 sm:p-8 max-w-md w-full shadow-xl relative animate-scale-in">
+      <div className="backdrop-blur-[20px] bg-white/95 border-[1.2px] border-[rgba(255,255,255,0.7)] rounded-[28px] p-6 sm:p-8 max-w-md w-full shadow-2xl relative animate-scale-in">
         {/* Close button */}
         <button
           type="button"

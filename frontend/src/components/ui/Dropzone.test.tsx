@@ -81,4 +81,32 @@ describe('Dropzone component', () => {
     expect(screen.queryByText(/Format de fichier non accepté/i)).toBeNull();
     expect(screen.queryByText(/Taille maximale dépassée/i)).toBeNull();
   });
+
+  it('renders existing file and triggers onRemoveExisting when X is clicked', () => {
+    const handleRemoveExisting = vi.fn();
+    const handleFile = vi.fn();
+
+    render(
+      <Dropzone
+        existingFile={{
+          name: 'Mon_Registre_CNRC.pdf',
+          size: 1024 * 1024,
+        }}
+        onRemoveExisting={handleRemoveExisting}
+        onFile={handleFile}
+      />
+    );
+
+    // Vérifie que le nom du document existant et le badge Enregistré sont affichés
+    expect(screen.getByText('Mon_Registre_CNRC.pdf')).not.toBeNull();
+    expect(screen.getByText('Enregistré')).not.toBeNull();
+
+    // Clic sur le bouton de suppression X
+    const removeBtn = screen.getByLabelText(/Supprimer Mon_Registre_CNRC.pdf/i);
+    expect(removeBtn).not.toBeNull();
+    fireEvent.click(removeBtn);
+
+    expect(handleRemoveExisting).toHaveBeenCalledTimes(1);
+    expect(handleFile).toHaveBeenCalledWith(null);
+  });
 });

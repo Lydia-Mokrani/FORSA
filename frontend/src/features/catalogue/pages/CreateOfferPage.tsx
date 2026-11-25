@@ -327,9 +327,13 @@ export const CreateOfferPage: React.FC = () => {
             <Bell size={28} />
           </button>
 
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#E9E0D0]">
+          <Link
+            to="/profile"
+            aria-label="Mon profil"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-[#E9E0D0] hover:opacity-90 transition cursor-pointer"
+          >
             <UserRound size={23} />
-          </div>
+          </Link>
         </div>
       </header>
 

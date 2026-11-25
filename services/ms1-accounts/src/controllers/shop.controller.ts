@@ -308,6 +308,8 @@ export class ShopController {
           status: true,
           reason: true,
           createdAt: true,
+          originalName: true,
+          size: true,
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -318,6 +320,8 @@ export class ShopController {
         status: d.status,
         reason: d.reason,
         uploadedAt: d.createdAt,
+        originalName: d.originalName,
+        size: d.size,
       }));
 
       res.json({ documents });

@@ -22,28 +22,49 @@ import { CreateOfferPage } from './features/catalogue/pages/CreateOfferPage';
 import { EditOfferPage } from './features/catalogue/pages/EditOfferPage';
 import { ShopEditPage } from './features/catalogue/pages/ShopEditPage';
 
-// Hub Commerçant & Paramètres MS1
+// Hub Commerçant & Paramètres MS1 (Espace 3)
 import {
   MerchantAccountPage,
   MerchantEditProfilePage,
   MerchantPreferencesPage,
   MerchantChangeEmailPage,
+  MerchantPendingPage,
 } from './features/account';
 
-// Profil & Compte MS1 (Sections B, C, D)
-import { ProfilePage } from './features/profile';
+// Profil & Compte MS1 (Espace 2)
+import {
+  ProfilePage,
+  EditProfilePage,
+  EditPhotoPage,
+  ChangeEmailPage,
+  ChangePhonePage,
+  LocationPage,
+  NotificationsPage,
+} from './features/profile';
+
 import {
   SettingsPage,
+  SecuritySettingsPage,
   ModeSwitchPage,
   AccountDangerPage,
+  AccountDangerPage as DeleteAccountPage,
 } from './features/settings';
 
-// Suite Authentification Telegram & Profil MS1
+// Suite Authentification Telegram & Profil MS1 (Espace 1)
 import {
   WelcomePage,
   RoleChoicePage,
   LoginPage,
   RegisterPage,
+  PendingValidationPage,
+  VerifyEmailPage,
+  VerifyPhonePage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+  SocialChooseSpacePage,
+  SocialAddPhonePage,
+  SocialLinkedPage,
+  SocialAccountExistsPage,
   MerchantStatusPage,
   AccountSuspendedPage,
   MerchantDocumentsPage,
@@ -63,7 +84,7 @@ export const App: React.FC = () => {
     <LocationProvider>
       <BrowserRouter>
         <Routes>
-          {/* MERCHANT LAYOUT (MS2 & MS1) */}
+          {/* MERCHANT LAYOUT (MS2 & MS1 - Espace 3) */}
           <Route element={<MerchantLayout />}>
             <Route
               path="/merchant"
@@ -90,8 +111,16 @@ export const App: React.FC = () => {
               element={<ShopEditPage />}
             />
             <Route
+              path="/merchant/shop/edit"
+              element={<ShopEditPage />}
+            />
+            <Route
               path="/merchant/account"
               element={<MerchantAccountPage />}
+            />
+            <Route
+              path="/merchant/account/pending"
+              element={<MerchantPendingPage />}
             />
             <Route
               path="/merchant/account/edit-profile"
@@ -105,9 +134,17 @@ export const App: React.FC = () => {
               path="/merchant/account/change-email"
               element={<MerchantChangeEmailPage />}
             />
+            <Route
+              path="/merchant/mode"
+              element={<ModeSwitchPage />}
+            />
+            <Route
+              path="/merchant/account/delete"
+              element={<DeleteAccountPage />}
+            />
           </Route>
 
-          {/* CLIENT LAYOUT (MS2 & MS1) */}
+          {/* CLIENT LAYOUT (MS2 & MS1 - Espace 2) */}
           <Route element={<ClientLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/explore" element={<ExploreOffersPage />} />
@@ -122,26 +159,43 @@ export const App: React.FC = () => {
                 </div>
               }
             />
-            <Route
-              path="/notifications"
-              element={
-                <div className="p-8 max-w-4xl mx-auto">
-                  <h1 className="text-2xl font-bold text-[#0B2C25]">Notifications</h1>
-                  <p className="text-stone-500 mt-2">Vous n'avez aucune nouvelle notification pour le moment.</p>
-                </div>
-              }
-            />
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/location" element={<LocationPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/profile/edit" element={<EditProfilePage />} />
+            <Route path="/profile/photo" element={<EditPhotoPage />} />
+            <Route path="/profile/email" element={<ChangeEmailPage />} />
+            <Route path="/profile/phone" element={<ChangePhonePage />} />
+            <Route path="/profile/location" element={<LocationPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/security" element={<SecuritySettingsPage />} />
             <Route path="/settings/mode" element={<ModeSwitchPage />} />
             <Route path="/settings/account" element={<AccountDangerPage />} />
+            <Route path="/settings/danger" element={<AccountDangerPage />} />
+            <Route path="/account/danger" element={<AccountDangerPage />} />
+            <Route path="/mode-switch" element={<ModeSwitchPage />} />
           </Route>
 
-          {/* AUTHENTICATION SUITE MS1 (Telegram-first) */}
+          {/* AUTHENTICATION SUITE MS1 (Espace 1 - Screens 01 à 23) */}
           <Route path="/welcome" element={<WelcomePage />} />
+          <Route path="/role" element={<RoleChoicePage />} />
           <Route path="/role-select" element={<RoleChoicePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register/merchant" element={<RegisterPage />} />
+          <Route path="/register/merchant/shop" element={<RegisterPage />} />
+          <Route path="/register/merchant/docs" element={<RegisterPage />} />
+          <Route path="/register/pending" element={<PendingValidationPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/verify-phone" element={<VerifyPhonePage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/auth/social/choose" element={<SocialChooseSpacePage />} />
+          <Route path="/auth/social/phone" element={<SocialAddPhonePage />} />
+          <Route path="/auth/social/linked" element={<SocialLinkedPage />} />
+          <Route path="/auth/social/exists" element={<SocialAccountExistsPage />} />
+
+          {/* STATUTS & ACCÈS MARCHAND */}
           <Route path="/merchant/status" element={<MerchantStatusPage />} />
           <Route path="/merchant/documents" element={<MerchantDocumentsPage />} />
           <Route path="/merchant/documents/resubmit" element={<DocumentResubmitPage />} />
@@ -150,6 +204,8 @@ export const App: React.FC = () => {
           <Route path="/access-denied" element={<AccessDeniedPage />} />
           <Route path="/401" element={<SessionExpiredPage />} />
           <Route path="/session-expired" element={<SessionExpiredPage />} />
+
+          {/* CONDITIONS & CONFIDENTIALITÉ (Loi 18-07) */}
           <Route path="/cgu" element={<TermsPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/conditions" element={<TermsPage />} />

@@ -273,7 +273,7 @@ export const ModeSwitchPage: React.FC = () => {
           data-node-id="1155:26175"
         >
           <div
-            className="bg-white rounded-[24px] p-7 sm:p-8 max-w-[560px] w-full shadow-[0px_12px_30px_rgba(0,0,0,0.18)] relative animate-scale-in flex flex-col gap-5"
+            className="backdrop-blur-[20px] bg-white/95 border-[1.2px] border-[rgba(255,255,255,0.7)] rounded-[24px] p-7 sm:p-8 max-w-[560px] w-full shadow-2xl relative animate-scale-in flex flex-col gap-5"
             data-node-id="1155:26176"
           >
             {/* Top row with badge and close button */}

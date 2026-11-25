@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation as useRouterLocation } from 'react-router-dom';
 import { useLocation } from '../context/LocationContext';
-import { MapPin, Search, Store, ShoppingBag, LayoutDashboard, Menu, X } from 'lucide-react';
+import { MapPin, Search, Store, ShoppingBag, LayoutDashboard, Menu, X, User } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { location, openModal } = useLocation();
@@ -43,8 +43,8 @@ export const Navbar: React.FC = () => {
 
           {/* Location Picker Trigger */}
           <button
-            onClick={openModal}
-            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 hover:bg-emerald-50 border border-gray-200/80 hover:border-emerald-200 text-xs font-medium text-gray-700 hover:text-emerald-700 transition max-w-[200px]"
+            onClick={() => navigate('/location')}
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 hover:bg-emerald-50 border border-gray-200/80 hover:border-emerald-200 text-xs font-medium text-gray-700 hover:text-emerald-700 transition max-w-[200px] cursor-pointer"
             title="Modifier ma localisation"
           >
             <MapPin className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
@@ -136,6 +136,21 @@ export const Navbar: React.FC = () => {
                 </Link>
               </>
             )}
+
+            <div className="h-4 w-px bg-gray-200 mx-1" />
+
+            {/* Bouton Profil */}
+            <Link
+              to="/profile"
+              className={`p-2 rounded-xl border transition flex items-center justify-center ${
+                routerLocation.pathname.startsWith('/profile')
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                  : 'border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-emerald-700'
+              }`}
+              title="Mon profil"
+            >
+              <User className="w-4 h-4" />
+            </Link>
           </nav>
 
           {/* Mobile hamburger button */}
@@ -153,8 +168,8 @@ export const Navbar: React.FC = () => {
         <div className="md:hidden border-t border-gray-100 bg-white px-4 pt-3 pb-5 space-y-3">
           <button
             onClick={() => {
-              openModal();
               setMobileMenuOpen(false);
+              navigate('/location');
             }}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 text-xs font-medium text-gray-800"
           >
@@ -197,6 +212,14 @@ export const Navbar: React.FC = () => {
             >
               <LayoutDashboard className="w-4 h-4" />
               Espace Commerçant
+            </Link>
+            <Link
+              to="/profile"
+              onClick={() => setMobileMenuOpen(false)}
+              className="px-3 py-2 rounded-lg text-sm font-semibold text-gray-800 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 mt-1 border-t border-gray-100 pt-2"
+            >
+              <User className="w-4 h-4 text-emerald-600" />
+              Mon profil
             </Link>
           </div>
         </div>

@@ -84,22 +84,22 @@ export const MerchantStatusPage: React.FC = () => {
   ];
 
   return (
-    <div className="relative min-h-screen w-full bg-ui-auth-bg flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-ui-emerald selection:text-white overflow-x-hidden">
+    <div className="bg-gradient-to-b from-[#dce1d0] from-[10.156%] via-[#f3e7c6] via-[66.797%] to-[#787b72] to-[106.64%] flex flex-col items-center justify-center min-h-screen pb-[54px] sm:pb-[66px] pt-[84px] sm:pt-[96px] px-[16px] sm:px-[64px] relative size-full font-poppins selection:bg-[#17664e] selection:text-white overflow-x-hidden">
       {/* En-tête officiel */}
-      <header className="relative z-10 w-full max-w-4xl flex items-center justify-between mb-8 px-2 sm:px-4">
+      <header className="absolute flex h-[32px] items-center justify-between left-[20px] sm:left-[64px] top-[24px] sm:top-[32px] right-[20px] sm:right-[64px] overflow-clip">
         <Link
           to="/"
-          className="text-[24px] font-extrabold tracking-tight text-ui-ink hover:opacity-90 transition"
+          className="font-extrabold text-[#0b2c25] text-[20px] sm:text-[24px] tracking-tight hover:opacity-90 transition"
         >
           FORSA
         </Link>
-        <span className="hidden sm:inline text-[14px] font-medium text-ui-ink/80">
+        <span className="hidden sm:inline font-medium text-[14px] text-[rgba(11,44,37,0.85)]">
           Espace Commerçant
         </span>
       </header>
 
-      {/* Carte Statut principale */}
-      <main className="relative z-10 w-full max-w-[560px] bg-white border border-ui-field-border rounded-[32px] p-6 sm:p-10 shadow-sm flex flex-col items-center text-center gap-6 my-auto">
+      {/* Carte Statut Verre Miroir */}
+      <main className="backdrop-blur-[20px] bg-[rgba(255,255,255,0.34)] border-[1.2px] border-[rgba(255,255,255,0.7)] border-solid rounded-[32px] p-[24px] sm:p-[48px] shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[20px] sm:gap-[22px] items-center text-center my-auto max-w-[560px] w-full overflow-hidden">
         {loading ? (
           <div className="py-12 flex flex-col items-center gap-3">
             <div className="size-8 border-3 border-ui-emerald border-t-transparent rounded-full animate-spin" />

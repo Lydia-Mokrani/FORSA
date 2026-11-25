@@ -31,9 +31,9 @@ export const TermsModal: React.FC<TermsModalProps> = ({
       aria-modal="true"
       aria-labelledby="terms-title"
     >
-      <div className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] max-w-2xl w-full shadow-2xl relative flex flex-col max-h-[85vh] animate-scale-in overflow-hidden">
+      <div className="backdrop-blur-[20px] bg-white/95 border-[1.2px] border-[rgba(255,255,255,0.7)] rounded-[28px] max-w-2xl w-full shadow-2xl relative flex flex-col max-h-[85vh] animate-scale-in overflow-hidden">
         {/* Header */}
-        <div className="p-6 pb-4 border-b border-[#dbf0dd] bg-gradient-to-b from-[#eef7ec]/40 to-white flex items-start justify-between">
+        <div className="p-6 pb-4 border-b border-[rgba(11,44,37,0.12)] bg-gradient-to-b from-[#eef7ec]/40 to-white/70 flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className="size-11 rounded-full bg-[#eef7ec] border border-[#dbf0dd] flex items-center justify-center text-[#17664e] shrink-0">
               <ShieldCheck className="size-6" />

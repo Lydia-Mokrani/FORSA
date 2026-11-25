@@ -257,28 +257,32 @@ export class AuthController {
         // Activation check pour pendingPhone
         await RecoveryService.checkAndApplyPendingPhone(user.id);
 
-        // Réactivation si désactivé (spec §7)
-        if (user.status === 'DEACTIVATED') {
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: { status: 'ACTIVE' },
-            include: { shop: true, preferences: true },
-          });
-        } else if (user.status === 'SUSPENDED' || user.status === 'DELETED') {
+        if (user.status === 'SUSPENDED' || user.status === 'DELETED') {
           throw new ForbiddenError('Ce compte a été suspendu ou supprimé.');
         }
 
-        // Si un nouvel e-mail a été renseigné et diffère de l'existant
+        const targetMode = requestedRole === Role.MERCHANT && user.roles.includes(Role.MERCHANT) ? 'merchant' : 'customer';
+        const updateData: any = {};
+        if (user.status === 'DEACTIVATED') {
+          updateData.status = 'ACTIVE';
+        }
+        if (user.activeMode !== targetMode) {
+          updateData.activeMode = targetMode;
+        }
         if (normalizedEmail && normalizedEmail !== user.email) {
+          updateData.email = normalizedEmail;
+          updateData.emailVerifiedAt = null;
+        }
+
+        if (Object.keys(updateData).length > 0) {
           user = await prisma.user.update({
             where: { id: user.id },
-            data: {
-              email: normalizedEmail,
-              emailVerifiedAt: null,
-            },
+            data: updateData,
             include: { shop: true, preferences: true },
           });
-          await EmailVerificationService.initiateEmailVerification(user.id, normalizedEmail);
+          if (updateData.email) {
+            await EmailVerificationService.initiateEmailVerification(user.id, normalizedEmail!);
+          }
         }
       } else {
         isNewUser = true;

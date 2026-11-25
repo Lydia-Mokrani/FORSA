@@ -20,6 +20,31 @@ export interface UserSessionData {
   } | null;
 }
 
+export function parseDeviceName(userAgent?: string | null, deviceHeader?: string | null): string {
+  if (deviceHeader && deviceHeader.length < 50 && !deviceHeader.startsWith('Mozilla/')) {
+    return deviceHeader;
+  }
+  if (!userAgent) return 'Navigateur Web';
+
+  let os = '';
+  if (/windows nt 10/i.test(userAgent)) os = 'Windows 10/11';
+  else if (/windows/i.test(userAgent)) os = 'Windows';
+  else if (/iphone/i.test(userAgent)) os = 'iPhone';
+  else if (/ipad/i.test(userAgent)) os = 'iPad';
+  else if (/android/i.test(userAgent)) os = 'Android';
+  else if (/macintosh|mac os x/i.test(userAgent)) os = 'macOS';
+  else if (/linux/i.test(userAgent)) os = 'Linux';
+
+  let browser = 'Navigateur Web';
+  if (/edg\//i.test(userAgent)) browser = 'Edge';
+  else if (/chrome|crios/i.test(userAgent) && !/edg\//i.test(userAgent) && !/opr\//i.test(userAgent)) browser = 'Chrome';
+  else if (/firefox|fxios/i.test(userAgent)) browser = 'Firefox';
+  else if (/safari/i.test(userAgent) && !/chrome/i.test(userAgent)) browser = 'Safari';
+  else if (/opr\//i.test(userAgent)) browser = 'Opera';
+
+  return os ? `${browser} sur ${os}` : browser;
+}
+
 /**
  * Crée une session complète (Access Token 15 min + Refresh Token 7 jours)
  */
@@ -32,9 +57,37 @@ export async function createSession(
   // TTL Refresh Token : 7 jours
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+  // Nettoyer les tokens expirés ou révoqués pour cet utilisateur pour éviter l'accumulation
+  if (typeof (prisma.refreshToken as any)?.deleteMany === 'function') {
+    await (prisma.refreshToken as any).deleteMany({
+      where: {
+        userId: user.id,
+        OR: [
+          { expiresAt: { lt: new Date() } },
+          { revoked: true },
+        ],
+      },
+    }).catch(() => {});
+  }
+
   const ipAddress = req?.ip || null;
   const userAgent = req?.headers['user-agent'] || null;
-  const device = (req?.headers['x-device-id'] as string) || (userAgent ? userAgent.substring(0, 50) : 'Appareil inconnu');
+  const device = parseDeviceName(userAgent, req?.headers['x-device-id'] as string);
+
+  // Révoquer les sessions actives précédentes sur ce même appareil/navigateur pour éviter les doublons
+  if (userAgent || device) {
+    await prisma.refreshToken.updateMany({
+      where: {
+        userId: user.id,
+        revoked: false,
+        OR: [
+          ...(userAgent ? [{ userAgent }] : []),
+          ...(device ? [{ device }] : []),
+        ],
+      },
+      data: { revoked: true },
+    }).catch(() => {});
+  }
 
   await prisma.refreshToken.create({
     data: {
@@ -146,7 +199,24 @@ export async function rotateRefreshToken(
 
   const ipAddress = req?.ip || session.ipAddress;
   const userAgent = req?.headers['user-agent'] || session.userAgent;
-  const device = (req?.headers['x-device-id'] as string) || session.device;
+  let device = (req?.headers['x-device-id'] as string) || session.device;
+  if (!device || device.length > 40) {
+    if (userAgent && /iphone/i.test(userAgent)) device = 'iPhone (iOS)';
+    else if (userAgent && /android/i.test(userAgent)) device = 'Smartphone (Android)';
+    else if (userAgent && /windows/i.test(userAgent)) device = 'Ordinateur (Windows)';
+    else if (userAgent && /macintosh|mac os x/i.test(userAgent)) device = 'Ordinateur (macOS)';
+    else if (userAgent && /linux/i.test(userAgent)) device = 'Ordinateur (Linux)';
+  }
+
+  // Nettoyage en tâche de fond des tokens expirés
+  if (typeof (prisma.refreshToken as any)?.deleteMany === 'function') {
+    await (prisma.refreshToken as any).deleteMany({
+      where: {
+        userId: session.userId,
+        expiresAt: { lt: new Date() },
+      },
+    }).catch(() => {});
+  }
 
   await prisma.refreshToken.create({
     data: {
@@ -206,7 +276,7 @@ export async function revokeRefreshToken(rawRefreshToken: string): Promise<boole
 }
 
 /**
- * Liste les sessions actives de l'utilisateur
+ * Liste les sessions actives de l'utilisateur (dédupliquées par appareil unique)
  */
 export async function listUserSessions(userId: string) {
   const sessions = await prisma.refreshToken.findMany({
@@ -226,7 +296,24 @@ export async function listUserSessions(userId: string) {
     orderBy: { createdAt: 'desc' },
   });
 
-  return sessions;
+  // Déduplication par appareil : si l'utilisateur s'est connecté plusieurs fois
+  // depuis le même appareil / navigateur, on ne conserve que la session la plus récente
+  const seen = new Set<string>();
+  const uniqueSessions: typeof sessions = [];
+
+  for (const s of sessions) {
+    const cleanDevice = parseDeviceName(s.userAgent, s.device);
+    const key = cleanDevice.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueSessions.push({
+        ...s,
+        device: cleanDevice,
+      });
+    }
+  }
+
+  return uniqueSessions;
 }
 
 /**

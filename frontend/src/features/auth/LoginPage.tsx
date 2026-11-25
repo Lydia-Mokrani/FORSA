@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
+import { ArrowRight } from 'lucide-react';
 import {
   Button,
   Field,
@@ -11,7 +12,8 @@ import {
 
 import arrowRightIcon from '../../assets/icons/arrow-right.svg';
 import arrowLeftIcon from '../../assets/icons/arrow-left.svg';
-import badgeRoleIcon from '../../assets/icons/badge-role-icon.svg';
+import roleClientIcon from '../../assets/icons/role-client-icon.svg';
+import roleMerchantIcon from '../../assets/icons/role-merchant-icon.svg';
 import googleIcon from '../../assets/icons/google.svg';
 import appleIcon from '../../assets/icons/apple.svg';
 import figmaClock from '../../assets/icons/figma/icone-clock-01.svg';
@@ -24,6 +26,7 @@ import {
   verifyTelegramAuth,
   loginWithGoogle,
   getPostLoginRedirect,
+  switchUserMode,
   setStoredUser,
   AuthUser,
 } from './services/authService';
@@ -248,8 +251,12 @@ export const LoginPage: React.FC = () => {
           setErrorMessage('Le lien Telegram a expiré. Veuillez relancer la connexion.');
           setStep('PHONE');
         } else if (res.codeSent || res.status === 'VERIFIED') {
-          // Contact validé dans Telegram -> passage immédiat à la saisie du code OTP
+          // Contact validé dans Telegram -> connexion automatique si autoCode disponible
           if (pollingRef.current) clearInterval(pollingRef.current);
+          if ((res as any).autoCode) {
+            submitOtp((res as any).autoCode);
+            return;
+          }
           setStep('VERIFY_OTP');
           setOtpCountdown(300); // 5 min
           setResendCooldown(60);
@@ -302,6 +309,24 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text');
+    const clean = pasted.replace(/\D/g, '').slice(0, 6);
+    if (clean.length > 0) {
+      const newOtp = ['', '', '', '', '', ''];
+      clean.split('').forEach((digit, i) => {
+        if (i < 6) newOtp[i] = digit;
+      });
+      setOtp(newOtp);
+      const nextIndex = Math.min(clean.length, 5);
+      otpRefs.current[nextIndex]?.focus();
+      if (clean.length === 6) {
+        submitOtp(clean);
+      }
+    }
+  };
+
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       otpRefs.current[index - 1]?.focus();
@@ -328,7 +353,7 @@ export const LoginPage: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      const data = await verifyTelegramAuth(challengeId, code);
+      const data = await verifyTelegramAuth(challengeId, code, role);
 
       // Vérification statut du compte
       if (data.user?.status === 'SUSPENDED') {
@@ -387,7 +412,18 @@ export const LoginPage: React.FC = () => {
     setIsSuccess(true);
     setErrorMessage(null);
 
-    const redirectPath = getPostLoginRedirect(user, role);
+    // Mettre à jour activeMode en local pour synchronisation immédiate
+    const targetMode = role === 'MERCHANT' ? 'merchant' : 'customer';
+    const updatedUser: AuthUser = {
+      ...user,
+      activeMode: targetMode,
+    };
+    setStoredUser(updatedUser);
+
+    // Prévenir le backend du changement de mode actif
+    switchUserMode(role).catch(() => {});
+
+    const redirectPath = getPostLoginRedirect(updatedUser, role);
 
     setTimeout(() => {
       navigate(redirectPath, { replace: true });
@@ -441,48 +477,48 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-ui-auth-bg flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-ui-emerald selection:text-white overflow-x-hidden">
-      {/* En-tête Figma */}
-      <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-4">
-        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-ui-ink hover:opacity-90 transition">
+    <div className="bg-gradient-to-b from-[#dce1d0] from-[10.156%] via-[#f3e7c6] via-[66.797%] to-[#787b72] to-[106.64%] flex flex-col items-center justify-center min-h-screen pb-[54px] sm:pb-[66px] pt-[84px] sm:pt-[96px] px-[16px] sm:px-[64px] relative size-full font-poppins selection:bg-[#17664e] selection:text-white overflow-x-hidden">
+      {/* En-tête Figma 1030:23481 */}
+      <header className="absolute flex h-[32px] items-center justify-between left-[20px] sm:left-[64px] top-[24px] sm:top-[32px] right-[20px] sm:right-[64px] overflow-clip">
+        <Link to="/" className="font-extrabold text-[#0b2c25] text-[20px] sm:text-[24px] tracking-tight hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="hidden sm:inline text-[14px] font-medium text-ui-text-80">
+        <span className="hidden sm:inline font-medium text-[14px] text-[rgba(11,44,37,0.85)]">
           Donnez une autre vie à vos invendus
         </span>
       </header>
 
-      {/* Modal overlay de succès conforme Figma (fond vert sombre semi-transparent) */}
+      {/* Modal overlay de succès conforme Figma */}
       {isSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ui-ink/40 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white border-[1.5px] border-ui-card-border rounded-ui-card p-8 flex flex-col items-center text-center gap-4 shadow-xl">
-            <div className="size-16 rounded-full bg-ui-mint border border-ui-card-border text-ui-emerald flex items-center justify-center shadow-xs">
-              <Icon name="check" size={28} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b2c25]/40 backdrop-blur-xs">
+          <div className="w-full max-w-md backdrop-blur-[20px] bg-white/90 border-[1.2px] border-[rgba(255,255,255,0.7)] rounded-[28px] p-8 flex flex-col items-center text-center gap-4 shadow-xl">
+            <div className="size-16 rounded-full bg-[#eaf6eb] border border-[#17664e]/20 text-[#17664e] flex items-center justify-center shadow-xs">
+              <Icon name="check-success" size={32} />
             </div>
-            <h2 className="text-2xl font-bold text-ui-ink">Connexion réussie !</h2>
-            <p className="text-sm text-ui-text-70">
+            <h2 className="text-2xl font-bold text-[#0b2c25]">Connexion réussie !</h2>
+            <p className="text-sm text-[rgba(11,44,37,0.7)]">
               Bienvenue sur FORSA. Redirection en cours...
             </p>
           </div>
         </div>
       )}
 
-      {/* Carte Blanche Conforme Figma [DECISION HYB: Fond uni #dce1d0] */}
-      <main className="relative z-10 bg-white border-[1.5px] border-ui-card-border rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_rgba(11,44,37,0.08)] flex flex-col gap-[20px] my-auto max-w-[520px] w-full">
-        {/* Toggle Rôle */}
+      {/* Carte Verre Miroir Conforme Figma 1030:23484 */}
+      <main className="backdrop-blur-[20px] bg-[rgba(255,255,255,0.34)] border-[1.2px] border-[rgba(255,255,255,0.7)] border-solid rounded-[32px] p-[24px] sm:p-[48px] shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[20px] sm:gap-[22px] my-auto max-w-[520px] w-full">
+        {/* Pastille Toggle Rôle Figma 1030:23486 */}
         {step === 'PHONE' && (
-          <div className="flex items-center justify-start w-full">
+          <div className="flex items-start justify-center w-full">
             <button
               type="button"
               onClick={toggleRole}
-              className="group inline-flex items-center gap-2 bg-ui-mint hover:bg-ui-mint/80 border border-ui-field-border h-[38px] px-3.5 rounded-full transition shadow-xs cursor-pointer"
+              className="bg-[rgba(255,255,255,0.62)] hover:bg-white/80 border border-[rgba(11,44,37,0.2)] flex gap-[8px] items-center justify-center px-[14px] py-[8px] rounded-[24px] transition cursor-pointer"
             >
-              <img src={badgeRoleIcon} alt="Rôle" className="size-4 shrink-0" />
-              <span className="text-[13px] font-semibold text-ui-ink">
+              <img src={role === 'CUSTOMER' ? roleClientIcon : roleMerchantIcon} alt="" className="size-[16px]" />
+              <span className="font-medium text-[#0b2c25] text-[13px]">
                 {role === 'CUSTOMER' ? 'Espace client' : 'Espace commerçant'}
               </span>
-              <span className="text-ui-text-70 text-[13px]">·</span>
-              <span className="text-[13px] font-semibold text-ui-emerald group-hover:underline">
+              <span className="text-[13px] text-[rgba(11,44,37,0.4)]">·</span>
+              <span className="font-medium text-[#17664e] hover:underline text-[13px]">
                 Changer
               </span>
             </button>
@@ -492,124 +528,126 @@ export const LoginPage: React.FC = () => {
         {/* ─── ÉTAPE 1 : Saisie Téléphone ───────────────────────────────────── */}
         {step === 'PHONE' && (
           <>
-            <div className="text-center flex flex-col gap-2 w-full">
-              <h1 className="font-semibold text-ui-ink text-2xl sm:text-[32px] leading-tight">
+            <div className="flex flex-col gap-[8px] items-center text-center w-full">
+              <h1 className="font-semibold text-[#0b2c25] text-[26px] sm:text-[34px] leading-tight">
                 {role === 'CUSTOMER' ? 'Bon retour !' : 'Espace commerçant'}
               </h1>
-              <p className="font-normal text-[15px] text-ui-text-70 leading-normal">
+              <p className="font-normal text-[14px] sm:text-[15px] text-[rgba(11,44,37,0.65)] leading-relaxed">
                 {role === 'CUSTOMER'
-                  ? 'Connectez-vous avec votre numéro mobile pour retrouver vos offres'
+                  ? 'Connectez-vous pour retrouver les offres près de chez vous'
                   : 'Gérez vos offres et vos réservations'}
               </p>
             </div>
 
-            {/* Message d'erreur via Banner R0 */}
+            {/* Message d'erreur */}
             {errorMessage && (
-              <Banner
-                variant="error"
-                description={errorMessage}
-                className="w-full text-left"
-              >
+              <div className="bg-[rgba(253,236,234,0.9)] border border-[#b22222]/30 rounded-[14px] p-3.5 text-[13px] text-[#b22222] w-full text-left">
+                <p>{errorMessage}</p>
                 {googleErrorLink && (
                   <div className="mt-2">
                     <Link
                       to={googleErrorLink.href}
-                      className="text-[13px] font-semibold text-ui-emerald hover:underline inline-flex items-center gap-1"
+                      className="text-[13px] font-semibold text-[#17664e] hover:underline inline-flex items-center gap-1"
                     >
                       {googleErrorLink.text} →
                     </Link>
                   </div>
                 )}
-              </Banner>
+              </div>
             )}
 
             <form onSubmit={handleStartTelegram} className="flex flex-col gap-4 w-full">
-              <Field
-                label="Numéro de mobile"
-                type="tel"
-                required
-                prefix="+213"
-                leftIcon={<Icon name="phone" size={18} />}
-                placeholder="05 / 06 / 07 XX XX XX XX"
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value)}
-                helperText="Vous recevrez un code de confirmation sur Telegram"
-              />
+              <div className="flex flex-col gap-[6px] w-full text-left">
+                <label htmlFor="login-phone" className="text-[13px] font-medium text-[#0b2c25]">
+                  Numéro de mobile <span className="text-[#b3261e]">*</span>
+                </label>
+                <div className="bg-[rgba(255,255,255,0.62)] focus-within:bg-[rgba(255,255,255,0.85)] border-[1.2px] border-[rgba(255,255,255,0.9)] focus-within:border-[#17664e] flex gap-[12px] h-[56px] items-center px-[18px] py-[16px] rounded-[14px] w-full transition shadow-xs">
+                  <span className="text-[15px] font-medium text-[#0b2c25] border-r border-[rgba(11,44,37,0.15)] pr-3">
+                    +213
+                  </span>
+                  <input
+                    id="login-phone"
+                    type="tel"
+                    required
+                    placeholder="05 / 06 / 07 XX XX XX XX"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    className="flex-1 bg-transparent border-none outline-none text-[#0b2c25] text-[15px] placeholder:text-[rgba(11,44,37,0.5)]"
+                  />
+                </div>
+                <p className="text-[12px] text-[rgba(11,44,37,0.55)]">
+                  Vous recevrez un code de confirmation sur Telegram
+                </p>
+              </div>
 
-              <Button
+              <button
                 type="submit"
-                variant="primary"
-                loading={loading}
-                fullWidth
-                rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+                disabled={loading}
+                className="bg-[#0b2c25] hover:bg-[#17664e] flex gap-[10px] h-[56px] items-center justify-center px-[24px] py-[16px] rounded-[16px] w-full text-white font-medium text-[16px] sm:text-[17px] transition shadow-sm cursor-pointer disabled:opacity-50"
               >
-                Continuer avec Telegram
-              </Button>
+                <span>{loading ? 'Chargement...' : 'Continuer avec Telegram'}</span>
+                <ArrowRight className="size-5 text-white stroke-[2.2] shrink-0" />
+              </button>
             </form>
 
             {role === 'MERCHANT' && (
-              <Banner
-                variant="info"
-                description="L’accès commerçant requiert une boutique enregistrée et approuvée par l’équipe FORSA."
-              />
+              <div className="bg-[rgba(255,255,255,0.5)] border border-[rgba(255,255,255,0.8)] flex gap-[10px] items-center px-[14px] py-[12px] rounded-[14px] w-full text-[13px] text-[rgba(11,44,37,0.75)] leading-normal">
+                L’accès commerçant requiert une boutique enregistrée et approuvée par l’équipe FORSA.
+              </div>
             )}
 
-            {/* Séparateur Social Login */}
-            <div className="relative flex items-center justify-center w-full my-1">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-ui-field-border" />
-              </div>
-              <span className="relative px-3 bg-white text-[12px] font-medium text-ui-text-70 uppercase tracking-wider">
+            {/* Séparateur Social Login Figma 1030:23497 */}
+            <div className="flex gap-[12px] items-center w-full my-1">
+              <div className="bg-[rgba(11,44,37,0.15)] flex-1 h-px" />
+              <span className="font-normal text-[12px] text-[rgba(11,44,37,0.5)] uppercase tracking-wider">
                 ou
               </span>
+              <div className="bg-[rgba(11,44,37,0.15)] flex-1 h-px" />
             </div>
 
-            {/* Boutons Sociaux [DECISION HYB] */}
-            <div className="flex flex-col gap-2.5 w-full">
-              {/* Google : réservé aux comptes existants, câblage VITE_GOOGLE_CLIENT_ID */}
+            {/* Boutons Sociaux Figma 1030:23501 */}
+            <div className="flex gap-[12px] items-center w-full">
+              {/* Google */}
               <button
                 type="button"
                 disabled={!isGoogleAvailable || googleLoading}
                 onClick={isGoogleAvailable ? handleGoogleLogin : undefined}
                 aria-disabled={!isGoogleAvailable}
-                className="w-full h-[48px] rounded-ui-ctl border border-ui-field-border bg-white hover:bg-ui-mint/30 text-ui-ink flex items-center justify-center gap-2.5 font-medium text-[14px] transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="bg-[rgba(255,255,255,0.75)] hover:bg-white/90 border border-[rgba(11,44,37,0.25)] flex flex-1 gap-[10px] h-[52px] sm:h-[56px] items-center justify-center px-[16px] py-[14px] rounded-[16px] transition cursor-pointer text-[#0b2c25] font-semibold text-[14px]"
               >
-                <img src={googleIcon} alt="Google" className="size-5 shrink-0" />
-                <span>Continuer avec Google</span>
+                <img src={googleIcon} alt="Google" className="size-[20px]" />
+                <span className="text-[#0b2c25] font-semibold">Google</span>
                 {!isGoogleAvailable && (
-                  <span className="text-[11px] bg-stone-100 text-ui-text-70 px-2 py-0.5 rounded-full font-normal">
-                    Bientôt disponible
+                  <span className="text-[10px] bg-[#eef7ec] border border-[#235347]/30 text-[#0b2c25] px-1.5 py-0.5 rounded-full font-medium">
+                    Bientôt
                   </span>
                 )}
               </button>
 
-              {/* Apple : design only, jamais fonctionnel, no onClick, no fetch */}
+              {/* Apple */}
               <button
                 type="button"
                 disabled
                 aria-disabled="true"
-                className="w-full h-[48px] rounded-ui-ctl border border-ui-field-border bg-stone-50 text-ui-ink/50 flex items-center justify-center gap-2.5 font-medium text-[14px] cursor-not-allowed"
+                className="bg-[rgba(255,255,255,0.75)] border border-[rgba(11,44,37,0.25)] flex flex-1 gap-[10px] h-[52px] sm:h-[56px] items-center justify-center px-[16px] py-[14px] rounded-[16px] text-[#0b2c25] font-semibold text-[14px] cursor-not-allowed"
               >
-                <img src={appleIcon} alt="Apple" className="size-5 shrink-0 opacity-40" />
-                <span>Continuer avec Apple</span>
-                <span className="text-[11px] bg-stone-200/60 text-ui-text-70 px-2 py-0.5 rounded-full font-normal">
-                  Bientôt disponible
-                </span>
+                <img src={appleIcon} alt="Apple" className="size-[20px]" />
+                <span className="text-[#0b2c25] font-semibold">Apple</span>
               </button>
             </div>
 
-            <p className="text-center text-[14px] text-ui-text-70 pt-1">
+            <p className="font-normal text-[14px] text-[rgba(11,44,37,0.7)] text-center w-full pt-1">
               {role === 'CUSTOMER' ? (
                 <>
                   Pas encore de compte ?{' '}
-                  <Link to="/register?role=client" className="font-semibold text-ui-emerald hover:underline">
+                  <Link to="/register?role=client" className="font-semibold text-[#17664e] hover:underline">
                     Créer un compte
                   </Link>
                 </>
               ) : (
                 <>
                   Nouveau commerçant ?{' '}
-                  <Link to="/register?role=merchant" className="font-semibold text-ui-emerald hover:underline">
+                  <Link to="/register?role=merchant" className="font-semibold text-[#17664e] hover:underline">
                     Créer un compte professionnel
                   </Link>
                 </>
@@ -628,30 +666,30 @@ export const LoginPage: React.FC = () => {
                   if (pollingRef.current) clearInterval(pollingRef.current);
                   setStep('PHONE');
                 }}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-ui-text-70 hover:text-ui-ink transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[rgba(11,44,37,0.7)] hover:text-[#0b2c25] transition cursor-pointer"
               >
                 <img src={arrowLeftIcon} alt="" className="size-4" />
                 <span>Modifier le numéro</span>
               </button>
-              <Chip variant="success">{normalizedPhone}</Chip>
+              <span className="bg-[rgba(255,255,255,0.7)] border border-[rgba(11,44,37,0.2)] text-[#0b2c25] text-xs font-semibold px-3 py-1 rounded-full">
+                {normalizedPhone}
+              </span>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <h2 className="font-semibold text-ui-ink text-2xl sm:text-[28px] leading-tight">
+              <h2 className="font-semibold text-[#0b2c25] text-[24px] sm:text-[28px] leading-tight">
                 Ouvrez Telegram
               </h2>
-              <p className="text-xs sm:text-[14px] text-ui-text-70 max-w-sm mx-auto">
+              <p className="text-[13px] sm:text-[14px] text-[rgba(11,44,37,0.65)] max-w-sm mx-auto">
                 Confirmez votre numéro avec le bot FORSA pour recevoir votre code à 6 chiffres.
               </p>
             </div>
 
             {/* Message d'erreur */}
             {errorMessage && (
-              <Banner
-                variant="error"
-                description={errorMessage}
-                className="w-full text-left"
-              />
+              <div className="bg-[rgba(253,236,234,0.9)] border border-[#b22222]/30 rounded-[14px] p-3 text-[13px] text-[#b22222] w-full text-left">
+                {errorMessage}
+              </div>
             )}
 
             {/* Bouton direct ouvrir Telegram */}
@@ -660,18 +698,18 @@ export const LoginPage: React.FC = () => {
                 href={deepLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full h-[52px] bg-[#229ED9] hover:bg-[#1E88BE] text-white font-medium text-[16px] rounded-ui-ctl flex items-center justify-center gap-2.5 shadow-sm transition cursor-pointer"
+                className="w-full h-[56px] bg-[#229ED9] hover:bg-[#1E88BE] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-sm transition cursor-pointer"
               >
-                <img src={figmaSmartPhone} alt="" className="size-5 invert" />
+                <img src={figmaSmartPhone} alt="" className="size-5 brightness-0 invert" />
                 <span>Ouvrir dans Telegram</span>
               </a>
             )}
 
             {/* QR Code pour desktop */}
             {deepLink && (
-              <div className="bg-white p-4 rounded-ui-card border border-ui-card-border shadow-xs flex flex-col items-center gap-2">
+              <div className="backdrop-blur-[10px] bg-[rgba(255,255,255,0.7)] p-4 rounded-[20px] border border-[rgba(255,255,255,0.9)] shadow-xs flex flex-col items-center gap-2">
                 <QRCodeSVG value={deepLink} size={150} level="M" />
-                <span className="text-[11px] text-ui-text-70">
+                <span className="text-[11px] text-[rgba(11,44,37,0.7)]">
                   Ou scannez avec votre smartphone
                 </span>
               </div>
@@ -679,15 +717,15 @@ export const LoginPage: React.FC = () => {
 
             {/* Indicateur de polling & compte à rebours */}
             <div className="flex flex-col items-center gap-2 pt-1 w-full">
-              <div className="inline-flex items-center gap-2 text-xs font-medium text-ui-ink bg-ui-mint px-3.5 py-1.5 rounded-full border border-ui-card-border">
+              <div className="inline-flex items-center gap-2 text-xs font-medium text-[#0b2c25] bg-[rgba(255,255,255,0.7)] px-3.5 py-1.5 rounded-full border border-[rgba(11,44,37,0.18)]">
                 <span className="relative flex size-2">
-                  <span className="animate-ping absolute inline-flex size-full rounded-full bg-ui-emerald opacity-75" />
-                  <span className="relative inline-flex rounded-full size-2 bg-ui-emerald" />
+                  <span className="animate-ping absolute inline-flex size-full rounded-full bg-[#17664e] opacity-75" />
+                  <span className="relative inline-flex rounded-full size-2 bg-[#17664e]" />
                 </span>
                 <span>En attente de votre confirmation dans Telegram...</span>
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs text-ui-text-70">
+              <div className="flex items-center gap-1.5 text-xs text-[rgba(11,44,37,0.7)]">
                 <img src={figmaClock} alt="" className="size-3.5 opacity-60" />
                 <span>Temps restant : {formatTimer(waitingCountdown)}</span>
               </div>
@@ -697,7 +735,7 @@ export const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleStartTelegram()}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-ui-emerald hover:underline cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#17664e] hover:underline cursor-pointer"
               >
                 <img src={figmaRefresh} alt="" className="size-3.5" />
                 <span>Générer un nouveau lien</span>
@@ -713,30 +751,29 @@ export const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStep('PHONE')}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-ui-text-70 hover:text-ui-ink transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[rgba(11,44,37,0.7)] hover:text-[#0b2c25] transition cursor-pointer"
               >
                 <img src={arrowLeftIcon} alt="" className="size-4" />
                 <span>Changer de numéro</span>
               </button>
-              <Chip variant="success">{normalizedPhone}</Chip>
+              <span className="bg-[rgba(255,255,255,0.7)] border border-[rgba(11,44,37,0.2)] text-[#0b2c25] text-xs font-semibold px-3 py-1 rounded-full">
+                {normalizedPhone}
+              </span>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <h2 className="font-semibold text-ui-ink text-2xl sm:text-[28px] leading-tight">
+              <h2 className="font-semibold text-[#0b2c25] text-[24px] sm:text-[28px] leading-tight">
                 Code de vérification
               </h2>
-              <p className="text-xs sm:text-[14px] text-ui-text-70 max-w-sm mx-auto">
+              <p className="text-[13px] sm:text-[14px] text-[rgba(11,44,37,0.65)] max-w-sm mx-auto">
                 Entrez le code à 6 chiffres envoyé par le bot FORSA sur Telegram
               </p>
             </div>
 
-            {/* Message d'erreur */}
             {errorMessage && (
-              <Banner
-                variant="error"
-                description={errorMessage}
-                className="w-full text-left"
-              />
+              <div className="bg-[rgba(253,236,234,0.9)] border border-[#b22222]/30 rounded-[14px] p-3 text-[13px] text-[#b22222] w-full text-left">
+                {errorMessage}
+              </div>
             )}
 
             {/* 6 cases OTP conformes Figma */}
@@ -753,21 +790,22 @@ export const LoginPage: React.FC = () => {
                   value={digit}
                   onChange={(e) => handleOtpChange(idx, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                  className="size-12 sm:size-14 text-center text-2xl font-bold bg-white border-[1.5px] border-ui-field-border focus:border-2 focus:border-ui-emerald focus:bg-white rounded-ui-ctl text-ui-ink shadow-xs focus:outline-none transition"
+                  onPaste={handleOtpPaste}
+                  className="size-11 sm:size-13 text-center text-xl sm:text-2xl font-bold bg-[rgba(255,255,255,0.7)] border-[1.5px] border-[rgba(11,44,37,0.22)] focus:border-2 focus:border-[#17664e] focus:bg-white rounded-[14px] text-[#0b2c25] shadow-xs focus:outline-none transition"
                 />
               ))}
             </div>
 
             {/* Compte à rebours & Renvoi */}
-            <div className="flex flex-col items-center gap-2 w-full text-xs text-ui-text-70">
+            <div className="flex flex-col items-center gap-2 w-full text-xs text-[rgba(11,44,37,0.7)]">
               <div className="flex items-center gap-1.5">
                 <img src={figmaClock} alt="" className="size-3.5 opacity-60" />
-                <span>Le code expire dans : <strong className="text-ui-ink">{formatTimer(otpCountdown)}</strong></span>
+                <span>Le code expire dans : <strong className="text-[#0b2c25]">{formatTimer(otpCountdown)}</strong></span>
               </div>
 
               <div className="pt-1">
                 {resendCooldown > 0 ? (
-                  <span className="text-ui-text-70 opacity-60">
+                  <span className="text-[rgba(11,44,37,0.6)]">
                     Renvoyer un code ({resendCooldown}s)
                   </span>
                 ) : (
@@ -775,7 +813,7 @@ export const LoginPage: React.FC = () => {
                     type="button"
                     onClick={handleResendCode}
                     disabled={loading}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-ui-emerald hover:underline cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#17664e] hover:underline cursor-pointer disabled:opacity-50"
                   >
                     <img src={figmaRefresh} alt="" className="size-3.5" />
                     <span>Renvoyer un code</span>
@@ -784,49 +822,46 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            <Button
+            <button
               type="button"
-              variant="primary"
               disabled={loading || otp.join('').length !== 6}
               onClick={() => submitOtp()}
-              loading={loading}
-              fullWidth
-              rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+              className="bg-[#0b2c25] hover:bg-[#17664e] flex gap-[10px] h-[56px] items-center justify-center px-[24px] py-[16px] rounded-[16px] w-full text-white font-medium text-[16px] sm:text-[17px] transition shadow-sm cursor-pointer disabled:opacity-50"
             >
-              Valider le code
-            </Button>
+              <span>{loading ? 'Validation...' : 'Valider le code'}</span>
+              <ArrowRight className="size-5 text-white stroke-[2.2] shrink-0" />
+            </button>
           </div>
         )}
 
         {/* ─── ÉTAPE 4 : Compte verrouillé (5 tentatives erronées) ──────────── */}
         {step === 'LOCKED' && (
           <div className="flex flex-col items-center text-center gap-5 w-full">
-            <div className="size-16 rounded-full bg-ui-error-bg border border-ui-error/20 flex items-center justify-center">
+            <div className="size-16 rounded-full bg-[rgba(253,236,234,0.9)] border border-[#b22222]/30 flex items-center justify-center text-[#b22222]">
               <Icon name="alertc" size={32} />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <h2 className="font-semibold text-ui-ink text-2xl sm:text-[28px] leading-tight">
+              <h2 className="font-semibold text-[#0b2c25] text-2xl sm:text-[28px] leading-tight">
                 Tentatives épuisées
               </h2>
-              <p className="text-xs sm:text-[14px] text-ui-text-70 max-w-sm mx-auto">
+              <p className="text-xs sm:text-[14px] text-[rgba(11,44,37,0.65)] max-w-sm mx-auto">
                 Par mesure de sécurité, ce défi a été annulé après 5 codes erronés. Veuillez recommencer depuis le début.
               </p>
             </div>
 
-            <Button
+            <button
               type="button"
-              variant="primary"
-              fullWidth
               onClick={() => {
                 setOtp(['', '', '', '', '', '']);
                 setStep('PHONE');
                 setErrorMessage(null);
                 setAttemptsLeft(null);
               }}
+              className="bg-[#0b2c25] hover:bg-[#17664e] flex gap-[10px] h-[56px] items-center justify-center px-[24px] py-[16px] rounded-[16px] w-full text-white font-medium text-[16px] sm:text-[17px] transition shadow-sm cursor-pointer"
             >
-              Recommencer
-            </Button>
+              <span>Recommencer</span>
+            </button>
           </div>
         )}
       </main>

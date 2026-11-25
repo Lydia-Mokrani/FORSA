@@ -10,3 +10,4 @@ export * from './ModeSwitchModal';
 export * from './EditCommerceModal';
 export * from './EditProfileModal';
 export * from './AvatarCropperModal';
+export * from './MerchantPendingPage';

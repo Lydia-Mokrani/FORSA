@@ -94,10 +94,14 @@ export const formatAlgerianMobileDisplay = (raw: string | null | undefined): str
   return `${d.slice(0, 1)} ${d.slice(1, 3)} ${d.slice(3, 5)} ${d.slice(5, 7)} ${d.slice(7, 9)}`;
 };
 
-export const ProfilePage: React.FC = () => {
+interface ProfilePageProps {
+  initialMode?: 'view' | 'edit';
+}
+
+export const ProfilePage: React.FC<ProfilePageProps> = ({ initialMode }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { location, setLocation, requestCurrentPosition } = useLocation();
+  const { location, setLocation, openModal, requestCurrentPosition } = useLocation();
 
   useEffect(() => {
     if (searchParams.get('changePhone') === '1' || searchParams.get('action') === 'change-phone') {
@@ -106,7 +110,11 @@ export const ProfilePage: React.FC = () => {
   }, [searchParams]);
 
   // Mode View: 'view' (Desktop · Profil — Mon profil) ou 'edit' (Desktop · Profil — Modifier le profil)
-  const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
+  const [viewMode, setViewMode] = useState<'view' | 'edit'>(() => {
+    if (initialMode) return initialMode;
+    if (searchParams.get('mode') === 'edit') return 'edit';
+    return 'view';
+  });
 
   // Profile data
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -139,6 +147,15 @@ export const ProfilePage: React.FC = () => {
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Synchronisation automatique de la localisation préférée depuis le contexte
+  useEffect(() => {
+    if (location?.label) {
+      setPreferredLocation(location.label);
+    }
+  }, [location?.label]);
+
+  const currentRadius = profile?.preferences?.searchRadiusKm || (location as any)?.radius || 10;
 
   // Avatar Upload & Cropper
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -814,6 +831,33 @@ export const ProfilePage: React.FC = () => {
     <div className="min-h-screen bg-[#fffaf0] font-poppins text-[#0b2c25] pb-24">
       {/* ── WORKSPACE (FRAME 617:5056) ────────────────────────────────────── */}
       <div className="w-full max-w-[1140px] mx-auto px-4 sm:px-8 pt-[30px] pb-[28px]">
+        {/* Flèche retour vers Mon Profil (quand en mode édition) */}
+        {viewMode === 'edit' && (
+          <button
+            type="button"
+            onClick={() => {
+              if (initialMode === 'edit') navigate('/profile');
+              else setViewMode('view');
+            }}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 hover:text-emerald-900 text-xs sm:text-sm font-semibold border border-emerald-200 transition shadow-xs cursor-pointer mb-4 w-fit group"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="group-hover:-translate-x-0.5 transition-transform"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            <span>Retour à mon profil</span>
+          </button>
+        )}
+
         {/* ── PAGE HEADER (FRAME 617:5057) ──────────────────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
           {/* Page Introduction (617:5058) */}
@@ -853,7 +897,11 @@ export const ProfilePage: React.FC = () => {
             </button>
 
             {/* Current Location (732:15081) */}
-            <div className="hidden sm:flex items-center gap-[7px] pr-[12px]">
+            <div
+              onClick={() => navigate('/location')}
+              className="hidden sm:flex items-center gap-[7px] pr-[12px] cursor-pointer hover:opacity-80 transition"
+              title="Modifier ma localisation"
+            >
               <img src={figmaHeaderLocation} alt="" className="size-[18px] shrink-0" />
               <span className="text-[12px] font-normal text-[#0b2c25] leading-[1.5]">
                 {preferredLocation}
@@ -861,7 +909,11 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             {/* Notifications Entry (732:15084) */}
-            <div className="relative size-[42px] rounded-full flex items-center justify-center cursor-pointer hover:bg-white/60 transition">
+            <div
+              onClick={() => navigate('/notifications')}
+              className="relative size-[42px] rounded-full flex items-center justify-center cursor-pointer hover:bg-white/60 transition"
+              title="Notifications"
+            >
               <img src={figmaHeaderBell} alt="" className="size-[22px] shrink-0" />
               <img
                 src={figmaUnreadIndicator}
@@ -1044,7 +1096,11 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     {/* Localisation (756:21216) */}
-                    <div className="flex items-center gap-[6px]">
+                    <div
+                      onClick={() => navigate('/location')}
+                      className="flex items-center gap-[6px] cursor-pointer hover:opacity-80 transition"
+                      title="Modifier ma localisation"
+                    >
                       <img src={figmaLocationPin} alt="" className="size-[16px] shrink-0" />
                       <span className="text-[14px] font-medium text-[#0b2c25]">
                         {preferredLocation}
@@ -1223,8 +1279,12 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     {/* Tuile Localisation préférée (756:21306) */}
-                    <div className="flex-1 bg-[#fffaf0] border border-[#e8ebdf] rounded-[16px] p-[16px] flex items-center gap-[14px]">
-                      <div className="size-[44px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
+                    <div
+                      onClick={() => navigate('/location')}
+                      className="flex-1 bg-[#fffaf0] border border-[#e8ebdf] rounded-[16px] p-[16px] flex items-center gap-[14px] cursor-pointer hover:border-[#17664e]/40 transition group"
+                      title="Modifier ma localisation"
+                    >
+                      <div className="size-[44px] rounded-full bg-[#ebeee1] group-hover:bg-[#dbf0dd] flex items-center justify-center shrink-0 transition-colors">
                         <img src={figmaLocationTile} alt="" className="size-[22px]" />
                       </div>
                       <div className="flex flex-col gap-[3px] min-w-0">
@@ -1252,7 +1312,7 @@ export const ProfilePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      navigate('/settings?tab=location');
+                      navigate('/location');
                     }}
                     className="border border-[#0b2c25] hover:bg-[#ebeee1] flex items-center justify-center gap-[8px] pl-[14px] pr-[16px] py-[8px] rounded-[100px] text-[12px] font-semibold text-[#0b2c25] transition cursor-pointer"
                   >
@@ -1264,7 +1324,11 @@ export const ProfilePage: React.FC = () => {
                 {/* Contenu zone (757:21322) */}
                 <div className="flex flex-col sm:flex-row items-center gap-[20px] w-full">
                   {/* Aperçu carte (876:25245) - 210x150 */}
-                  <div className="relative size-[150px] w-[210px] rounded-[16px] overflow-hidden shrink-0">
+                  <div
+                    onClick={() => navigate('/location')}
+                    className="relative size-[150px] w-[210px] rounded-[16px] overflow-hidden shrink-0 cursor-pointer hover:opacity-90 transition"
+                    title="Cliquer pour modifier ma zone de recherche"
+                  >
                     <img
                       src={figmaFondDeCarte}
                       alt="Fond de carte"
@@ -1318,15 +1382,19 @@ export const ProfilePage: React.FC = () => {
                         <span className="text-[11px] font-normal text-[#0b2c25]">
                           Rayon de recherche
                         </span>
-                        <span className="text-[12px] font-semibold text-[#17664e]">10 km</span>
+                        <span className="text-[12px] font-semibold text-[#17664e]">{currentRadius} km</span>
                       </div>
-                      {/* Curseur (757:21337) */}
+                      {/* Curseur dynamique (757:21337) */}
                       <div className="relative w-full h-[6px] bg-[#d9d9d9] rounded-[100px]">
-                        <div className="absolute left-0 top-0 h-[6px] w-[95.4px] bg-[#17664e] rounded-[3px]" />
+                        <div
+                          className="absolute left-0 top-0 h-[6px] bg-[#17664e] rounded-[3px] transition-all"
+                          style={{ width: `${Math.min(100, Math.max(4, (currentRadius / 50) * 100))}%` }}
+                        />
                         <img
                           src={figmaPoignee}
                           alt=""
-                          className="absolute left-[87.4px] top-[-5px] size-[16px]"
+                          className="absolute top-[-5px] size-[16px] -translate-x-1/2 transition-all"
+                          style={{ left: `${Math.min(100, Math.max(4, (currentRadius / 50) * 100))}%` }}
                         />
                       </div>
                     </div>
@@ -1352,7 +1420,7 @@ export const ProfilePage: React.FC = () => {
                   {/* Tuile Réservations */}
                   <div className="flex-1 bg-[#ebeee1] rounded-[16px] px-[6px] py-[14px] flex flex-col items-center justify-center gap-[4px]">
                     <img src={figmaCalendarCheckIn} alt="" className="size-[20px]" />
-                    <p className="text-[22px] font-bold text-[#0b2c25] leading-none">4</p>
+                    <p className="text-[22px] font-bold text-[#0b2c25] leading-none">0</p>
                     <p className="text-[11px] font-normal text-[#0b2c25] leading-none text-center">
                       Réservations
                     </p>
@@ -1361,7 +1429,7 @@ export const ProfilePage: React.FC = () => {
                   {/* Tuile En cours */}
                   <div className="flex-1 bg-[#fdf3d8] rounded-[16px] px-[6px] py-[14px] flex flex-col items-center justify-center gap-[4px]">
                     <img src={figmaCalendarWarning} alt="" className="size-[20px]" />
-                    <p className="text-[22px] font-bold text-[#0b2c25] leading-none">2</p>
+                    <p className="text-[22px] font-bold text-[#0b2c25] leading-none">0</p>
                     <p className="text-[11px] font-normal text-[#0b2c25] leading-none text-center">
                       En cours
                     </p>
@@ -1370,7 +1438,7 @@ export const ProfilePage: React.FC = () => {
                   {/* Tuile Retirée */}
                   <div className="flex-1 bg-[#dbf0dd] rounded-[16px] px-[6px] py-[14px] flex flex-col items-center justify-center gap-[4px]">
                     <img src={figmaTickActivity} alt="" className="size-[20px]" />
-                    <p className="text-[22px] font-bold text-[#0b2c25] leading-none">1</p>
+                    <p className="text-[22px] font-bold text-[#0b2c25] leading-none">0</p>
                     <p className="text-[11px] font-normal text-[#0b2c25] leading-none text-center">
                       Retirée
                     </p>
@@ -1384,21 +1452,22 @@ export const ProfilePage: React.FC = () => {
                   </div>
                   <div className="flex flex-col gap-px min-w-0">
                     <p className="text-[14px] font-semibold text-[#0b2c25] leading-none">
-                      1 repas sauvé
+                      0 repas sauvé
                     </p>
                     <p className="text-[11px] font-normal text-[#0b2c25] leading-none pt-1">
-                      100 DA réglés sur place
+                      0 DA réglés sur place
                     </p>
                   </div>
                 </div>
 
                 {/* Lien Voir mes réservations */}
-                <a
-                  href="#reservations"
-                  className="text-[12px] font-semibold text-[#17664e] hover:underline"
+                <button
+                  type="button"
+                  onClick={() => navigate('/reservations')}
+                  className="text-[12px] font-semibold text-[#17664e] hover:underline text-left cursor-pointer"
                 >
                   Voir mes réservations →
-                </a>
+                </button>
               </div>
 
               {/* 2. CARTE PARAMÈTRES (FRAME 793:23362) */}
@@ -1419,7 +1488,7 @@ export const ProfilePage: React.FC = () => {
 
                 {/* Ligne Sécurité du compte */}
                 <div
-                  onClick={() => navigate('/settings?tab=security')}
+                  onClick={() => navigate('/settings/security')}
                   className="flex items-center gap-[12px] py-[12px] w-full cursor-pointer hover:bg-gray-50/60 rounded-[12px] px-1 transition"
                 >
                   <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
@@ -1455,7 +1524,7 @@ export const ProfilePage: React.FC = () => {
 
                 {/* Ligne Localisation */}
                 <div
-                  onClick={() => navigate('/settings?tab=location')}
+                  onClick={() => navigate('/location')}
                   className="flex items-center gap-[12px] py-[12px] w-full cursor-pointer hover:bg-gray-50/60 rounded-[12px] px-1 transition"
                 >
                   <div className="size-[40px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
@@ -1678,7 +1747,7 @@ export const ProfilePage: React.FC = () => {
                     </span>
                     <button
                       type="button"
-                      onClick={() => navigate('/settings?tab=location')}
+                      onClick={() => navigate('/location')}
                       className="text-[12px] font-semibold text-[#17664e] hover:underline shrink-0 cursor-pointer"
                     >
                       Modifier

@@ -83,6 +83,8 @@ export async function createAuthChallenge(
   };
 }
 
+export const challengeCodeCache = new Map<string, string>();
+
 /**
  * Récupère le statut public d'un défi (spec §6)
  */
@@ -113,10 +115,13 @@ export async function getChallengeStatus(challengeId: string) {
     }).catch(() => {});
   }
 
+  const autoCode = challengeCodeCache.get(challengeId);
+
   return {
     id: challenge.id,
     status: currentStatus,
     codeSent: !!challenge.codeHash,
+    autoCode: autoCode || undefined,
     expiresAt: challenge.expiresAt,
   };
 }

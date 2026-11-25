@@ -286,13 +286,13 @@ export const HomePage: React.FC = () => {
               <Bell size={22} />
             </button>
 
-            <button
-              type="button"
-              aria-label="Profil"
-              className="flex h-[45px] w-[45px] items-center justify-center rounded-full bg-[#E8E9DF] text-[#0B2C25]"
+            <Link
+              to="/profile"
+              aria-label="Mon profil"
+              className="flex h-[45px] w-[45px] items-center justify-center rounded-full bg-[#E8E9DF] text-[#0B2C25] hover:opacity-90 transition cursor-pointer"
             >
               <UserRound size={21} />
-            </button>
+            </Link>
           </div>
         </section>
 

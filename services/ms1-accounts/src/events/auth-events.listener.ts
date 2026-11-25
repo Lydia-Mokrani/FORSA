@@ -4,7 +4,7 @@ import { prisma } from '../config/prisma';
 import { config } from '../config/env';
 import { maskPhone } from '../utils/mask-phone';
 import { ChallengePurpose, ChallengeStatus } from '@prisma/client';
-import { hashString } from '../services/challenge.service';
+import { hashString, challengeCodeCache } from '../services/challenge.service';
 import { RecoveryService } from '../services/recovery.service';
 
 export async function initAuthEventListeners(): Promise<void> {
@@ -170,6 +170,8 @@ export async function initAuthEventListeners(): Promise<void> {
       const code = crypto.randomInt(100000, 999999).toString();
       const codeHash = hashString(code);
       const codeExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 min TTL
+
+      challengeCodeCache.set(challenge.id, code);
 
       await prisma.authChallenge.update({
         where: { id: challenge.id },

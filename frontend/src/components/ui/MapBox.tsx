@@ -29,11 +29,38 @@ export interface MapBoxProps {
 }
 
 /**
+ * Nettoie et formate l'adresse Nominatim brute pour un affichage compact et élégant :
+ * Supprime les répétitions multilingues et limite la largeur pour éviter les débordements sur la carte.
+ */
+function cleanDisplayAddress(raw?: string): string {
+  if (!raw) return '';
+  const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return raw;
+
+  const uniqueParts: string[] = [];
+  for (const part of parts) {
+    // Épurer les caractères Tifinagh et caractères superflus
+    const cleaned = part.replace(/[\u2D30-\u2D7F]/g, '').trim();
+    if (cleaned && !uniqueParts.some((u) => u.toLowerCase() === cleaned.toLowerCase())) {
+      uniqueParts.push(cleaned);
+    }
+    if (uniqueParts.length >= 2) break;
+  }
+
+  const result = uniqueParts.join(', ');
+  if (result.length > 34) {
+    return result.slice(0, 31) + '...';
+  }
+  return result || parts[0];
+}
+
+/**
  * Crée l'icône personnalisée Leaflet avec le style exact Figma :
- * Cercle vert sombre #0b2c25, épingle blanche, et étiquette d'adresse flottante blanche.
+ * Cercle vert sombre #0b2c25, épingle blanche, et étiquette d'adresse flottante blanche compacte.
  */
 function createMarkerIcon(address?: string): L.DivIcon {
-  const addressHtml = address
+  const display = cleanDisplayAddress(address);
+  const addressHtml = display
     ? `<div style="
         position: absolute;
         bottom: 50px;
@@ -41,15 +68,19 @@ function createMarkerIcon(address?: string): L.DivIcon {
         transform: translateX(-50%);
         background: #ffffff;
         border-radius: 100px;
-        padding: 6px 12px;
-        font-size: 12px;
-        font-weight: 500;
+        padding: 5px 12px;
+        font-size: 11px;
+        font-weight: 600;
         color: #0b2c25;
         white-space: nowrap;
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
         box-shadow: 0 4px 12px rgba(0,0,0,0.12);
         pointer-events: none;
         font-family: inherit;
-      ">${address}</div>`
+        border: 1px solid rgba(11,44,37,0.12);
+      ">${display}</div>`
     : '';
 
   return L.divIcon({

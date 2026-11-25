@@ -28,6 +28,7 @@ export interface UserPreferences {
   searchRadiusKm?: number;
   pushEnabled?: boolean;
   telegramNotifications?: boolean;
+  emailNotifications?: boolean;
 }
 
 export interface AuthUser {
@@ -41,6 +42,7 @@ export interface AuthUser {
   avatarUrl?: string | null;
   shop?: ShopInfo | null;
   preferences?: UserPreferences | null;
+  twoFactorEnabled?: boolean;
 }
 
 export interface TelegramStartResponse {
@@ -410,9 +412,22 @@ export function getPostLoginRedirect(user: AuthUser, requestedRole?: 'CUSTOMER' 
     return '/account/suspended';
   }
 
-  const isMerchant = user.roles.includes('MERCHANT') || requestedRole === 'MERCHANT';
+  // 1. Si le rôle demandé est explicitement CLIENT : toujours rediriger vers l'espace client
+  if (requestedRole === 'CUSTOMER') {
+    return '/';
+  }
 
-  if (isMerchant) {
+  // 2. Si le rôle demandé est explicitement COMMERÇANT
+  if (requestedRole === 'MERCHANT') {
+    const shopStatus = user.shop?.verificationStatus;
+    if (shopStatus === 'APPROVED') {
+      return '/merchant/dashboard';
+    }
+    return '/merchant/status';
+  }
+
+  // 3. Si aucun rôle n'a été spécifié, se baser sur le mode actif de l'utilisateur
+  if (user.activeMode === 'merchant' && user.roles?.includes('MERCHANT')) {
     const shopStatus = user.shop?.verificationStatus;
     if (shopStatus === 'APPROVED') {
       return '/merchant/dashboard';
@@ -524,6 +539,10 @@ export async function updateUserProfile(payload: {
   searchRadiusKm?: number;
   pushEnabled?: boolean;
   telegramNotifications?: boolean;
+  emailNotifications?: boolean;
+  twoFactorEnabled?: boolean;
+  password?: string;
+  currentPassword?: string;
 }): Promise<any> {
   const res = await authFetch('/api/users/me', {
     method: 'PUT',
@@ -623,6 +642,8 @@ export interface ShopDocumentItem {
   reason?: string | null;
   uploadedAt: string;
   url?: string;
+  originalName?: string;
+  size?: number;
 }
 
 /**

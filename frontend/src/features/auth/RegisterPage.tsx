@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
+import { ArrowRight } from 'lucide-react';
 import {
   Button,
   Field,
@@ -14,7 +15,8 @@ import {
 
 import arrowRightIcon from '../../assets/icons/arrow-right.svg';
 import arrowLeftIcon from '../../assets/icons/arrow-left.svg';
-import badgeRoleIcon from '../../assets/icons/badge-role-icon.svg';
+import roleClientIcon from '../../assets/icons/role-client-icon.svg';
+import roleMerchantIcon from '../../assets/icons/role-merchant-icon.svg';
 import figmaClock from '../../assets/icons/figma/icone-clock-01.svg';
 import figmaRefresh from '../../assets/icons/figma/icone-refresh.svg';
 import figmaSmartPhone from '../../assets/icons/figma/icone-smart-phone-01.svg';
@@ -498,6 +500,35 @@ export const RegisterPage: React.FC = () => {
           method: 'POST',
           body: formData,
         }).catch((docErr) => console.warn('Erreur envoi documents:', docErr));
+
+        // Sauvegarde locale des documents transmis pour la mise à jour ultérieure
+        try {
+          localStorage.setItem(
+            'forsa_uploaded_docs',
+            JSON.stringify({
+              commercial_register: merchantData.commercialRegisterFile
+                ? {
+                    name: merchantData.commercialRegisterFile.name,
+                    size: merchantData.commercialRegisterFile.size,
+                  }
+                : null,
+              tax_id: merchantData.taxIdFile
+                ? {
+                    name: merchantData.taxIdFile.name,
+                    size: merchantData.taxIdFile.size,
+                  }
+                : null,
+              storefront: merchantData.storefrontFile
+                ? {
+                    name: merchantData.storefrontFile.name,
+                    size: merchantData.storefrontFile.size,
+                  }
+                : null,
+            })
+          );
+        } catch {
+          // ignore
+        }
       }
 
       // Redirection immédiate vers l'écran de statut commerçant
@@ -516,37 +547,37 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-ui-auth-bg flex flex-col items-center justify-between px-4 py-8 sm:px-16 font-poppins selection:bg-ui-emerald selection:text-white overflow-x-hidden">
-      {/* En-tête */}
-      <header className="relative z-10 w-full max-w-6xl flex items-center justify-between mb-8 px-2 sm:px-4">
-        <Link to="/" className="text-[24px] font-extrabold tracking-tight text-ui-ink hover:opacity-90 transition">
+    <div className="bg-gradient-to-b from-[#dce1d0] from-[10.156%] via-[#f3e7c6] via-[66.797%] to-[#787b72] to-[106.64%] flex flex-col items-center justify-center min-h-screen pb-[54px] sm:pb-[66px] pt-[84px] sm:pt-[96px] px-[16px] sm:px-[64px] relative size-full font-poppins selection:bg-[#17664e] selection:text-white overflow-x-hidden">
+      {/* En-tête Figma 1030:23481 */}
+      <header className="absolute flex h-[32px] items-center justify-between left-[20px] sm:left-[64px] top-[24px] sm:top-[32px] right-[20px] sm:right-[64px] overflow-clip">
+        <Link to="/" className="font-extrabold text-[#0b2c25] text-[20px] sm:text-[24px] tracking-tight hover:opacity-90 transition">
           FORSA
         </Link>
-        <span className="hidden sm:inline text-[14px] font-medium text-ui-text-80">
+        <span className="hidden sm:inline font-medium text-[14px] text-[rgba(11,44,37,0.85)]">
           Rejoignez le mouvement anti-gaspillage
         </span>
       </header>
 
-      {/* Carte Blanche Conforme Figma [DECISION HYB: Fond uni #dce1d0] */}
-      <main className="relative z-10 bg-white border-[1.5px] border-ui-card-border rounded-[32px] p-6 sm:p-10 shadow-[0px_16px_40px_rgba(11,44,37,0.08)] flex flex-col gap-[20px] my-auto max-w-[560px] w-full">
+      {/* Carte Verre Miroir Conforme Figma 1030:23696 */}
+      <main className="backdrop-blur-[20px] bg-[rgba(255,255,255,0.34)] border-[1.2px] border-[rgba(255,255,255,0.7)] border-solid rounded-[32px] p-[24px] sm:p-[48px] shadow-[0px_16px_40px_0px_rgba(0,0,0,0.1)] flex flex-col gap-[20px] sm:gap-[22px] my-auto max-w-[560px] w-full">
         {/* Toggle Rôle (uniquement à l'étape initiale) */}
         {((role === 'CUSTOMER' && clientStep === 'FORM') ||
           (role === 'MERCHANT' && merchantStep === 1 && merchantAuthStep === 'FORM')) && (
-          <div className="flex items-center justify-start w-full">
+          <div className="flex items-start justify-center w-full">
             <button
               type="button"
               onClick={() => {
                 setRole((r) => (r === 'CUSTOMER' ? 'MERCHANT' : 'CUSTOMER'));
                 setErrorMessage(null);
               }}
-              className="group inline-flex items-center gap-2 bg-ui-mint hover:bg-ui-mint/80 border border-ui-field-border h-[38px] px-3.5 rounded-full transition shadow-xs cursor-pointer"
+              className="bg-[rgba(255,255,255,0.62)] hover:bg-white/80 border border-[rgba(11,44,37,0.2)] flex gap-[8px] items-center justify-center px-[14px] py-[8px] rounded-[24px] transition cursor-pointer"
             >
-              <img src={badgeRoleIcon} alt="Rôle" className="size-4 shrink-0" />
-              <span className="text-[13px] font-semibold text-ui-ink">
+              <img src={role === 'CUSTOMER' ? roleClientIcon : roleMerchantIcon} alt="" className="size-[16px]" />
+              <span className="font-medium text-[#0b2c25] text-[13px]">
                 {role === 'CUSTOMER' ? 'Compte client' : 'Compte commerçant'}
               </span>
-              <span className="text-ui-text-70 text-[13px]">·</span>
-              <span className="text-[13px] font-semibold text-ui-emerald group-hover:underline">
+              <span className="text-[13px] text-[rgba(11,44,37,0.4)]">·</span>
+              <span className="font-medium text-[#17664e] hover:underline text-[13px]">
                 Changer
               </span>
             </button>
@@ -567,13 +598,11 @@ export const RegisterPage: React.FC = () => {
           </div>
         )}
 
-        {/* Message d'erreur via Banner */}
+        {/* Message d'erreur */}
         {errorMessage && (
-          <Banner
-            variant="error"
-            description={errorMessage}
-            className="w-full text-left"
-          />
+          <div className="bg-[rgba(253,236,234,0.9)] border border-[#b22222]/30 rounded-[14px] p-3.5 text-[13px] text-[#b22222] w-full text-left">
+            {errorMessage}
+          </div>
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -583,12 +612,12 @@ export const RegisterPage: React.FC = () => {
         {/* Client Étape 1 : Formulaire */}
         {role === 'CUSTOMER' && clientStep === 'FORM' && (
           <>
-            <div className="text-center flex flex-col gap-1 w-full">
-              <h1 className="font-semibold text-ui-ink text-2xl sm:text-[32px] leading-tight">
-                Créer un compte
+            <div className="flex flex-col gap-[8px] items-center text-center w-full">
+              <h1 className="font-semibold text-[#0b2c25] text-[26px] sm:text-[34px] leading-tight">
+                Créer un compte client
               </h1>
-              <p className="font-normal text-[15px] text-ui-text-70 leading-normal">
-                Profitez d'offres exclusives et sauvez des invendus
+              <p className="font-normal text-[14px] sm:text-[15px] text-[rgba(11,44,37,0.65)] leading-relaxed">
+                Réservez des produits à prix réduit près de chez vous
               </p>
             </div>
 
@@ -667,7 +696,7 @@ export const RegisterPage: React.FC = () => {
                 variant="primary"
                 loading={loading}
                 fullWidth
-                rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+                rightIcon={<ArrowRight className="size-4 text-white stroke-[2.2] shrink-0" />}
               >
                 Continuer avec Telegram
               </Button>
@@ -716,32 +745,32 @@ export const RegisterPage: React.FC = () => {
                 href={deepLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full h-[52px] bg-[#229ED9] hover:bg-[#1E88BE] text-white font-medium text-[16px] rounded-ui-ctl flex items-center justify-center gap-2.5 shadow-sm transition cursor-pointer"
+                className="w-full h-[56px] bg-[#229ED9] hover:bg-[#1E88BE] text-white font-medium text-[16px] rounded-[16px] flex items-center justify-center gap-2.5 shadow-sm transition cursor-pointer"
               >
-                <img src={figmaSmartPhone} alt="" className="size-5 invert" />
+                <img src={figmaSmartPhone} alt="" className="size-5 brightness-0 invert" />
                 <span>Ouvrir dans Telegram</span>
               </a>
             )}
 
             {deepLink && (
-              <div className="bg-white p-4 rounded-ui-card border border-ui-card-border shadow-xs flex flex-col items-center gap-2">
+              <div className="backdrop-blur-[10px] bg-[rgba(255,255,255,0.7)] p-4 rounded-[20px] border border-[rgba(255,255,255,0.9)] shadow-xs flex flex-col items-center gap-2">
                 <QRCodeSVG value={deepLink} size={150} level="M" />
-                <span className="text-[11px] text-ui-text-70">
+                <span className="text-[11px] text-[rgba(11,44,37,0.7)]">
                   Ou scannez avec votre smartphone
                 </span>
               </div>
             )}
 
             <div className="flex flex-col items-center gap-2 pt-1 w-full">
-              <div className="inline-flex items-center gap-2 text-xs font-medium text-ui-ink bg-ui-mint px-3.5 py-1.5 rounded-full border border-ui-card-border">
+              <div className="inline-flex items-center gap-2 text-xs font-medium text-[#0b2c25] bg-[rgba(255,255,255,0.7)] px-3.5 py-1.5 rounded-full border border-[rgba(11,44,37,0.18)]">
                 <span className="relative flex size-2">
-                  <span className="animate-ping absolute inline-flex size-full rounded-full bg-ui-emerald opacity-75" />
-                  <span className="relative inline-flex rounded-full size-2 bg-ui-emerald" />
+                  <span className="animate-ping absolute inline-flex size-full rounded-full bg-[#17664e] opacity-75" />
+                  <span className="relative inline-flex rounded-full size-2 bg-[#17664e]" />
                 </span>
                 <span>En attente de confirmation dans Telegram...</span>
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs text-ui-text-70">
+              <div className="flex items-center gap-1.5 text-xs text-[rgba(11,44,37,0.7)]">
                 <img src={figmaClock} alt="" className="size-3.5 opacity-60" />
                 <span>Temps restant : {formatTimer(waitingCountdown)}</span>
               </div>
@@ -790,27 +819,25 @@ export const RegisterPage: React.FC = () => {
                   value={digit}
                   onChange={(e) => handleOtpChange(idx, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                  className="size-12 sm:size-14 text-center text-2xl font-bold bg-white border-[1.5px] border-ui-field-border focus:border-2 focus:border-ui-emerald focus:bg-white rounded-ui-ctl text-ui-ink shadow-xs focus:outline-none transition"
+                  className="size-11 sm:size-13 text-center text-xl sm:text-2xl font-bold bg-[rgba(255,255,255,0.7)] border-[1.5px] border-[rgba(11,44,37,0.22)] focus:border-2 focus:border-[#17664e] focus:bg-white rounded-[14px] text-[#0b2c25] shadow-xs focus:outline-none transition"
                 />
               ))}
             </div>
 
-            <div className="flex items-center gap-1.5 text-xs text-ui-text-70">
+            <div className="flex items-center gap-1.5 text-xs text-[rgba(11,44,37,0.7)]">
               <img src={figmaClock} alt="" className="size-3.5 opacity-60" />
-              <span>Expire dans : <strong className="text-ui-ink">{formatTimer(otpCountdown)}</strong></span>
+              <span>Expire dans : <strong className="text-[#0b2c25]">{formatTimer(otpCountdown)}</strong></span>
             </div>
 
-            <Button
+            <button
               type="button"
-              variant="primary"
               disabled={loading || otp.join('').length !== 6}
               onClick={() => submitOtp()}
-              loading={loading}
-              fullWidth
-              rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+              className="bg-[#0b2c25] hover:bg-[#17664e] flex gap-[10px] h-[56px] items-center justify-center px-[24px] py-[16px] rounded-[16px] w-full text-white font-medium text-[16px] sm:text-[17px] transition shadow-sm cursor-pointer disabled:opacity-50"
             >
-              Confirmer le compte
-            </Button>
+              <span>{loading ? 'Confirmation...' : 'Confirmer le compte'}</span>
+              <ArrowRight className="size-5 text-white stroke-[2.2] shrink-0" />
+            </button>
           </div>
         )}
 
@@ -821,11 +848,11 @@ export const RegisterPage: React.FC = () => {
         {/* Commerçant Étape 1 : Compte & Gérant */}
         {role === 'MERCHANT' && merchantStep === 1 && merchantAuthStep === 'FORM' && (
           <>
-            <div className="text-center flex flex-col gap-1 w-full">
-              <h1 className="font-semibold text-ui-ink text-2xl sm:text-[32px] leading-tight">
+            <div className="flex flex-col gap-[8px] items-center text-center w-full">
+              <h1 className="font-semibold text-[#0b2c25] text-[26px] sm:text-[34px] leading-tight">
                 Étape 1 : Votre compte gérant
               </h1>
-              <p className="font-normal text-[15px] text-ui-text-70 leading-normal">
+              <p className="font-normal text-[14px] sm:text-[15px] text-[rgba(11,44,37,0.65)] leading-relaxed">
                 Informations du responsable de l’établissement
               </p>
             </div>
@@ -905,7 +932,7 @@ export const RegisterPage: React.FC = () => {
                 variant="primary"
                 loading={loading}
                 fullWidth
-                rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+                rightIcon={<ArrowRight className="size-4 text-white stroke-[2.2] shrink-0" />}
               >
                 Vérifier le numéro sur Telegram
               </Button>
@@ -923,11 +950,11 @@ export const RegisterPage: React.FC = () => {
         {/* Commerçant Étape 2 : Commerce, Adresse & MapBox */}
         {role === 'MERCHANT' && merchantStep === 2 && (
           <>
-            <div className="text-center flex flex-col gap-1 w-full">
-              <h1 className="font-semibold text-ui-ink text-2xl sm:text-[32px] leading-tight">
+            <div className="flex flex-col gap-[8px] items-center text-center w-full">
+              <h1 className="font-semibold text-[#0b2c25] text-[26px] sm:text-[34px] leading-tight">
                 Étape 2 : Votre commerce
               </h1>
-              <p className="font-normal text-[15px] text-ui-text-70 leading-normal">
+              <p className="font-normal text-[14px] sm:text-[15px] text-[rgba(11,44,37,0.65)] leading-relaxed">
                 Localisation et détails de votre établissement
               </p>
             </div>
@@ -989,27 +1016,6 @@ export const RegisterPage: React.FC = () => {
                   leftIcon={<Icon name="pin" size={18} />}
                   helperText="Appuyez sur Entrée ou cliquez hors du champ pour actualiser la position"
                 />
-
-                {/* Pastille de statut géocodage */}
-                <div className="pt-1 flex items-center justify-between">
-                  {geoStatus === 'found' && (
-                    <Chip variant="success">Position détectée</Chip>
-                  )}
-                  {geoStatus === 'searching' && (
-                    <Chip variant="neutral">Recherche de la position...</Chip>
-                  )}
-                  {geoStatus === 'notFound' && (
-                    <Chip variant="error">Position non détectée</Chip>
-                  )}
-                  {geoStatus === 'unavailable' && (
-                    <Chip variant="warn">Position à confirmer</Chip>
-                  )}
-                  {geoCoordinates && (
-                    <span className="text-[11px] text-ui-text-70">
-                      {geoCoordinates.latitude.toFixed(4)}, {geoCoordinates.longitude.toFixed(4)}
-                    </span>
-                  )}
-                </div>
               </div>
 
               {/* Aperçu cartographique MapBox */}
@@ -1055,7 +1061,7 @@ export const RegisterPage: React.FC = () => {
                   type="submit"
                   variant="primary"
                   className="flex-1"
-                  rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+                  rightIcon={<ArrowRight className="size-4 text-white stroke-[2.2] shrink-0" />}
                 >
                   Continuer vers Documents
                 </Button>
@@ -1067,11 +1073,11 @@ export const RegisterPage: React.FC = () => {
         {/* Commerçant Étape 3 : Documents & Dépôt */}
         {role === 'MERCHANT' && merchantStep === 3 && (
           <>
-            <div className="text-center flex flex-col gap-1 w-full">
-              <h1 className="font-semibold text-ui-ink text-2xl sm:text-[32px] leading-tight">
+            <div className="flex flex-col gap-[8px] items-center text-center w-full">
+              <h1 className="font-semibold text-[#0b2c25] text-[26px] sm:text-[34px] leading-tight">
                 Étape 3 : Justificatifs d'activité
               </h1>
-              <p className="font-normal text-[15px] text-ui-text-70 leading-normal">
+              <p className="font-normal text-[14px] sm:text-[15px] text-[rgba(11,44,37,0.65)] leading-relaxed">
                 Déposez vos documents officiels (PDF, JPG, PNG - 5 Mo max)
               </p>
             </div>
@@ -1132,7 +1138,7 @@ export const RegisterPage: React.FC = () => {
                   loading={loading}
                   disabled={!merchantData.confirmDocuments}
                   className="flex-1"
-                  rightIcon={<img src={arrowRightIcon} alt="" className="size-4 invert" />}
+                  rightIcon={<ArrowRight className="size-4 text-white stroke-[2.2] shrink-0" />}
                 >
                   Finaliser la demande
                 </Button>
