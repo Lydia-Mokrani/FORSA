@@ -8,7 +8,7 @@ import 'leaflet/dist/leaflet.css';
 import { useLocation, UserLocation } from '../catalogue/context/LocationContext';
 import { updateUserProfile } from '../auth/services/authService';
 
-// Figma Icons import (exact from Figma 1364:92388)
+// Figma Icons import (exact from Figma 1364:92388 & modals)
 import figmaSearch from '../../assets/figma/c65bafca-341b-4fe5-968e-65a0de5bec39.svg';
 import figmaGPSButton from '../../assets/figma/e1cc85d5-a256-42a0-9991-7c976cd3b299.svg';
 import figmaPastillePin from '../../assets/figma/ea730f30-6ef9-4733-a04b-19e79562dedb.svg';
@@ -23,12 +23,25 @@ import figmaInfoCircle from '../../assets/figma/39d236e1-c4a7-45f9-b398-1b31b286
 import figmaHeaderLocation from '../../assets/figma/1cbde86d-466a-42db-a381-6f1483cf7a01.svg';
 import figmaHeaderBell from '../../assets/figma/fdec917d-047b-45c5-a7f0-c4a70094cba6.svg';
 import figmaUnreadIndicator from '../../assets/figma/8e948e5b-bcd1-41df-b768-9851ca53ff42.svg';
-import figmaFoodAvatar from '../../assets/figma/a723cc94-1cb3-4997-94a9-8399651e86c8.png';
+import figmaPhotoDeProfil from '../../assets/figma/35776968-16f2-47d7-bee8-022b315658ba.png';
 import figmaPhotoProduit0 from '../../assets/figma/9f985b2c-fa91-4724-99ad-de6465d66ff9.png';
 import figmaPhotoProduit1 from '../../assets/figma/c8d4929e-46fa-4ab0-a413-1ad141bd9461.png';
 import figmaPhotoProduit2 from '../../assets/figma/ecfc8b9e-acaa-42b2-ad97-493538b595bb.png';
 import figmaPhotoProduit3 from '../../assets/figma/33df1824-d707-421e-a0f5-0d97061d1c67.png';
 import figmaPhotoProduit4 from '../../assets/figma/6c55e7fd-90af-4d43-b8e0-7a62de231897.png';
+
+// Modals specific Figma assets
+import figmaModalConsentPin from '../../assets/figma/1070b682-452f-4b6d-8190-a480816be200.svg';
+import figmaCloseX from '../../assets/figma/ab2fee69-4d19-42c1-89c4-6cdca8df7ba3.svg';
+import figmaDeniedWarningPin from '../../assets/figma/3ebeaa76-e7c6-4cb2-9773-2e4e92ef7c96.svg';
+import figmaDeniedEditPen from '../../assets/figma/2c3662f1-8d9f-4269-8727-dfc9fa33cae3.svg';
+import figmaRefreshIcon from '../../assets/figma/f183b288-aab5-4aed-adfe-1a4da46f1c62.svg';
+import figmaAddressModalPin from '../../assets/figma/cb94ec97-e9c6-4f19-a101-6459c9662781.svg';
+import figmaInputLocationPin from '../../assets/figma/a0b287b9-9434-4d45-9fd8-c395ff03f35d.svg';
+import figmaAlertError from '../../assets/figma/0eaf41cc-1b79-4318-928c-416cadcd99b2.svg';
+import figmaSuggestionPin from '../../assets/figma/628bcd92-a04b-41c0-8e28-258c76dcc152.svg';
+import figmaTickSave from '../../assets/figma/1f26238d-ee4e-4854-b697-7112b2dd0a6a.svg';
+import figmaMapUnavailableDanger from '../../assets/figma/a2cf32b7-5491-4d90-8659-8f51e973a10b.svg';
 
 const ALGERIAN_WILAYAS = [
   { code: '01', name: 'Adrar', lat: 27.8742, lng: -0.2939 },
@@ -89,6 +102,15 @@ const ALGERIAN_WILAYAS = [
   { code: '56', name: 'Djanet', lat: 24.5539, lng: 9.4844 },
   { code: '57', name: 'El M\'Ghair', lat: 33.9483, lng: 5.9222 },
   { code: '58', name: 'El Meniaa', lat: 30.5847, lng: 2.8839 },
+];
+
+const POPULAR_SUGGESTIONS = [
+  { name: 'Alger Centre', lat: 36.7725, lng: 3.0586 },
+  { name: 'Bab Ezzouar', lat: 36.7118, lng: 3.1818 },
+  { name: 'Hussein Dey', lat: 36.7441, lng: 3.0874 },
+  { name: 'Hydra', lat: 36.7439, lng: 3.0389 },
+  { name: 'Oran', lat: 35.6987, lng: -0.6349 },
+  { name: 'Constantine', lat: 36.3650, lng: 6.6147 },
 ];
 
 // Commerces partenaires de démonstration sur la carte (Figma 1364:92691 - 1364:92703)
@@ -247,13 +269,28 @@ export const LocationPage: React.FC = () => {
     return (location as any).radius || 10;
   });
 
+  // Modals state
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [showDeniedModal, setShowDeniedModal] = useState(false);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [showCityModal, setShowCityModal] = useState(false);
+  const [showMapUnavailableModal, setShowMapUnavailableModal] = useState(false);
+
+  // Address modal form state
+  const [modalAddressInput, setModalAddressInput] = useState('');
+  const [addressSearchError, setAddressSearchError] = useState(false);
+  const [modalAddressSearching, setModalAddressSearching] = useState(false);
+
+  // City modal filter state
+  const [cityFilterQuery, setCityFilterQuery] = useState('');
+
+  // Floating search bar state
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
+
   const [gpsLoading, setGpsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [successBanner, setSuccessBanner] = useState(false);
-  const [showAddressInput, setShowAddressInput] = useState(false);
-  const [showCitySelect, setShowCitySelect] = useState(false);
 
   const userAvatar = (() => {
     try {
@@ -261,16 +298,17 @@ export const LocationPage: React.FC = () => {
       if (cached) {
         const parsed = JSON.parse(cached);
         const u = parsed.user || parsed;
-        return u.avatarUrl || null;
+        return u.avatarUrl || u.photo || null;
       }
     } catch {}
     return null;
   })();
 
-  // Détection GPS
-  const handleUseGPS = () => {
+  // Détection GPS effective suite à consentement
+  const handleRequestGeolocation = () => {
+    setShowConsentModal(false);
     if (!navigator.geolocation) {
-      alert('La géolocalisation n’est pas supportée par votre navigateur.');
+      setShowDeniedModal(true);
       return;
     }
     setGpsLoading(true);
@@ -302,7 +340,7 @@ export const LocationPage: React.FC = () => {
       (err) => {
         console.warn('GPS error:', err);
         setGpsLoading(false);
-        alert('Impossible d’accéder à votre position GPS. Veuillez vérifier vos autorisations ou choisir une ville.');
+        setShowDeniedModal(true);
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -325,8 +363,8 @@ export const LocationPage: React.FC = () => {
     } catch {}
   };
 
-  // Recherche d'adresse
-  const handleSearchSubmit = async (e: React.FormEvent) => {
+  // Recherche d'adresse depuis la barre flottante de la carte
+  const handleFloatingSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -346,24 +384,67 @@ export const LocationPage: React.FC = () => {
         setSelectedLng(lng);
         setSelectedLabel(item.display_name.split(',')[0]);
       } else {
-        alert('Aucune adresse trouvée pour cette recherche en Algérie.');
+        // Ouvre la modale Figma Lieu introuvable préremplie avec l'erreur
+        setModalAddressInput(searchQuery.trim());
+        setAddressSearchError(true);
+        setShowAddressModal(true);
       }
     } catch {
-      alert('Erreur lors de la recherche.');
+      setShowMapUnavailableModal(true);
     } finally {
       setSearching(false);
     }
   };
 
-  // Sélection de wilaya
-  const handleSelectWilaya = (wilayaName: string) => {
-    const found = ALGERIAN_WILAYAS.find((w) => w.name === wilayaName);
-    if (found) {
-      setSelectedLat(found.lat);
-      setSelectedLng(found.lng);
-      setSelectedLabel(`${found.name}, Algérie`);
-      setShowCitySelect(false);
+  // Recherche depuis la modale "Saisir une adresse"
+  const handleModalAddressSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!modalAddressInput.trim()) return;
+    setModalAddressSearching(true);
+    setAddressSearchError(false);
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          modalAddressInput.trim() + ', Algérie'
+        )}&limit=1`,
+        { headers: { 'Accept-Language': 'fr' } }
+      );
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const item = data[0];
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lon);
+        setSelectedLat(lat);
+        setSelectedLng(lng);
+        setSelectedLabel(item.display_name.split(',')[0]);
+        setShowAddressModal(false);
+        setModalAddressInput('');
+      } else {
+        setAddressSearchError(true);
+      }
+    } catch {
+      setAddressSearchError(true);
+    } finally {
+      setModalAddressSearching(false);
     }
+  };
+
+  const handleSelectSuggestion = (s: { name: string; lat: number; lng: number }) => {
+    setSelectedLat(s.lat);
+    setSelectedLng(s.lng);
+    setSelectedLabel(`${s.name}, Algérie`);
+    setShowAddressModal(false);
+    setModalAddressInput('');
+    setAddressSearchError(false);
+  };
+
+  // Sélection de wilaya
+  const handleSelectWilaya = (w: (typeof ALGERIAN_WILAYAS)[0]) => {
+    setSelectedLat(w.lat);
+    setSelectedLng(w.lng);
+    setSelectedLabel(`${w.name}, Algérie`);
+    setShowCityModal(false);
   };
 
   // Sauvegarde
@@ -412,7 +493,7 @@ export const LocationPage: React.FC = () => {
       setSuccessBanner(true);
       setTimeout(() => {
         navigate('/profile');
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
       console.error(err);
       navigate('/profile');
@@ -420,6 +501,12 @@ export const LocationPage: React.FC = () => {
       setSaving(false);
     }
   };
+
+  const filteredWilayas = ALGERIAN_WILAYAS.filter(
+    (w) =>
+      w.name.toLowerCase().includes(cityFilterQuery.toLowerCase().trim()) ||
+      w.code.includes(cityFilterQuery.trim())
+  );
 
   return (
     <div
@@ -473,20 +560,18 @@ export const LocationPage: React.FC = () => {
               />
             </div>
 
-            {/* Circular User Avatar (1364:92401) */}
+            {/* Circular User Avatar Photo (1364:92401) */}
             <div
               onClick={() => navigate('/profile')}
-              className="relative size-[44px] rounded-full overflow-hidden shrink-0 bg-[#0B2C25] text-white flex items-center justify-center border border-black/5 shadow-xs cursor-pointer hover:opacity-90 transition"
+              className="relative size-[48px] rounded-full overflow-hidden shrink-0 border border-black/5 shadow-xs cursor-pointer hover:opacity-90 transition bg-white"
               data-node-id="1364:92401"
               title="Mon profil"
             >
-              {userAvatar ? (
-                <img src={userAvatar} alt="Avatar" className="size-full object-cover" />
-              ) : (
-                <svg className="size-[22px] text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              )}
+              <img
+                src={userAvatar || figmaPhotoDeProfil}
+                alt="Avatar"
+                className="size-full object-cover"
+              />
             </div>
           </div>
         </div>
@@ -515,7 +600,7 @@ export const LocationPage: React.FC = () => {
               data-node-id="1364:92707"
             >
               <form
-                onSubmit={handleSearchSubmit}
+                onSubmit={handleFloatingSearchSubmit}
                 className="bg-white border border-[#0b2c25] rounded-[14px] h-[48px] px-[16px] flex items-center gap-[10px] shadow-md"
               >
                 <img src={figmaSearch} alt="" className="size-[17px] shrink-0 opacity-75" />
@@ -531,7 +616,7 @@ export const LocationPage: React.FC = () => {
                 ) : (
                   <button
                     type="submit"
-                    className="text-xs font-semibold text-white bg-[#0b2c25] hover:bg-[#17664e] px-3 py-1.5 rounded-lg transition"
+                    className="text-xs font-semibold text-white bg-[#0b2c25] hover:bg-[#17664e] px-3 py-1.5 rounded-lg transition cursor-pointer"
                   >
                     Chercher
                   </button>
@@ -542,7 +627,7 @@ export const LocationPage: React.FC = () => {
             {/* Bouton GPS Me localiser flottant en bas à droite (1364:92711) */}
             <button
               type="button"
-              onClick={handleUseGPS}
+              onClick={() => setShowConsentModal(true)}
               disabled={gpsLoading}
               title="Me localiser via GPS"
               className="absolute bottom-[24px] right-[20px] z-[1000] size-[48px] rounded-full bg-white hover:bg-stone-50 border border-[#0b2c25] flex items-center justify-center shadow-lg transition cursor-pointer"
@@ -639,7 +724,7 @@ export const LocationPage: React.FC = () => {
               </div>
             </div>
 
-            {/* 2. SECTION CHOISIR UNE AUTRE LOCALISATION (1364:92727) */}
+            {/* 2. SECTION CHOISIR UNE AUTRE LOCALISATION (1364:92727) - AUCUN ACCORDÉON INTERNE */}
             <div
               className="bg-white border-[1.5px] border-[#dbf0dd] rounded-[24px] p-[18px] flex flex-col gap-[14px] shadow-sm"
               data-node-id="1364:92727"
@@ -657,7 +742,7 @@ export const LocationPage: React.FC = () => {
               <div className="flex flex-col py-[2px] w-full divide-y divide-[#0b2c25]/15" data-node-id="1364:92732">
                 {/* Ligne 1 : Utiliser ma position (1364:92733) */}
                 <div
-                  onClick={handleUseGPS}
+                  onClick={() => setShowConsentModal(true)}
                   className="flex items-center gap-[14px] px-[14px] py-[12px] hover:bg-[#fffaf0] rounded-[12px] transition cursor-pointer group"
                   data-node-id="1364:92733"
                 >
@@ -676,81 +761,47 @@ export const LocationPage: React.FC = () => {
                 </div>
 
                 {/* Ligne 2 : Saisir une adresse (1364:92741) */}
-                <div className="flex flex-col">
-                  <div
-                    onClick={() => setShowAddressInput(!showAddressInput)}
-                    className="flex items-center gap-[14px] px-[14px] py-[12px] hover:bg-[#fffaf0] rounded-[12px] transition cursor-pointer group"
-                    data-node-id="1364:92741"
-                  >
-                    <div className="size-[40px] rounded-[14px] bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="1364:92742">
-                      <img src={figmaEditPen} alt="" className="size-[18px]" />
-                    </div>
-                    <div className="flex-1 min-w-0" data-node-id="1364:92744">
-                      <p className="font-medium text-[15px] text-[#0b2c25]">
-                        Saisir une adresse
-                      </p>
-                    </div>
-                    <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
+                <div
+                  onClick={() => {
+                    setAddressSearchError(false);
+                    setModalAddressInput('');
+                    setShowAddressModal(true);
+                  }}
+                  className="flex items-center gap-[14px] px-[14px] py-[12px] hover:bg-[#fffaf0] rounded-[12px] transition cursor-pointer group"
+                  data-node-id="1364:92741"
+                >
+                  <div className="size-[40px] rounded-[14px] bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="1364:92742">
+                    <img src={figmaEditPen} alt="" className="size-[18px]" />
                   </div>
-
-                  {showAddressInput && (
-                    <div className="px-[14px] pb-[12px] pt-1">
-                      <form onSubmit={handleSearchSubmit} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Ex: Rue Didouche Mourad, Alger"
-                          className="flex-1 px-3 py-2 text-xs border border-[#0b2c25]/30 rounded-lg focus:outline-none focus:border-[#17664e] bg-[#fffaf0]"
-                        />
-                        <button
-                          type="submit"
-                          className="px-3 py-2 bg-[#0b2c25] text-white text-xs font-semibold rounded-lg hover:bg-[#17664e] transition"
-                        >
-                          OK
-                        </button>
-                      </form>
-                    </div>
-                  )}
+                  <div className="flex-1 min-w-0" data-node-id="1364:92744">
+                    <p className="font-medium text-[15px] text-[#0b2c25]">
+                      Saisir une adresse
+                    </p>
+                  </div>
+                  <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
                 </div>
 
                 {/* Ligne 3 : Choisir une ville (1364:92748) */}
-                <div className="flex flex-col">
-                  <div
-                    onClick={() => setShowCitySelect(!showCitySelect)}
-                    className="flex items-center gap-[14px] px-[14px] py-[12px] hover:bg-[#fffaf0] rounded-[12px] transition cursor-pointer group"
-                    data-node-id="1364:92748"
-                  >
-                    <div className="size-[40px] rounded-[14px] bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="1364:92749">
-                      <img src={figmaBuildingCity} alt="" className="size-[18px]" />
-                    </div>
-                    <div className="flex-1 min-w-0" data-node-id="1364:92751">
-                      <p className="font-medium text-[15px] text-[#0b2c25]">
-                        Choisir une ville
-                      </p>
-                    </div>
-                    <span className="font-normal text-[13px] text-[#0b2c25]/80" data-node-id="1364:92753">
-                      Alger
-                    </span>
-                    <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
+                <div
+                  onClick={() => {
+                    setCityFilterQuery('');
+                    setShowCityModal(true);
+                  }}
+                  className="flex items-center gap-[14px] px-[14px] py-[12px] hover:bg-[#fffaf0] rounded-[12px] transition cursor-pointer group"
+                  data-node-id="1364:92748"
+                >
+                  <div className="size-[40px] rounded-[14px] bg-[#ebeee1] flex items-center justify-center shrink-0 group-hover:bg-[#dbf0dd] transition-colors" data-node-id="1364:92749">
+                    <img src={figmaBuildingCity} alt="" className="size-[18px]" />
                   </div>
-
-                  {showCitySelect && (
-                    <div className="px-[14px] pb-[12px] pt-1">
-                      <select
-                        onChange={(e) => handleSelectWilaya(e.target.value)}
-                        defaultValue=""
-                        className="w-full px-3 py-2 text-xs border border-[#0b2c25]/30 rounded-lg focus:outline-none focus:border-[#17664e] bg-[#fffaf0] font-medium"
-                      >
-                        <option value="" disabled>-- Sélectionner une wilaya parmi les 58 --</option>
-                        {ALGERIAN_WILAYAS.map((w) => (
-                          <option key={w.code} value={w.name}>
-                            {w.code} - {w.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  <div className="flex-1 min-w-0" data-node-id="1364:92751">
+                    <p className="font-medium text-[15px] text-[#0b2c25]">
+                      Choisir une ville
+                    </p>
+                  </div>
+                  <span className="font-normal text-[13px] text-[#0b2c25]/80 max-w-[100px] truncate" data-node-id="1364:92753">
+                    {selectedLabel.split(',')[0]}
+                  </span>
+                  <img src={figmaArrowRight} alt="" className="size-[18px] opacity-70 group-hover:opacity-100 transition" />
                 </div>
               </div>
             </div>
@@ -835,6 +886,435 @@ export const LocationPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          MODALES FIGMA OFFICIELLES (SECTION 1364:94990)
+      ═══════════════════════════════════════════════════════════════════════ */}
+
+      {/* ── MODALE 1 : CONSENTEMENT GÉOLOCALISATION (Figma 1364:93174) ── */}
+      {showConsentModal && (
+        <div
+          onClick={() => setShowConsentModal(false)}
+          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#fffaf0] w-full max-w-[480px] rounded-[28px] p-[40px] flex flex-col items-center gap-[16px] shadow-2xl relative"
+            data-node-id="1364:93174"
+            data-name="Modale consentement"
+          >
+            {/* Pastille Icône (1364:93175) */}
+            <div className="size-[80px] rounded-full bg-[#ebeee1] flex items-center justify-center shrink-0">
+              <img src={figmaModalConsentPin} alt="" className="size-[32px]" />
+            </div>
+
+            {/* Titre (1364:93177) */}
+            <h2 className="font-semibold text-[22px] text-[#0b2c25] text-center leading-snug">
+              Autoriser FORSA à utiliser votre position ?
+            </h2>
+
+            {/* Description (1364:93178) */}
+            <p className="font-normal text-[14px] text-[#0b2c25]/85 text-center leading-relaxed">
+              Pour vous montrer les offres près de vous. Votre position n’est jamais partagée avec d’autres utilisateurs.
+            </p>
+
+            {/* Bouton Autoriser (1364:93179) */}
+            <button
+              type="button"
+              onClick={handleRequestGeolocation}
+              className="w-full h-[48px] bg-[#0b2c25] hover:bg-[#17664e] text-white font-semibold text-[13px] rounded-[10px] flex items-center justify-center transition cursor-pointer shadow-sm mt-2"
+              data-node-id="1364:93179"
+            >
+              Autoriser
+            </button>
+
+            {/* Bouton Saisir une adresse (1364:93181) */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowConsentModal(false);
+                setAddressSearchError(false);
+                setModalAddressInput('');
+                setShowAddressModal(true);
+              }}
+              className="w-full h-[48px] border border-[rgba(0,0,0,0.44)] hover:bg-black/5 text-[#0b2c25] font-semibold text-[13px] rounded-[10px] flex items-center justify-center transition cursor-pointer"
+              data-node-id="1364:93181"
+            >
+              Saisir une adresse
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE 2 : CONSENTEMENT REFUSÉ / POSITION NON PARTAGÉE (Figma 1364:93578) ── */}
+      {showDeniedModal && (
+        <div
+          onClick={() => setShowDeniedModal(false)}
+          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border-[1.5px] border-[#dbf0dd] w-full max-w-[520px] rounded-[24px] p-[28px] flex flex-col gap-[14px] shadow-2xl relative"
+            data-node-id="1364:93578"
+            data-name="Modale x"
+          >
+            {/* Ligne Fermer (1364:93579) */}
+            <div className="flex items-center justify-end w-full">
+              <button
+                type="button"
+                onClick={() => setShowDeniedModal(false)}
+                className="size-[36px] rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-stone-50 flex items-center justify-center transition cursor-pointer"
+                title="Fermer"
+              >
+                <img src={figmaCloseX} alt="" className="size-[16px]" />
+              </button>
+            </div>
+
+            {/* Contenu résultat (1364:93582) */}
+            <div className="flex flex-col items-center gap-[14px] text-center w-full">
+              {/* Pastille warning (1364:93583) */}
+              <div className="size-[72px] rounded-full bg-[#fdf3d8] flex items-center justify-center shrink-0">
+                <img src={figmaDeniedWarningPin} alt="" className="size-[36px]" />
+              </div>
+
+              {/* Titre (1364:93585) */}
+              <h2 className="font-semibold text-[18px] text-[#0b2c25]">
+                Position non partagée
+              </h2>
+
+              {/* Description (1364:93586) */}
+              <p className="font-medium text-[14px] text-[#0b2c25]/85 leading-relaxed">
+                Aucune position n’a été collectée. Saisissez une adresse, ou autorisez la localisation dans les réglages de votre navigateur.
+              </p>
+
+              {/* Actions (1364:93587) */}
+              <div className="flex flex-col gap-[10px] w-full pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeniedModal(false);
+                    setAddressSearchError(false);
+                    setModalAddressInput('');
+                    setShowAddressModal(true);
+                  }}
+                  className="w-full h-[48px] bg-[#0b2c25] hover:bg-[#17664e] text-white font-semibold text-[14px] rounded-[12px] flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
+                  data-node-id="1364:93588"
+                >
+                  <img src={figmaDeniedEditPen} alt="" className="size-[18px]" />
+                  <span>Saisir une adresse</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleRequestGeolocation}
+                  className="w-full h-[48px] border border-[#0b2c25] hover:bg-stone-50 text-[#0b2c25] font-semibold text-[14px] rounded-[12px] flex items-center justify-center gap-2 transition cursor-pointer"
+                  data-node-id="1364:93591"
+                >
+                  <img src={figmaRefreshIcon} alt="" className="size-[18px]" />
+                  <span>Réessayer</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE 3 : SAISIR UNE ADRESSE / LIEU INTROUVABLE (Figma 1364:93989) ── */}
+      {showAddressModal && (
+        <div
+          onClick={() => setShowAddressModal(false)}
+          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border-[1.5px] border-[#dbf0dd] w-full max-w-[520px] rounded-[24px] p-[28px] flex flex-col gap-[20px] shadow-2xl relative"
+            data-node-id="1364:93989"
+            data-name="Modale Saisir une adresse"
+          >
+            {/* En-tête (1364:93990) */}
+            <div className="flex items-start gap-[14px] w-full">
+              <div className="size-[48px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0">
+                <img src={figmaAddressModalPin} alt="" className="size-[24px]" />
+              </div>
+              <div className="flex flex-col gap-[3px] flex-1 min-w-0">
+                <h2 className="font-semibold text-[18px] text-[#0b2c25] leading-tight" data-node-id="1364:93994">
+                  Saisir une adresse
+                </h2>
+                <p className="font-normal text-[12px] text-[#0b2c25]/75" data-node-id="1364:93995">
+                  Indiquez une ville ou une adresse.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddressModal(false)}
+                className="size-[36px] rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-stone-50 flex items-center justify-center shrink-0 transition cursor-pointer"
+                title="Fermer"
+              >
+                <img src={figmaCloseX} alt="" className="size-[16px]" />
+              </button>
+            </div>
+
+            {/* Champ Ville ou adresse (1364:93998) */}
+            <div className="flex flex-col gap-[6px] w-full" data-node-id="1364:93998">
+              <label className="font-semibold text-[12px] text-[#0b2c25]">
+                Ville ou adresse
+              </label>
+              <form onSubmit={handleModalAddressSubmit} className="w-full">
+                <div
+                  className={`bg-white border-[1.5px] ${
+                    addressSearchError ? 'border-[#b13b3b]' : 'border-[#0b2c25]'
+                  } rounded-[12px] h-[48px] px-[14px] flex items-center gap-[10px] w-full transition-colors`}
+                  data-node-id="1364:94000"
+                >
+                  <img src={figmaInputLocationPin} alt="" className="size-[18px] shrink-0" />
+                  <input
+                    type="text"
+                    value={modalAddressInput}
+                    onChange={(e) => {
+                      setModalAddressInput(e.target.value);
+                      if (addressSearchError) setAddressSearchError(false);
+                    }}
+                    placeholder="Ex: Alger centre, Bab Ezzouar, Oran..."
+                    className="flex-1 h-full bg-transparent font-medium text-[14px] text-[#0b2c25] placeholder:text-[#0b2c25]/50 focus:outline-none"
+                    autoFocus
+                  />
+                  {modalAddressSearching && (
+                    <span className="text-xs text-[#17664e] font-semibold animate-pulse">Recherche...</span>
+                  )}
+                </div>
+              </form>
+
+              {/* Message d'aide / erreur (1364:94003) */}
+              {addressSearchError && (
+                <div className="flex items-center gap-[6px] pt-1" data-node-id="1364:94003">
+                  <img src={figmaAlertError} alt="" className="size-[14px] shrink-0" />
+                  <p className="font-normal text-[11px] text-[#b13b3b]" data-node-id="1364:94005">
+                    Aucun lieu ne correspond à votre saisie. Vérifiez l’orthographe.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Suggestions (1364:94006) */}
+            <div
+              className="bg-[#fffaf0] border border-[#e8ebdf] rounded-[16px] px-[16px] py-[8px] flex flex-col w-full"
+              data-node-id="1364:94006"
+            >
+              <p className="font-semibold text-[11px] text-[#0b2c25] py-1" data-node-id="1364:94007">
+                Villes proches
+              </p>
+              <div className="flex flex-col divide-y divide-[#0b2c25]/10">
+                {POPULAR_SUGGESTIONS.map((s) => (
+                  <div
+                    key={s.name}
+                    onClick={() => handleSelectSuggestion(s)}
+                    className="flex items-center gap-[10px] py-[10px] hover:text-[#17664e] hover:bg-black/5 rounded-lg px-2 -mx-2 transition cursor-pointer group"
+                  >
+                    <img src={figmaSuggestionPin} alt="" className="size-[16px] shrink-0 opacity-80 group-hover:opacity-100" />
+                    <span className="font-medium text-[14px] text-[#0b2c25] group-hover:text-[#17664e]">
+                      {s.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Actions (1364:94017) */}
+            <div className="flex items-center justify-end gap-[12px] w-full pt-1" data-node-id="1364:94017">
+              <button
+                type="button"
+                onClick={() => setShowAddressModal(false)}
+                className="h-[45px] px-[20px] rounded-[12px] border border-[#0b2c25] hover:bg-stone-50 font-semibold text-[14px] text-[#0b2c25] flex items-center justify-center transition cursor-pointer"
+                data-node-id="1364:94018"
+              >
+                Annuler
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleModalAddressSubmit()}
+                disabled={modalAddressSearching || !modalAddressInput.trim()}
+                className={`h-[45px] px-[20px] rounded-[12px] bg-[#0b2c25] text-white font-semibold text-[14px] flex items-center justify-center gap-2 transition cursor-pointer shadow-xs ${
+                  !modalAddressInput.trim() ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[#17664e]'
+                }`}
+                data-node-id="1364:94020"
+              >
+                <img src={figmaTickSave} alt="" className="size-[18px]" />
+                <span>Enregistrer</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE 4 : CHOISIR UNE VILLE (SÉLECTION DES 58 WILAYAS D'ALGÉRIE) ── */}
+      {showCityModal && (
+        <div
+          onClick={() => setShowCityModal(false)}
+          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border-[1.5px] border-[#dbf0dd] w-full max-w-[560px] max-h-[85vh] rounded-[24px] p-[28px] flex flex-col gap-[18px] shadow-2xl relative"
+          >
+            {/* En-tête */}
+            <div className="flex items-start gap-[14px] w-full">
+              <div className="size-[48px] rounded-full bg-[#eef7ec] border border-[#235347] flex items-center justify-center shrink-0">
+                <img src={figmaBuildingCity} alt="" className="size-[22px]" />
+              </div>
+              <div className="flex flex-col gap-[3px] flex-1 min-w-0">
+                <h2 className="font-semibold text-[18px] text-[#0b2c25] leading-tight">
+                  Choisir une ville
+                </h2>
+                <p className="font-normal text-[12px] text-[#0b2c25]/75">
+                  Sélectionnez votre wilaya parmi les 58 wilayas d’Algérie.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCityModal(false)}
+                className="size-[36px] rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-stone-50 flex items-center justify-center shrink-0 transition cursor-pointer"
+                title="Fermer"
+              >
+                <img src={figmaCloseX} alt="" className="size-[16px]" />
+              </button>
+            </div>
+
+            {/* Champ de recherche rapide de wilaya */}
+            <div className="bg-[#fffaf0] border border-[#0b2c25]/30 rounded-[12px] h-[44px] px-[14px] flex items-center gap-[10px] w-full">
+              <img src={figmaSearch} alt="" className="size-[16px] shrink-0 opacity-70" />
+              <input
+                type="text"
+                value={cityFilterQuery}
+                onChange={(e) => setCityFilterQuery(e.target.value)}
+                placeholder="Filtrer par nom ou numéro (ex: 16 ou Alger)..."
+                className="flex-1 h-full bg-transparent font-medium text-[13px] text-[#0b2c25] placeholder:text-[#0b2c25]/50 focus:outline-none"
+                autoFocus
+              />
+              {cityFilterQuery && (
+                <button
+                  type="button"
+                  onClick={() => setCityFilterQuery('')}
+                  className="text-xs text-[#0b2c25]/60 hover:text-[#0b2c25]"
+                >
+                  Effacer
+                </button>
+              )}
+            </div>
+
+            {/* Liste scrollable des wilayas */}
+            <div className="flex-1 overflow-y-auto max-h-[360px] pr-1 flex flex-col gap-1.5 divide-y divide-[#0b2c25]/10">
+              {filteredWilayas.length === 0 ? (
+                <div className="py-8 text-center text-sm text-[#0b2c25]/60">
+                  Aucune wilaya ne correspond à « {cityFilterQuery} »
+                </div>
+              ) : (
+                filteredWilayas.map((w) => {
+                  const isSelected = selectedLabel.toLowerCase().includes(w.name.toLowerCase());
+                  return (
+                    <div
+                      key={w.code}
+                      onClick={() => handleSelectWilaya(w)}
+                      className={`flex items-center justify-between px-[14px] py-[10px] rounded-[10px] cursor-pointer transition ${
+                        isSelected
+                          ? 'bg-[#eef7ec] text-[#17664e] font-semibold'
+                          : 'hover:bg-[#fffaf0] text-[#0b2c25]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-[#17664e] bg-[#dbf0dd] px-2 py-0.5 rounded-md min-w-[28px] text-center">
+                          {w.code}
+                        </span>
+                        <span className="text-[14px] font-medium">{w.name}</span>
+                      </div>
+                      {isSelected && (
+                        <img src={figmaTickSave} alt="Selected" className="size-[16px]" />
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-[12px] w-full pt-2 border-t border-[#0b2c25]/10">
+              <button
+                type="button"
+                onClick={() => setShowCityModal(false)}
+                className="h-[42px] px-[20px] rounded-[12px] border border-[#0b2c25] hover:bg-stone-50 font-semibold text-[13px] text-[#0b2c25] flex items-center justify-center transition cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE 5 : SERVICE DE CARTES INDISPONIBLE (Figma 1364:94418) ── */}
+      {showMapUnavailableModal && (
+        <div
+          onClick={() => setShowMapUnavailableModal(false)}
+          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border-[1.5px] border-[#dbf0dd] w-full max-w-[520px] rounded-[24px] p-[28px] flex flex-col gap-[14px] shadow-2xl relative"
+            data-node-id="1364:94418"
+            data-name="Modale x"
+          >
+            {/* Ligne Fermer (1364:94419) */}
+            <div className="flex items-center justify-end w-full">
+              <button
+                type="button"
+                onClick={() => setShowMapUnavailableModal(false)}
+                className="size-[36px] rounded-full border-[1.5px] border-[#e8ebdf] hover:bg-stone-50 flex items-center justify-center transition cursor-pointer"
+                title="Fermer"
+              >
+                <img src={figmaCloseX} alt="" className="size-[16px]" />
+              </button>
+            </div>
+
+            {/* Contenu (1364:94422) */}
+            <div className="flex flex-col items-center gap-[14px] text-center w-full">
+              <div className="size-[72px] rounded-full bg-[#f7dcd8] flex items-center justify-center shrink-0">
+                <img src={figmaMapUnavailableDanger} alt="" className="size-[36px]" />
+              </div>
+
+              <h2 className="font-semibold text-[18px] text-[#0b2c25]">
+                Service de cartes indisponible
+              </h2>
+
+              <p className="font-medium text-[14px] text-[#0b2c25]/85 leading-relaxed">
+                Le service est momentanément indisponible ou sa limite d’utilisation est atteinte. Les offres restent consultables sans la carte.
+              </p>
+
+              <div className="flex flex-col gap-[10px] w-full pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMapUnavailableModal(false);
+                    handleFloatingSearchSubmit({ preventDefault: () => {} } as any);
+                  }}
+                  className="w-full h-[48px] bg-[#0b2c25] hover:bg-[#17664e] text-white font-semibold text-[14px] rounded-[12px] flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
+                  data-node-id="1364:94428"
+                >
+                  <img src={figmaRefreshIcon} alt="" className="size-[18px]" />
+                  <span>Réessayer plus tard</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMapUnavailableModal(false)}
+                  className="w-full h-[48px] border border-[#0b2c25] hover:bg-stone-50 text-[#0b2c25] font-semibold text-[14px] rounded-[12px] flex items-center justify-center transition cursor-pointer"
+                  data-node-id="1364:94431"
+                >
+                  <span>Fermer</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -132,7 +132,7 @@ export const SettingsPage: React.FC = () => {
               title="Mon profil"
             >
               <img
-                src={figmaFoodAvatar}
+                src={currentAvatar || figmaPhotoDeProfil}
                 alt="Avatar"
                 className="size-full object-cover"
               />
