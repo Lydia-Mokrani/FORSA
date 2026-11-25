@@ -68,7 +68,7 @@ services:
 
 networks:
   forsa-network:
-    driver: bridge
+    external: true
 
 volumes:
   consul_data:
