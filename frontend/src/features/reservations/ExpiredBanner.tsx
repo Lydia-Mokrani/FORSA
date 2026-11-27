@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Reservation } from './types';
 import IconClock from './assets/icons/Icône clock-01.svg';
-import IconArrowRight from './assets/icons/Icône arrow-right-02-round.svg';
+
 
 interface ExpiredBannerProps {
   reservation?: Reservation;
@@ -26,12 +26,12 @@ export const ExpiredBanner: React.FC<ExpiredBannerProps> = ({
     (reservation?.id === 'res-1'
       ? 'Pain complet'
       : reservation?.id === 'res-2'
-      ? 'Part de gâteau au chocolat'
-      : reservation?.id === 'res-3'
-      ? 'Le panier laitier'
-      : reservation?.id === 'res-4'
-      ? 'Farine'
-      : 'Pain complet');
+        ? 'Part de gâteau au chocolat'
+        : reservation?.id === 'res-3'
+          ? 'Le panier laitier'
+          : reservation?.id === 'res-4'
+            ? 'Farine'
+            : 'Pain complet');
 
   const formattedHour = (() => {
     if (!reservation?.pickupEnd) return '20:00';
@@ -52,10 +52,9 @@ export const ExpiredBanner: React.FC<ExpiredBannerProps> = ({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-[16px] p-[16px_20px_16px_18px] bg-[#FCF3D6] border border-[#EED686] rounded-[16px] shadow-xs">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-[16px] pl-[18px] pr-[20px] py-[16px] bg-[#FCF3D6] border border-[#EED686] rounded-[16px]">
       <div className="flex items-center gap-[16px] flex-1 min-w-0">
-        {/* Pastille icône clock-01 - 44x44 white rounded-full */}
-        <div className="flex items-center justify-center w-[44px] h-[44px] rounded-full bg-white shrink-0 shadow-xs">
+        <div className="flex items-center justify-center w-[44px] h-[44px] rounded-full bg-white shrink-0">
           <img
             src={IconClock}
             alt=""
@@ -67,31 +66,23 @@ export const ExpiredBanner: React.FC<ExpiredBannerProps> = ({
           />
         </div>
 
-        {/* Text */}
-        <div className="flex flex-col gap-[2px] min-w-0 flex-1">
-          <span className="font-poppins font-semibold text-[16px] text-[#0B2C25] leading-snug">
+        <div className="flex flex-col gap-[3px] min-w-0 flex-1">
+          <span className="font-poppins font-semibold text-[16px] text-[#0B2C25] leading-normal">
             Réservation expirée
           </span>
-          <p className="font-poppins font-normal text-[14px] text-[rgba(11,44,37,0.75)] leading-relaxed">
+          <p className="font-poppins font-normal text-[13px] text-[rgba(11,44,37,0.75)] leading-normal">
             Vous n’avez pas retiré « {productName} » avant {formattedHour}. Le stock a été remis en vente,
             aucun montant n’est dû.
           </p>
         </div>
       </div>
 
-      {/* Button Explorer les offres */}
       <button
         type="button"
         onClick={handleExplore}
-        className="flex items-center justify-center gap-[8px] h-[40px] px-[20px] bg-[#0B2C25] text-white rounded-[12px] font-poppins font-semibold text-[13px] hover:bg-black/90 active:scale-95 transition-all shrink-0 cursor-pointer self-start sm:self-auto"
+        className="flex items-center justify-center h-[46px] px-[18px] bg-[#0B2C25] text-white rounded-[12px] font-poppins font-semibold text-[13px] hover:bg-black/90 active:scale-95 transition-all shrink-0 cursor-pointer self-start sm:self-auto"
       >
-        <span>Explorer les offres</span>
-        <img
-          src={IconArrowRight}
-          alt=""
-          className="w-[14px] h-[14px]"
-          style={{ filter: 'brightness(0) invert(1)' }}
-        />
+        Explorer les offres
       </button>
     </div>
   );

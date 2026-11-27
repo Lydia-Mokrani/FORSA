@@ -1,0 +1,16 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="396" height="735.6" viewBox="0 0 396 735.6" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Ticketyes &#194;&#183; zigzag" filter="url(#filter0_d_0_491)">
+<path d="M364.8 14.4C368.776 14.4 372 17.6237 372 21.6002V694.8C372 698.777 368.776 702 364.8 702H362.4C362.4 693.293 355.415 686.235 346.8 686.235C338.184 686.235 331.2 693.293 331.2 702H325.2C325.2 693.293 318.215 686.235 309.6 686.235C300.984 686.235 294 693.293 294 702H288C288 693.293 281.016 686.235 272.4 686.235C263.785 686.235 256.8 693.293 256.8 702H250.8C250.8 693.293 243.816 686.235 235.2 686.235C226.585 686.235 219.6 693.293 219.6 702H213.6C213.599 693.293 206.616 686.235 198 686.235C189.384 686.235 182.401 693.293 182.4 702H176.4C176.4 693.293 169.415 686.235 160.8 686.235C152.184 686.235 145.2 693.293 145.2 702H139.2C139.2 693.293 132.215 686.235 123.6 686.235C114.984 686.235 108 693.293 108 702H102C102 693.293 95.0157 686.235 86.4004 686.235C77.7849 686.235 70.8 693.293 70.7998 702H64.7998C64.7996 693.293 57.8156 686.235 49.2002 686.235C40.5847 686.235 33.5998 693.293 33.5996 702H31.2002C27.2239 702 24.0002 698.777 24 694.8V21.6002C24 17.6237 27.2237 14.4 31.2002 14.4H364.8Z" fill="white"/>
+</g>
+<defs>
+<filter id="filter0_d_0_491" x="0" y="0" width="396" height="735.6" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="9.6"/>
+<feGaussianBlur stdDeviation="12"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.04 0 0 0 0 0.17 0 0 0 0 0.14 0 0 0 0.12 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_491"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_491" result="shape"/>
+</filter>
+</defs>
+</svg>

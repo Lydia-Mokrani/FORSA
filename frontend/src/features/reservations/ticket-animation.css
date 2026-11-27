@@ -1,0 +1,22 @@
+/* Animation du ticket : sortie d'imprimante (Figma 1:16382 -> 1:16540).
+   Départ y = -657.6 px, arrivée y = 13.2 px => déplacement de 670.8 px.
+   Durée et courbe : choix de l'implémentation, Figma n'en donne pas. */
+.receipt-ticket-anim {
+    animation: receipt-ticket-drop var(--receipt-ticket-duration, 1.8s) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes receipt-ticket-drop {
+    from {
+        transform: translateY(-670.8px);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .receipt-ticket-anim {
+        animation: none;
+    }
+}
