@@ -6,6 +6,7 @@ import { ReservationDetail } from "./ReservationDetail";
 import { CreateReservationForm } from "./CreateReservationForm";
 import { ReservationSuccess } from "./ReservationSuccess";
 import { MerchantDashboard } from "./MerchantDashboard";
+import type { Reservation } from "./types";
 
 export const ReservationScreen: React.FC = () => {
   // simple routing via local state
@@ -17,6 +18,7 @@ export const ReservationScreen: React.FC = () => {
     | "merchant"
   >("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [createdReservation, setCreatedReservation] = useState<Reservation | null>(null);
 
   const renderScreen = () => {
     switch (screen) {
@@ -41,12 +43,20 @@ export const ReservationScreen: React.FC = () => {
       case "create":
         return (
           <CreateReservationForm
-            onSuccess={() => setScreen("success")}
+            onSuccess={(reservation) => {
+              setCreatedReservation(reservation ?? null);
+              setScreen("success");
+            }}
             onCancel={() => setScreen("list")}
           />
         );
       case "success":
-        return <ReservationSuccess onBack={() => setScreen("list")} />;
+        return (
+          <ReservationSuccess
+            reservation={createdReservation}
+            onBack={() => setScreen("list")}
+          />
+        );
       case "merchant":
         return <MerchantDashboard onBack={() => setScreen("list")} />;
       default:

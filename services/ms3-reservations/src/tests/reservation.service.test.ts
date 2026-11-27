@@ -6,12 +6,17 @@ import QRCode from 'qrcode';
 import { BadRequestError } from '@forsa/common';
 
 jest.mock('../services/ms2.service');
-jest.mock('../config/prisma');
+jest.mock('../config/prisma', () => ({
+  prisma: {
+    reservation: { findUnique: jest.fn(), create: jest.fn() },
+    customerNoShow: { findUnique: jest.fn() },
+  },
+}));
 jest.mock('qrcode');
 
-const mockedPrisma = prisma as any;
-const mockedMS2 = MS2Service as any;
-const mockedQRCode = QRCode as any;
+const mockedPrisma = jest.mocked(prisma);
+const mockedMS2 = jest.mocked(MS2Service);
+const mockedQRCodeToDataURL = QRCode.toDataURL as unknown as jest.Mock;
 
 describe('ReservationService', () => {
   beforeEach(() => {
@@ -19,10 +24,10 @@ describe('ReservationService', () => {
   });
 
   test('generatePickupCode produces correct format', () => {
-    // private method via any
-    const code = (ReservationService as any).generatePickupCode();
+    const reservationService = ReservationService as unknown as { generatePickupCode(): string };
+    const code = reservationService.generatePickupCode();
     expect(code).toMatch(/^FRS-[A-Za-z0-9]{6}$/);
-    const second = (ReservationService as any).generatePickupCode();
+    const second = reservationService.generatePickupCode();
     expect(second).not.toBe(code); // very likely different
   });
 
@@ -31,9 +36,9 @@ describe('ReservationService', () => {
     mockedMS2.fetchOffer.mockResolvedValue(offer);
     mockedMS2.reserveStock.mockResolvedValue({});
     mockedPrisma.reservation.findUnique.mockResolvedValue(null); // no collision
-    mockedQRCode.toDataURL.mockResolvedValue('data:image/png;base64,AAA');
+    mockedQRCodeToDataURL.mockResolvedValue('data:image/png;base64,AAA');
     const reservationObj = { id: 'uuid', pickupCode: 'FRS-ABC123' };
-    mockedPrisma.reservation.create.mockResolvedValue(reservationObj);
+    mockedPrisma.reservation.create.mockResolvedValue(reservationObj as never);
 
     const result = await ReservationService.createReservation({
       customerId: 'cust1',
@@ -45,7 +50,7 @@ describe('ReservationService', () => {
     });
     expect(result).toBe(reservationObj);
     expect(result.pickupCode).toMatch(/^FRS-[A-Za-z0-9]{6}$/);
-    expect(mockedQRCode.toDataURL).toHaveBeenCalled();
+    expect(mockedQRCodeToDataURL).toHaveBeenCalled();
   });
 
   test('createReservation fails when MS2 missing pickup window', async () => {

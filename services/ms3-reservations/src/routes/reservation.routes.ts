@@ -2,7 +2,16 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireRole, BadRequestError, ForbiddenError, NotFoundError } from '@forsa/common';
 import { prisma } from '../config/prisma';
+import { suspendedShops } from '../services/rabbitmq.service';
 import { ReservationService } from '../services/reservation.service';
+
+function requireApprovedMerchant(req: Request): string {
+  const shopId = req.user!.shopId;
+  if (!shopId) throw new BadRequestError('Merchant has no shopId');
+  if (req.user!.shopStatus !== 'approved') throw new ForbiddenError('Merchant is not approved');
+  if (suspendedShops.has(shopId)) throw new ForbiddenError('Merchant is suspended');
+  return shopId;
+}
 
 export const createReservationRouter = (publicKey: string) => {
   const reservationRouter = Router();
@@ -22,6 +31,11 @@ export const createReservationRouter = (publicKey: string) => {
       try {
         const { shopId, offerId, quantity, unitPrice } = req.body;
         const user = req.user!;
+        if (user.emailVerified !== true) throw new ForbiddenError('Verified email required');
+        if (!user.sub) throw new ForbiddenError('Customer id required');
+        if (shopId && (suspendedShops.has(shopId) || user.shopStatus === 'suspended')) {
+          throw new ForbiddenError('Shop is suspended');
+        }
         const reservation = await ReservationService.createReservation({
           customerId: user.sub,
           customerEmail: user.email,
@@ -46,6 +60,42 @@ export const createReservationRouter = (publicKey: string) => {
       try {
         const user = req.user!;
         const reservations = await prisma.reservation.findMany({ where: { customerId: user.sub } });
+        res.json(reservations);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // ------------------- Merchant endpoints -------------------
+  // List reservations for merchant's shop
+  reservationRouter.get(
+    '/shop',
+    requireAuth(publicKey),
+    requireRole('MERCHANT'),
+    async (req: Request, res: Response, next) => {
+      try {
+        const shopId = requireApprovedMerchant(req);
+        const reservations = await prisma.reservation.findMany({ where: { shopId } });
+        res.json(reservations);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // Shop reservation history (includes status history)
+  reservationRouter.get(
+    '/shop/history',
+    requireAuth(publicKey),
+    requireRole('MERCHANT'),
+    async (req: Request, res: Response, next) => {
+      try {
+        const shopId = requireApprovedMerchant(req);
+        const reservations = await prisma.reservation.findMany({
+          where: { shopId },
+          include: { statusHistory: true },
+        });
         res.json(reservations);
       } catch (err) {
         next(err);
@@ -93,44 +143,6 @@ export const createReservationRouter = (publicKey: string) => {
     },
   );
 
-  // ------------------- Merchant endpoints -------------------
-  // List reservations for merchant's shop
-  reservationRouter.get(
-    '/shop',
-    requireAuth(publicKey),
-    requireRole('MERCHANT'),
-    async (req: Request, res: Response, next) => {
-      try {
-        const shopId = req.user!.shopId;
-        if (!shopId) throw new BadRequestError('Merchant has no shopId');
-        const reservations = await prisma.reservation.findMany({ where: { shopId } });
-        res.json(reservations);
-      } catch (err) {
-        next(err);
-      }
-    },
-  );
-
-  // Shop reservation history (includes status history)
-  reservationRouter.get(
-    '/shop/history',
-    requireAuth(publicKey),
-    requireRole('MERCHANT'),
-    async (req: Request, res: Response, next) => {
-      try {
-        const shopId = req.user!.shopId;
-        if (!shopId) throw new BadRequestError('Merchant has no shopId');
-        const reservations = await prisma.reservation.findMany({
-          where: { shopId },
-          include: { statusHistory: true },
-        });
-        res.json(reservations);
-      } catch (err) {
-        next(err);
-      }
-    },
-  );
-
   // Merchant accept reservation
   reservationRouter.post(
     '/:id/accept',
@@ -138,13 +150,14 @@ export const createReservationRouter = (publicKey: string) => {
     requireRole('MERCHANT'),
     async (req: Request, res: Response, next) => {
       try {
+        const shopId = requireApprovedMerchant(req);
         const reservation = await prisma.reservation.findUnique({ where: { id: req.params.id } });
         if (!reservation) throw new NotFoundError('Reservation not found');
-        if (reservation.shopId !== req.user!.shopId) throw new ForbiddenError('Reservation does not belong to this shop');
+        if (reservation.shopId !== shopId) throw new ForbiddenError('Reservation does not belong to this shop');
         await ReservationService.changeStatus({
           reservationId: reservation.id,
           toStatus: 'ACCEPTED',
-          actorId: req.user!.shopId!,
+          actorId: shopId,
           actorRole: 'MERCHANT',
         });
         res.sendStatus(204);
@@ -161,14 +174,15 @@ export const createReservationRouter = (publicKey: string) => {
     requireRole('MERCHANT'),
     async (req: Request, res: Response, next) => {
       try {
+        const shopId = requireApprovedMerchant(req);
         const reservation = await prisma.reservation.findUnique({ where: { id: req.params.id } });
         if (!reservation) throw new NotFoundError('Reservation not found');
-        if (reservation.shopId !== req.user!.shopId) throw new ForbiddenError('Reservation does not belong to this shop');
+        if (reservation.shopId !== shopId) throw new ForbiddenError('Reservation does not belong to this shop');
         const { reason } = req.body;
         await ReservationService.changeStatus({
           reservationId: reservation.id,
           toStatus: 'REFUSED',
-          actorId: req.user!.shopId!,
+          actorId: shopId,
           actorRole: 'MERCHANT',
           reason,
         });
@@ -186,10 +200,11 @@ export const createReservationRouter = (publicKey: string) => {
     requireRole('MERCHANT'),
     async (req: Request, res: Response, next) => {
       try {
+        const shopId = requireApprovedMerchant(req);
         const reservation = await prisma.reservation.findUnique({ where: { id: req.params.id } });
         if (!reservation) throw new NotFoundError('Reservation not found');
-        if (reservation.shopId !== req.user!.shopId) throw new ForbiddenError('Reservation does not belong to this shop');
-        await ReservationService.pickup(reservation.id, req.user!.shopId!);
+        if (reservation.shopId !== shopId) throw new ForbiddenError('Reservation does not belong to this shop');
+        await ReservationService.pickup(reservation.id, shopId);
         res.sendStatus(204);
       } catch (err) {
         next(err);
@@ -204,18 +219,15 @@ export const createReservationRouter = (publicKey: string) => {
     requireRole('MERCHANT'),
     async (req: Request, res: Response, next) => {
       try {
-        const { pickupCode } = req.body;
+        const { pickupCode, code } = req.body;
 
-        if (!pickupCode) {
+        if (!pickupCode && !code) {
           throw new BadRequestError('pickupCode required');
         }
 
-        const shopId = req.user!.shopId;
-        if (!shopId) {
-          throw new BadRequestError('Merchant has no shopId');
-        }
+        const shopId = requireApprovedMerchant(req);
 
-        await ReservationService.pickupByCode(pickupCode, shopId);
+        await ReservationService.pickupByCode(pickupCode ?? code, shopId);
         res.sendStatus(204);
       } catch (err) {
         next(err);

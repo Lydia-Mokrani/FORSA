@@ -3,6 +3,10 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@forsa/common": ["../../packages/common/dist"]
+    },
     "rootDir": "src",
     "outDir": "dist",
     "strict": true,

@@ -220,6 +220,122 @@ export const ReservationsApi = {
     return res.data;
   },
 
+  /** GET /api/reservations/:id — returns one reservation */
+  async getReservationById(id: string): Promise<Reservation> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/reservations/${encodeURIComponent(id)}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Erreur serveur MS3 (${res.status})`);
+    }
+
+    return (await res.json()) as Reservation;
+  },
+
+  /** GET /api/reservations/shop — merchant reservations */
+  async getShopReservations(): Promise<Reservation[]> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/reservations/shop`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Erreur serveur MS3 (${res.status})`);
+    }
+
+    return extractArray(await res.json());
+  },
+
+  /** POST /api/reservations/:id/accept */
+  async acceptReservation(id: string): Promise<void> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/reservations/${encodeURIComponent(id)}/accept`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      const msg =
+        (errJson as { error?: { message?: string }; message?: string })?.error?.message ||
+        (errJson as { message?: string })?.message ||
+        `Échec de l'acceptation (HTTP ${res.status})`;
+      throw new Error(msg);
+    }
+  },
+
+  /** GET /api/reservations/shop/history — merchant reservation history */
+  async getShopHistory(): Promise<Reservation[]> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/reservations/shop/history`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Erreur serveur MS3 (${res.status})`);
+    }
+
+    return extractArray(await res.json());
+  },
+
+  /** POST /api/reservations/pickup — confirm pickup by QR/pickup code */
+  async pickupByCode(code: string): Promise<void> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/reservations/pickup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ pickupCode: code, code }),
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      const msg =
+        (errJson as { error?: { message?: string }; message?: string })?.error?.message ||
+        (errJson as { message?: string })?.message ||
+        `Échec du retrait (HTTP ${res.status})`;
+      throw new Error(msg);
+    }
+  },
+
+  /** POST /api/reservations/:id/refuse */
+  async refuseReservation(id: string, reason?: string): Promise<void> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/reservations/${encodeURIComponent(id)}/refuse`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(reason ? { reason } : {}),
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      const msg =
+        (errJson as { error?: { message?: string }; message?: string })?.error?.message ||
+        (errJson as { message?: string })?.message ||
+        `Échec du refus (HTTP ${res.status})`;
+      throw new Error(msg);
+    }
+  },
+
   /**
    * POST /api/reservations/:id/cancel
    * Calls the MS3 endpoint to cancel a PENDING or ACCEPTED reservation.

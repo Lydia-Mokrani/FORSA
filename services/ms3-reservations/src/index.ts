@@ -4,8 +4,19 @@ import cors from 'cors';
 import { loggerMiddleware, errorHandler, ConsulRegistry } from '@forsa/common';
 import { config } from './config/env';
 import { createReservationRouter } from './routes/reservation.routes';
+import { ReservationService } from './services/reservation.service';
 import { AuthService } from './services/auth.service';
 import { initRabbitMQ } from './services/rabbitmq.service';
+
+let expirationTimer: NodeJS.Timeout | null = null;
+
+async function runExpiration() {
+  try {
+    await ReservationService.expireOverdueReservations();
+  } catch (err) {
+    console.error('Reservation expiration failed:', err);
+  }
+}
 
 async function startServer() {
   // Retrieve MS1 public key before starting the service
@@ -48,11 +59,15 @@ async function startServer() {
     console.log(`[MS3-Reservations] Server started on port ${config.port} (Env: ${config.nodeEnv})`);
     await initRabbitMQ();
     await consul.register();
+    await runExpiration();
+    expirationTimer = setInterval(runExpiration, 60_000);
+    expirationTimer.unref();
   });
 
   // Graceful shutdown
   const gracefulShutdown = async (signal: string) => {
     console.log(`[MS3-Reservations] Received ${signal}, shutting down...`);
+    if (expirationTimer) clearInterval(expirationTimer);
     await consul.deregister();
 
     const { rabbitMQ } = await import('./services/rabbitmq.service.js');

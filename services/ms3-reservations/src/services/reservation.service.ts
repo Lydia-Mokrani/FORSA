@@ -4,7 +4,7 @@ import { MS2Service } from './ms2.service';
 import { BadRequestError, ForbiddenError, ApiError } from '@forsa/common';
 import crypto from 'crypto';
 import QRCode from 'qrcode';
-import { rabbitMQ } from './rabbitmq.service';
+import { publishReservationEvent } from './rabbitmq.service';
 import { ReservationStatus } from '@prisma/client';
 
 /**
@@ -154,12 +154,13 @@ export class ReservationService {
         });
         // Emit creation event (best‑effort)
         try {
-          await rabbitMQ.publish('reservation.created', {
+          await publishReservationEvent('reservation.created', {
             reservationId,
-            status: 'PENDING',
+            customerId,
             shopId,
             offerId,
             quantity,
+            code: pickupCode,
           });
         } catch (_) { }
         return reservation;
@@ -257,7 +258,12 @@ export class ReservationService {
 
     // Emit event (best‑effort) after the transaction has committed
     try {
-      await rabbitMQ.publish(`reservation.${toStatus.toLowerCase()}`, { reservationId, status: toStatus });
+      await publishReservationEvent(`reservation.${toStatus.toLowerCase()}`, {
+        reservationId,
+        customerId: reservation.customerId,
+        shopId: reservation.shopId,
+        offerId: reservation.offerId,
+      });
     } catch (_) { }
 
     // Release stock for terminal states – retry up to 3 times (idempotent).
@@ -280,6 +286,34 @@ export class ReservationService {
     return true;
   }
   // Validate pickup using the QR code / pickup code
+  // Expire overdue PENDING/ACCEPTED reservations past pickupEnd
+  static async expireOverdueReservations(): Promise<number> {
+    const now = new Date();
+    const overdue = await prisma.reservation.findMany({
+      where: {
+        status: { in: ['PENDING', 'ACCEPTED'] },
+        pickupEnd: { lt: now },
+      },
+    });
+
+    let expired = 0;
+    for (const reservation of overdue) {
+      try {
+        await this.changeStatus({
+          reservationId: reservation.id,
+          toStatus: 'EXPIRED',
+          actorId: 'ms3-reservations',
+          actorRole: 'SYSTEM',
+          reason: 'DEADLINE_PASSED',
+        });
+        expired++;
+      } catch (e) {
+        console.error(`Failed to expire reservation ${reservation.id}:`, e);
+      }
+    }
+    return expired;
+  }
+
   static async pickupByCode(pickupCode: string, merchantId: string) {
     if (!pickupCode || typeof pickupCode !== 'string') {
       throw new BadRequestError('Pickup code is required');

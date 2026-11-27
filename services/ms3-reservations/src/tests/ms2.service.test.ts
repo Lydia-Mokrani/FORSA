@@ -5,7 +5,7 @@ import { BadRequestError } from '@forsa/common';
 jest.mock('../config/axios');
 
 const mockedPost = jest.fn();
-(internalAxios as any).post = mockedPost;
+internalAxios.post = mockedPost;
 
 describe('MS2Service endpoint URLs', () => {
   beforeEach(() => {
