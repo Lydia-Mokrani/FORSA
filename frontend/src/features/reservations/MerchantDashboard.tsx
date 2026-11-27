@@ -4,9 +4,17 @@ import type { Reservation } from './types';
 
 interface MerchantDashboardProps {
   onBack: () => void;
+  previewMode?: boolean;
+  previewReservations?: Reservation[];
+  previewHistory?: Reservation[];
 }
 
-export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onBack }) => {
+export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({
+  onBack,
+  previewMode = false,
+  previewReservations,
+  previewHistory,
+}) => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,27 +34,35 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onBack }) 
     setLoading(true);
     setError(null);
     try {
-      setReservations(await ReservationsApi.getShopReservations());
+      if (previewMode) {
+        setReservations(previewReservations ?? []);
+      } else {
+        setReservations(await ReservationsApi.getShopReservations());
+      }
     } catch (e: any) {
       setError(e.message || 'Impossible de charger les réservations');
       setReservations([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [previewMode, previewReservations]);
 
   const loadPickupHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const history = await ReservationsApi.getShopHistory();
-      setPickupHistory(history.filter((r) => r.status === 'PICKED_UP'));
+      if (previewMode) {
+        setPickupHistory((previewHistory ?? []).filter((r) => r.status === 'PICKED_UP'));
+      } else {
+        const history = await ReservationsApi.getShopHistory();
+        setPickupHistory(history.filter((r) => r.status === 'PICKED_UP'));
+      }
     } catch (e: any) {
       setError(e.message || 'Impossible de charger l’historique des retraits');
       setPickupHistory([]);
     } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [previewMode, previewHistory]);
 
   useEffect(() => {
     loadReservations();
@@ -112,7 +128,9 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onBack }) 
     setBusyId(id);
     setError(null);
     try {
-      await ReservationsApi.acceptReservation(id);
+      if (!previewMode) {
+        await ReservationsApi.acceptReservation(id);
+      }
       setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'ACCEPTED' } : r)));
     } catch (e: any) {
       setError(e.message || "Échec de l'acceptation");
@@ -125,7 +143,9 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onBack }) 
     setBusyId(id);
     setError(null);
     try {
-      await ReservationsApi.refuseReservation(id);
+      if (!previewMode) {
+        await ReservationsApi.refuseReservation(id);
+      }
       setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'REFUSED' } : r)));
     } catch (e: any) {
       setError(e.message || 'Échec du refus');
@@ -142,7 +162,9 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onBack }) 
     setError(null);
     setPickupMessage(null);
     try {
-      await ReservationsApi.pickupByCode(code);
+      if (!previewMode) {
+        await ReservationsApi.pickupByCode(code);
+      }
       setPickupMessage('Retrait confirmé · réservation récupérée');
       setPickupCode('');
       await loadReservations();

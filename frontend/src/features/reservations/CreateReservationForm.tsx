@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { ReservationDialog, type OfferDetail } from './ReservationDialog';
+import { ReservationDialog, type OfferDetail, type ReservationCreateParams, type ReservationCreateResult } from './ReservationDialog';
 import type { Reservation } from './types';
 
 interface CreateReservationFormProps {
   offer?: OfferDetail;
   onSuccess: (reservation?: Reservation) => void;
   onCancel: () => void;
+  onReserve?: (params: ReservationCreateParams) => Promise<ReservationCreateResult>;
 }
 
 const DEFAULT_OFFER: OfferDetail = {
@@ -31,6 +32,7 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({
   offer = DEFAULT_OFFER,
   onSuccess,
   onCancel,
+  onReserve,
 }) => {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -51,6 +53,7 @@ export const CreateReservationForm: React.FC<CreateReservationFormProps> = ({
       onSuccess={handleSuccess}
       onViewReceipt={handleSuccess}
       onNavigateToReservations={handleClose}
+      onReserve={onReserve}
     />
   );
 };

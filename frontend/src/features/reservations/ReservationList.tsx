@@ -10,7 +10,7 @@ import { CancelImpossibleModal } from './CancelImpossibleModal';
 import { ReservationSkeleton } from './ReservationSkeleton';
 import { ExpiredBanner } from './ExpiredBanner';
 import { ReceiptTicketModal } from './ReceiptTicketModal';
-import { ReservationDialog, type OfferDetail } from './ReservationDialog';
+import { ReservationDialog, type OfferDetail, type ReservationCreateParams, type ReservationCreateResult } from './ReservationDialog';
 
 // SVG icon imports from assets/icons
 import IconClock from './assets/icons/Icône clock-01.svg';
@@ -35,6 +35,9 @@ interface ReservationListProps {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onMerchant: () => void;
+  previewMode?: boolean;
+  previewReservations?: Reservation[];
+  onReserve?: (params: ReservationCreateParams) => Promise<ReservationCreateResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +113,9 @@ const SmallPastille: React.FC<{ icon: string; alt: string }> = ({ icon, alt }) =
 
 export const ReservationList: React.FC<ReservationListProps> = ({
   onSelect,
+  previewMode = false,
+  previewReservations,
+  onReserve,
 }) => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,6 +138,11 @@ export const ReservationList: React.FC<ReservationListProps> = ({
     setLoading(true);
     setErrorMessage(null);
     try {
+      if (previewMode) {
+        setReservations(previewReservations ?? []);
+        setLoading(false);
+        return;
+      }
       const res = await ReservationsApi.getMyReservationsDetailed();
       if (res.error) {
         setErrorMessage(res.error);
@@ -145,7 +156,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [previewMode, previewReservations]);
 
   useEffect(() => {
     loadReservations();
@@ -1096,6 +1107,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({
             type: 'success',
           });
         }}
+        previewMode={previewMode}
       />
 
       {/* ================================================================
@@ -1151,6 +1163,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({
         onNavigateToReservations={() => {
           setIsReservationDialogOpen(false);
         }}
+        onReserve={onReserve}
       />
     </div>
   );

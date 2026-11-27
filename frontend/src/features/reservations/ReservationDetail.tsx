@@ -6,6 +6,7 @@ import type { Reservation } from './types';
 interface ReservationDetailProps {
   reservationId: string;
   onBack: () => void;
+  previewReservation?: Reservation | null;
 }
 
 function formatPickupWindow(reservation: Reservation): string {
@@ -18,7 +19,7 @@ function formatPickupWindow(reservation: Reservation): string {
   }
 }
 
-export const ReservationDetail: React.FC<ReservationDetailProps> = ({ reservationId, onBack }) => {
+export const ReservationDetail: React.FC<ReservationDetailProps> = ({ reservationId, onBack, previewReservation }) => {
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,11 @@ export const ReservationDetail: React.FC<ReservationDetailProps> = ({ reservatio
   useEffect(() => {
     const load = async () => {
       try {
-        setReservation(await ReservationsApi.getReservationById(reservationId));
+        if (previewReservation) {
+          setReservation(previewReservation);
+        } else {
+          setReservation(await ReservationsApi.getReservationById(reservationId));
+        }
       } catch (e: any) {
         setError(e.message || 'Error loading reservation');
       } finally {
@@ -35,7 +40,7 @@ export const ReservationDetail: React.FC<ReservationDetailProps> = ({ reservatio
       }
     };
     load();
-  }, [reservationId]);
+  }, [reservationId, previewReservation]);
 
   if (loading) return <p className="text-center">Chargement...</p>;
   if (error) return <p className="text-red-500">{error}</p>;
@@ -96,6 +101,7 @@ export const ReservationDetail: React.FC<ReservationDetailProps> = ({ reservatio
           setCancelling(false);
           setError(reason || 'Cette réservation ne peut plus être annulée.');
         }}
+        previewMode={Boolean(previewReservation)}
       />
     </div>
   );

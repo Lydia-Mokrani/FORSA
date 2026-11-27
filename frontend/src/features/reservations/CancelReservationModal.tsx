@@ -10,6 +10,7 @@ interface CancelReservationModalProps {
   onClose: () => void;
   onSuccess: (cancelledReservationId: string) => void;
   onForbidden?: (reservation: Reservation, reason?: string) => void;
+  previewMode?: boolean;
 }
 
 export const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
@@ -20,6 +21,7 @@ export const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
   onClose,
   onSuccess,
   onForbidden,
+  previewMode = false,
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +76,9 @@ export const CancelReservationModal: React.FC<CancelReservationModalProps> = ({
     setLoading(true);
     setError(null);
 
-    const result = await ReservationsApi.cancelReservation(reservation.id);
+    const result = previewMode
+      ? { success: true }
+      : await ReservationsApi.cancelReservation(reservation.id);
 
     if (result.success) {
       setLoading(false);

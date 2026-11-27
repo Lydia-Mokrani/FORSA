@@ -8,6 +8,25 @@ import IconStar from './assets/icons/Icône star.svg';
 import IconHandBag from './assets/icons/Icône hand-bag-01.svg';
 import IconQrCode from './assets/icons/Icône qr-code.svg';
 
+export interface ReservationCreateParams {
+  shopId: string;
+  offerId: string;
+  quantity: number;
+  unitPrice?: number;
+  offerTitle?: string;
+  shopName?: string;
+  shopAddress?: string;
+  shopDistance?: string;
+  pickupStart?: string;
+  pickupEnd?: string;
+}
+
+export interface ReservationCreateResult {
+  success: boolean;
+  data?: Reservation;
+  error?: string;
+}
+
 export interface OfferDetail {
   id: string;
   name: string;
@@ -35,6 +54,7 @@ interface ReservationDialogProps {
   onReservationCreated?: (reservation: Reservation) => void;
   onViewReceipt?: (reservation: Reservation) => void;
   onNavigateToReservations?: () => void;
+  onReserve?: (params: ReservationCreateParams) => Promise<ReservationCreateResult>;
 }
 
 /**
@@ -54,6 +74,7 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
   onReservationCreated,
   onViewReceipt,
   onNavigateToReservations,
+  onReserve,
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -108,7 +129,7 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
     setLoading(true);
     setError(null);
 
-    const result = await ReservationsApi.createReservation({
+    const params: ReservationCreateParams = {
       shopId: offer.shopId,
       offerId: offer.id,
       quantity,
@@ -119,7 +140,11 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
       shopDistance: offer.shopDistance,
       pickupStart: offer.pickupStart,
       pickupEnd: offer.pickupEnd,
-    });
+    };
+
+    const result = onReserve
+      ? await onReserve(params)
+      : await ReservationsApi.createReservation(params);
 
     if (result.success && result.data) {
       setLoading(false);

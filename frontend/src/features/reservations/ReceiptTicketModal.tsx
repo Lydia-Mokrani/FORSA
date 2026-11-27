@@ -159,21 +159,21 @@ export const ReceiptTicketModal: React.FC<ReceiptTicketModalProps> = ({
 
   return (
     <div
-      className="fixed inset-y-0 right-0 left-0 lg:left-[238px] z-[9999] overflow-y-auto bg-[#FFFAF0] font-poppins"
+      className="fixed inset-y-0 right-0 left-[238px] z-20 overflow-y-auto bg-[#FFFAF0] font-poppins"
       role="dialog"
       aria-modal="true"
     >
-      <div className="flex flex-col gap-[16px] md:gap-[24px] pb-[28px] pt-[20px] md:pt-[30px] px-4 sm:px-6 md:px-[40px]">
+      <div className="flex flex-col gap-[24px] pb-[28px] pt-[30px] px-[40px]">
         {/* ===== Page header — Figma 1:16543 ===== */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 md:gap-[24px] w-full">
-          <div className="flex min-w-0 flex-1 flex-col gap-[3px] sm:whitespace-nowrap text-[#0B2C25]">
+        <div className="flex flex-row items-center justify-between gap-[24px] w-full">
+          <div className="flex min-w-px flex-1 flex-col gap-[3px] whitespace-nowrap text-[#0B2C25]">
             <p className="text-[11px] font-normal">Mon espace / Mes réservations / Justificatif</p>
-            <p className="text-[18px] md:text-[48px] font-semibold">Justificatif de retrait</p>
-            <p className="text-[12px] md:text-[20px] font-normal whitespace-normal">
+            <p className="text-[48px] font-semibold">Justificatif de retrait</p>
+            <p className="text-[20px] font-normal">
               Présentez ce QR code au commerçant : lui seul confirme le retrait après votre règlement en magasin.
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2.5 md:gap-[14px] flex-wrap">
+          <div className="flex shrink-0 items-center gap-[14px]">
             <button
               type="button"
               onClick={onClose}
@@ -184,7 +184,7 @@ export const ReceiptTicketModal: React.FC<ReceiptTicketModalProps> = ({
                   className="absolute flex items-center justify-center inset-[29.17%_16.66%_29.16%_16.67%]"
                   style={{ containerType: 'size' }}
                 >
-                  <div className="-rotate-90 -scale-x-100 flex-none h-[100cqw] w-[100cqh]">
+                  <div className="-rotate-90 flex-none h-[16px] w-[16px]">
                     <div className="relative size-full">
                       <div className="absolute inset-[-7.04%_-11.25%_-7.02%_-11.26%]">
                         <img src={ImgArrowLeft} alt="" className="block size-full max-w-none" />
@@ -208,31 +208,18 @@ export const ReceiptTicketModal: React.FC<ReceiptTicketModalProps> = ({
               </div>
             </div>
             {/* Avatar : photo fournie par le backend */}
-            <div className="flex size-[48px] shrink-0 items-center justify-center rounded-full bg-[#D9D9D9] text-xs font-bold text-[#0B2C25]">
-              CL
-            </div>
+            <div className="flex size-[48px] shrink-0 items-center justify-center rounded-full bg-[#D9D9D9]" />
           </div>
         </div>
 
         {/* ===== Colonnes — Figma 1:16559 ===== */}
-        <div className="flex flex-col lg:flex-row items-center lg:items-start gap-[20px] md:gap-[24px] w-full">
+        <div className="content-start flex flex-wrap gap-[24px] items-start overflow-clip w-full">
           {/* ---------- Scène du ticket (1:16560) ---------- */}
-          <div className="flex w-full max-w-[500px] lg:w-[500px] h-auto lg:h-[787px] max-h-[100dvh] overflow-y-auto lg:overflow-visible shrink-0 flex-col items-center justify-center rounded-[32px] p-[16px]">
-            {/* Scène responsive : conserve les dimensions Figma et réduit toute la scène */}
-            <div
-              className="relative w-full max-w-[468px] shrink-0"
-              style={{ aspectRatio: '468 / 743' }}
-            >
-              <div className="absolute left-1/2 top-0 -translate-x-1/2">
-                <div
-                  className="relative h-[743px] w-[468px]"
-                  style={{
-                    transform: 'scale(min(1, calc((100vw - 64px) / 468px)))',
-                    transformOrigin: 'top center',
-                  }}
-                >
+          <div className="flex flex-col h-[787px] items-center justify-center p-[16px] rounded-[32px] shrink-0 w-[500px]">
+            <div className="relative h-[743px] shrink-0 w-[468px]">
                   {/* Sortie du ticket : rogne le ticket (1:16562) */}
                   <div className="absolute left-0 top-[25.2px] h-[717.6px] w-[468px] overflow-clip">
+                    {/* Ticket justificatif (1:16563) : toutes les couches partagent ce repère. */}
                     <div
                       className="receipt-ticket-anim absolute left-[60px] top-[13.2px] h-[687.6px] w-[348px]"
                       style={{ '--receipt-ticket-duration': `${TICKET_ANIMATION_DURATION_S}s` } as React.CSSProperties}
@@ -243,81 +230,81 @@ export const ReceiptTicketModal: React.FC<ReceiptTicketModalProps> = ({
                           <img src={ImgTicketZigzag} alt="" className="block size-full max-w-none" />
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Statut */}
-                  <div className="absolute left-1/2 top-[30px] flex -translate-x-1/2 items-center gap-[6px] whitespace-nowrap rounded-[120px] bg-[#DBF0DD] px-[12px] py-[4.8px]">
-                    <FigIcon
-                      src={ImgStatusTick}
-                      size={14.4}
-                      inset="27.08% 20.83% 27.09% 20.83%"
-                      inner="-13.63% -10.71% -13.64% -10.71%"
-                    />
-                    <span className="text-[13.2px] font-medium text-[#17664E]">{statusLabel}</span>
-                  </div>
+                      {/* Statut */}
+                      <div className="absolute left-[79.2px] top-[30px] flex items-center gap-[6px] whitespace-nowrap rounded-[120px] bg-[#DBF0DD] px-[12px] py-[4.8px]">
+                        <FigIcon
+                          src={ImgStatusTick}
+                          size={14.4}
+                          inset="27.08% 20.83% 27.09% 20.83%"
+                          inner="-13.63% -10.71% -13.64% -10.71%"
+                        />
+                        <span className="text-[13.2px] font-medium text-[#17664E]">{statusLabel}</span>
+                      </div>
 
-                  {/* Produit */}
-                  <div className="absolute left-[33.6px] top-[72px] flex w-[280.8px] flex-col items-center gap-[2.4px] text-center">
-                    <p className="max-w-full truncate text-[24px] font-bold text-[#17664E]">{productName}</p>
-                    <p className="max-w-full truncate text-[13.2px] font-normal text-[rgba(11,44,37,0.71)]">
-                      {shopName} · {shopDistance}
-                    </p>
-                  </div>
+                      {/* Produit */}
+                      <div className="absolute left-[33.6px] top-[72px] flex w-[280.8px] flex-col items-center gap-[2.4px] text-center">
+                        <p className="max-w-full truncate text-[24px] font-bold text-[#17664E]">{productName}</p>
+                        <p className="max-w-full truncate text-[13.2px] font-normal text-[rgba(11,44,37,0.71)]">
+                          {shopName} · {shopDistance}
+                        </p>
+                      </div>
 
-                  {/* Photo du produit : fournie par le backend (gris en attendant) */}
-                  {/* TODO-FIGMA : brancher la vraie photo du produit */}
-                  <div className="absolute left-[33.6px] top-[142.8px] h-[100.8px] w-[280.8px] rounded-[16.8px] bg-[#D9D9D9]" />
+                      {/* Photo du produit : fournie par le backend (gris en attendant) */}
+                      {/* TODO-FIGMA : brancher la vraie photo du produit */}
+                      <div className="absolute left-[33.6px] top-[142.8px] h-[100.8px] w-[280.8px] rounded-[16.8px] bg-[#D9D9D9]" />
 
-                  <Dots top={255.6} />
-                  <p className="absolute left-1/2 top-[267.6px] w-[280.8px] -translate-x-1/2 text-center text-[13.2px] font-medium text-[#0B2C25]">
-                    {retraitLine}
-                  </p>
-                  <Dots top={300} />
-
-                  {/* Ligne article */}
-                  <div className="absolute left-[33.6px] top-[312px] flex w-[280.8px] items-center justify-between gap-3">
-                    <div className="flex min-w-0 flex-1 flex-col gap-[1.2px]">
-                      <p className="truncate text-[14.4px] font-medium text-[#0B2C25]" title={productName}>
-                        {productName}
+                      <Dots top={255.6} />
+                      <p className="absolute left-[174px] top-[267.6px] w-[280.8px] -translate-x-1/2 text-center text-[13.2px] font-medium text-[#0B2C25]">
+                        {retraitLine}
                       </p>
-                      <p className="truncate text-[12px] font-normal text-[rgba(11,44,37,0.71)]">{unitsLabel}</p>
-                    </div>
-                    <p className="shrink-0 whitespace-nowrap text-[19.2px] font-bold text-[#0B2C25]">{price}</p>
-                  </div>
+                      <Dots top={300} />
 
-                  <Dots top={364.8} />
+                      {/* Ligne article */}
+                      <div className="absolute left-[33.6px] top-[312px] flex w-[280.8px] items-center justify-between gap-[8px]">
+                        <div className="flex min-w-px flex-1 flex-col gap-[1.2px]">
+                          <p className="truncate text-[14.4px] font-medium text-[#0B2C25]" title={productName}>
+                            {productName}
+                          </p>
+                          <p className="truncate text-[12px] font-normal text-[rgba(11,44,37,0.71)]">{unitsLabel}</p>
+                        </div>
+                        <p className="shrink-0 whitespace-nowrap text-[19.2px] font-bold text-[#0B2C25]">{price}</p>
+                      </div>
 
-                  {/* QR code */}
-                  <div className="absolute left-[97.2px] top-[376.8px] flex items-center justify-center rounded-[16.8px] border-[1.2px] border-solid border-[#E8EBDF] bg-white p-[9.6px]">
-                    <div className="relative size-[132px] shrink-0">
-                      <img
-                        src={reservation.qrCodeData || ImgTicketQr}
-                        alt={`QR ${reservation.pickupCode}`}
-                        className="absolute inset-0 block size-full max-w-none object-contain"
-                      />
-                    </div>
-                  </div>
+                      <Dots top={364.8} />
 
-                  {/* Code de retrait */}
-                  <div className="absolute left-[33.6px] top-[537.6px] flex w-[280.8px] flex-col items-center gap-[2.4px] text-center whitespace-nowrap">
-                    <p className="text-[12px] font-normal text-[rgba(11,44,37,0.71)]">CODE DE RETRAIT</p>
-                    <p className="select-all text-[26.4px] font-bold tracking-[3.168px] text-[#0B2C25]">
-                      {reservation.pickupCode}
-                    </p>
-                    <p className="text-[12px] font-normal text-[rgba(11,44,37,0.71)]">
-                      N° de réservation : {reservationNum}
-                    </p>
-                  </div>
+                      {/* QR code */}
+                      <div className="absolute left-[97.2px] top-[376.8px] flex items-center justify-center rounded-[16.8px] border-[1.2px] border-solid border-[#E8EBDF] bg-white p-[9.6px]">
+                        <div className="relative size-[132px] shrink-0">
+                          <img
+                            src={reservation.qrCodeData || ImgTicketQr}
+                            alt={`QR ${reservation.pickupCode}`}
+                            className="absolute inset-0 block size-full max-w-none object-contain"
+                          />
+                        </div>
+                      </div>
 
-                  <p className="absolute left-1/2 top-[627.6px] w-[280.8px] -translate-x-1/2 text-center text-[13.2px] font-semibold text-[#17664E]">
-                    Merci de lutter contre le gaspillage !
-                  </p>
+                      {/* Code de retrait */}
+                      <div className="absolute left-[33.6px] top-[537.6px] flex w-[280.8px] flex-col items-center gap-[2.4px] text-center whitespace-nowrap">
+                        <p className="text-[12px] font-normal text-[rgba(11,44,37,0.71)]">CODE DE RETRAIT</p>
+                        <p className="select-all text-[26.4px] font-bold tracking-[3.168px] text-[#0B2C25]">
+                          {reservation.pickupCode}
+                        </p>
+                        <p className="text-[12px] font-normal text-[rgba(11,44,37,0.71)]">
+                          N° de réservation : {reservationNum}
+                        </p>
+                      </div>
 
-                  {/* Bordure ondulée (vecteur Figma) */}
-                  <div className="pointer-events-none absolute left-[7.2px] top-[7.2px] h-[652.8px] w-[333.6px]">
-                    <div className="absolute inset-[-0.11%_-0.22%]">
-                      <img src={ImgTicketBorder} alt="" className="block size-full max-w-none" />
+                      <p className="absolute left-[174px] top-[627.6px] w-[280.8px] -translate-x-1/2 text-center text-[13.2px] font-semibold text-[#17664E]">
+                        Merci de lutter contre le gaspillage !
+                      </p>
+
+                      {/* Bordure ondulée (vecteur Figma) */}
+                      <div className="pointer-events-none absolute left-[7.2px] top-[7.2px] h-[652.8px] w-[333.6px]">
+                        <div className="absolute inset-[-0.11%_-0.22%]">
+                          <img src={ImgTicketBorder} alt="" className="block size-full max-w-none" />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -327,14 +314,12 @@ export const ReceiptTicketModal: React.FC<ReceiptTicketModalProps> = ({
                     <img src={ImgPrinterLed} alt="" className="absolute inset-0 block size-full max-w-none" />
                   </div>
                 </div>
-              </div>
-            </div>
           </div>
 
           {/* ---------- Colonne principale (1:16603) ---------- */}
-          <div className="flex w-full min-w-0 lg:min-w-[460px] flex-1 flex-col gap-[20px] md:gap-[24px]">
+          <div className="flex w-full min-w-[460px] flex-1 flex-col gap-[24px] overflow-clip">
     {/* Carte retrait à venir (1:16604) */}
-    <div className="flex w-full flex-col gap-3 md:gap-[20px] rounded-[18px] md:rounded-[24px] bg-[#0B2C25] p-[14px] md:p-[28px]">
+    <div className="flex w-full flex-col gap-[20px] rounded-[24px] bg-[#0B2C25] p-[28px] overflow-clip">
       <div className="flex w-full items-center justify-between">
         <div className="flex items-center gap-[12px]">
           <div className="flex size-[40px] shrink-0 items-center justify-center rounded-full bg-[#41967D]">
@@ -391,7 +376,7 @@ export const ReceiptTicketModal: React.FC<ReceiptTicketModalProps> = ({
     </div>
 
     {/* Carte suivi (1:16631) */}
-    <div className="flex w-full flex-col gap-3 md:gap-[20px] rounded-[18px] md:rounded-[24px] border-[1.5px] border-solid border-[#DBF0DD] bg-white p-[14px] md:p-[24px]">
+    <div className="flex w-full flex-col gap-[20px] rounded-[24px] border-[1.5px] border-solid border-[#DBF0DD] bg-white p-[24px] overflow-clip">
       <div className="flex w-full items-center justify-between">
         <div className="flex items-center gap-[12px]">
           <div className="flex size-[44px] shrink-0 items-center justify-center rounded-full border border-solid border-[#235347] bg-[#EEF7EC]">
@@ -459,9 +444,9 @@ export const ReceiptTicketModal: React.FC<ReceiptTicketModalProps> = ({
     </div>
 
     {/* Rangée basse (1:16671) */}
-    <div className="flex w-full flex-col sm:flex-row items-start gap-[20px] md:gap-[24px]">
+    <div className="content-start flex flex-wrap gap-[24px] items-start overflow-clip w-full">
       {/* Carte commerce */}
-      <div className="flex w-full sm:min-w-[240px] flex-1 flex-col gap-[12px] rounded-[18px] md:rounded-[24px] border-[1.5px] border-solid border-[#DBF0DD] bg-white p-[12px] md:p-[16px]">
+      <div className="flex w-full min-w-[240px] flex-1 flex-col gap-[12px] rounded-[24px] border-[1.5px] border-solid border-[#DBF0DD] bg-white p-[16px] overflow-clip">
         <div className="relative h-[96px] w-full shrink-0 overflow-clip rounded-[16px]">
           <div className="absolute left-0 top-0 h-[96px] w-[252px]">
             <img src={ImgMapBg} alt="" className="absolute inset-0 block size-full max-w-none" />
@@ -501,7 +486,7 @@ export const ReceiptTicketModal: React.FC<ReceiptTicketModalProps> = ({
       </div>
 
       {/* Carte bon à savoir */}
-      <div className="flex w-full sm:min-w-[240px] flex-1 flex-col gap-[12px] rounded-[18px] md:rounded-[24px] border-[1.5px] border-solid border-[#DBF0DD] bg-white p-[14px] md:p-[16px]">
+      <div className="flex w-full min-w-[240px] flex-1 flex-col gap-[12px] rounded-[24px] border-[1.5px] border-solid border-[#DBF0DD] bg-white p-[16px] overflow-clip">
         <p className="whitespace-nowrap text-[16px] font-semibold text-[#0B2C25]">Bon à savoir</p>
         {[
           { src: ImgTipQr, inset: '8.33% 8.34% 8.34% 8.33%', inner: '-5.62% -5.63% -5.63% -5.62%', t: 'Montrez ce QR code' },
@@ -515,24 +500,22 @@ export const ReceiptTicketModal: React.FC<ReceiptTicketModalProps> = ({
             <p className="whitespace-nowrap text-[13px] font-normal text-[#0B2C25]">{row.t}</p>
           </div>
         ))}
+        {canCancel && (
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onCancel!(reservation);
+            }}
+            className="flex h-[42px] w-full cursor-pointer items-center justify-center rounded-[12px] border border-solid border-[#78847F] px-[16px]"
+          >
+            <span className="whitespace-nowrap text-[13px] font-semibold text-[#0B2C25]">
+              Annuler avant le retrait
+            </span>
+          </button>
+        )}
       </div>
     </div>
-
-    {/* Bouton Annuler sous Bon à savoir (Figma 1:21788) */}
-    {canCancel && (
-      <button
-        type="button"
-        onClick={() => {
-          onClose();
-          onCancel!(reservation);
-        }}
-        className="flex h-[44px] md:h-[42px] w-full cursor-pointer items-center justify-center rounded-[12px] border border-solid border-[#78847F] px-[16px]"
-      >
-        <span className="whitespace-nowrap text-[13px] font-semibold text-[#0B2C25]">
-          Annuler avant le retrait
-        </span>
-      </button>
-    )}
         </div>
       </div>
     </div>
